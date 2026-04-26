@@ -8,7 +8,7 @@ use App\Exceptions\EvolutionApiException;
 use App\Http\Requests\StoreTemplateRequest;
 use App\Models\MessageTemplate;
 use App\Models\WhatsAppInstance;
-use App\Services\EvolutionApiService;
+use App\Services\WhatsAppCloudApiService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -16,9 +16,24 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Throwable;
 
+/**
+ * Handles message-template CRUD across two sources:
+ *
+ *   - Local templates  — handcrafted, stored only in our DB. Useful for
+ *                        Evolution-driven instances or freeform 24h-window
+ *                        sends. status='LOCAL', whatsapp_template_id=null.
+ *
+ *   - Remote templates — fetched from / submitted to Meta's Cloud API.
+ *                        status mirrors Meta (PENDING/APPROVED/REJECTED).
+ *                        whatsapp_template_id set to Meta's template ID.
+ *
+ * The {@see sync()} action pulls every template Meta knows about for an
+ * instance and upserts; {@see submitToMeta()} pushes a local template up
+ * for review.
+ */
 class MessageTemplateController extends Controller
 {
-    public function __construct(private readonly EvolutionApiService $evolutionApi)
+    public function __construct(private readonly WhatsAppCloudApiService $cloudApi)
     {
     }
 
@@ -29,10 +44,13 @@ class MessageTemplateController extends Controller
             ->latest()
             ->get();
 
+        // Only Cloud instances can fetch / submit templates — surface them
+        // to the view so the dropdown can be populated.
         $instances = WhatsAppInstance::where('user_id', auth()->id())
+            ->where('driver', WhatsAppInstance::DRIVER_CLOUD)
             ->orderBy('is_default', 'desc')
             ->orderBy('instance_name')
-            ->get(['id', 'instance_name', 'phone_number', 'status']);
+            ->get(['id', 'instance_name', 'business_phone_number', 'phone_number', 'status']);
 
         return view('templates.index', [
             'templates' => $templates,
@@ -53,6 +71,7 @@ class MessageTemplateController extends Controller
             'content' => $request->validated('content'),
             'category' => $request->validated('category'),
             'status' => MessageTemplate::STATUS_LOCAL,
+            'language' => $request->validated('language') ?? 'en_US',
         ];
 
         if ($request->hasFile('media')) {
@@ -88,6 +107,15 @@ class MessageTemplateController extends Controller
         $template = MessageTemplate::where('user_id', auth()->id())
             ->findOrFail($id);
 
+        // Remote (Meta-managed) templates can't be edited via Cloud API after submission;
+        // user must delete and resubmit. Block edit attempts to prevent silent drift between
+        // our DB and Meta's source of truth.
+        if ($template->isRemote()) {
+            return redirect()
+                ->back()
+                ->with('error', 'Approved templates cannot be edited. Delete and resubmit instead.');
+        }
+
         $template->update([
             'name' => $validated['name'],
             'content' => $validated['content'],
@@ -114,6 +142,20 @@ class MessageTemplateController extends Controller
         $template = MessageTemplate::where('user_id', auth()->id())
             ->findOrFail($id);
 
+        // For remote templates, also tell Meta to delete — otherwise the local row
+        // disappears but Meta still bills/uses the template name.
+        if ($template->isRemote() && $template->whatsappInstance?->isCloud()) {
+            try {
+                $this->cloudApi->deleteTemplate($template->whatsappInstance, $template->name);
+            } catch (Throwable $e) {
+                // Soft-fail: the local row is removed regardless, so the user can re-sync
+                // to recover state. Surface a warning instead of blocking.
+                return redirect()
+                    ->route('templates.index')
+                    ->with('warning', "Local template removed, but Meta delete failed: {$e->getMessage()}. Re-sync if needed.");
+            }
+        }
+
         $template->delete();
 
         return redirect()
@@ -122,7 +164,8 @@ class MessageTemplateController extends Controller
     }
 
     /**
-     * Pull WhatsApp Business templates from Evolution API and upsert them locally.
+     * Pull every template Meta has for the given Cloud API instance and upsert
+     * each into the local DB. Idempotent — safe to run on a schedule.
      */
     public function sync(Request $request): RedirectResponse
     {
@@ -133,8 +176,20 @@ class MessageTemplateController extends Controller
         $instance = WhatsAppInstance::where('user_id', auth()->id())
             ->findOrFail($validated['whatsapp_instance_id']);
 
+        if (! $instance->isCloud()) {
+            return redirect()
+                ->route('templates.index')
+                ->with('error', 'Template sync only works for Cloud API instances. Evolution instances do not have message templates.');
+        }
+
+        if (! $instance->isCloudReady()) {
+            return redirect()
+                ->route('templates.index')
+                ->with('error', 'Instance is missing Cloud API credentials. Reopen its settings to fix.');
+        }
+
         try {
-            $remoteTemplates = $this->evolutionApi->fetchTemplates($instance->instance_name);
+            $remoteTemplates = $this->cloudApi->fetchTemplates($instance);
         } catch (EvolutionApiException $e) {
             return redirect()
                 ->route('templates.index')
@@ -142,13 +197,13 @@ class MessageTemplateController extends Controller
         } catch (Throwable $e) {
             return redirect()
                 ->route('templates.index')
-                ->with('error', 'Could not reach Evolution API. Check your connection settings.');
+                ->with('error', 'Could not reach Meta. Check the instance credentials and try again.');
         }
 
         if (empty($remoteTemplates)) {
             return redirect()
                 ->route('templates.index')
-                ->with('warning', 'No templates returned. The instance must use the WhatsApp Cloud API integration to expose templates.');
+                ->with('warning', 'No templates returned. Approve at least one template in Meta Business Manager first.');
         }
 
         $created = 0;
@@ -161,12 +216,67 @@ class MessageTemplateController extends Controller
 
         return redirect()
             ->route('templates.index')
-            ->with('success', "Synced {$created} new, {$updated} updated template(s) from WhatsApp.");
+            ->with('success', "Synced {$created} new, {$updated} updated template(s) from Meta.");
     }
 
     /**
-     * Upsert one Evolution API template payload into the local DB.
-     *
+     * Push a local template up to Meta for review. After this, Meta has a
+     * say — the template enters PENDING and only becomes usable once it
+     * transitions to APPROVED.
+     */
+    public function submitToMeta(Request $request, string $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'whatsapp_instance_id' => ['required', 'integer', 'exists:whatsapp_instances,id'],
+        ]);
+
+        $template = MessageTemplate::where('user_id', auth()->id())->findOrFail($id);
+        $instance = WhatsAppInstance::where('user_id', auth()->id())
+            ->where('driver', WhatsAppInstance::DRIVER_CLOUD)
+            ->findOrFail($validated['whatsapp_instance_id']);
+
+        if ($template->isRemote()) {
+            return redirect()->back()->with('error', 'Template is already managed by Meta.');
+        }
+
+        if (! $instance->isCloudReady()) {
+            return redirect()->back()->with('error', 'Instance is missing Cloud API credentials.');
+        }
+
+        $components = $template->components ?: [
+            ['type' => 'BODY', 'text' => $template->content],
+        ];
+
+        try {
+            $response = $this->cloudApi->createTemplate(
+                $instance,
+                $template->name,
+                $this->mapCategoryToMeta($template->category),
+                $template->language ?? 'en_US',
+                $components,
+            );
+        } catch (Throwable $e) {
+            return redirect()->back()->with('error', "Meta rejected the submission: {$e->getMessage()}");
+        }
+
+        $template->update([
+            'whatsapp_instance_id' => $instance->id,
+            'whatsapp_template_id' => $response['id'] ?? null,
+            'status' => strtoupper((string) ($response['status'] ?? MessageTemplate::STATUS_PENDING)),
+            'components' => $components,
+            'synced_at' => Carbon::now(),
+        ]);
+
+        return redirect()
+            ->route('templates.index')
+            ->with('success', 'Submitted to Meta. Status will move from PENDING to APPROVED/REJECTED — re-sync to refresh.');
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Internals
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
      * @param  array<string, mixed>  $remote
      * @return 'created'|'updated'
      */
@@ -177,7 +287,7 @@ class MessageTemplateController extends Controller
         $remoteId = (string) ($remote['id'] ?? $name);
         $components = is_array($remote['components'] ?? null) ? $remote['components'] : [];
         $bodyText = $this->extractBodyText($components);
-        $category = $this->mapCategory((string) ($remote['category'] ?? ''));
+        $category = $this->mapCategoryFromMeta((string) ($remote['category'] ?? ''));
 
         $existing = MessageTemplate::where('user_id', auth()->id())
             ->where('whatsapp_instance_id', $instance->id)
@@ -200,16 +310,16 @@ class MessageTemplateController extends Controller
 
         if ($existing) {
             $existing->update($payload);
+
             return 'updated';
         }
 
         MessageTemplate::create($payload);
+
         return 'created';
     }
 
     /**
-     * Extract the BODY component text from Meta's component array.
-     *
      * @param  array<int, array<string, mixed>>  $components
      */
     private function extractBodyText(array $components): string
@@ -223,15 +333,24 @@ class MessageTemplateController extends Controller
         return '';
     }
 
-    /**
-     * Map Meta template categories to the local enum.
-     */
-    private function mapCategory(string $metaCategory): string
+    /** Meta category strings → local enum (sync direction). */
+    private function mapCategoryFromMeta(string $metaCategory): string
     {
         return match (strtoupper($metaCategory)) {
             'MARKETING' => 'promotional',
             'UTILITY', 'AUTHENTICATION' => 'transactional',
             default => 'reminder',
+        };
+    }
+
+    /** Local enum → Meta category strings (submission direction). */
+    private function mapCategoryToMeta(string $localCategory): string
+    {
+        return match ($localCategory) {
+            'promotional' => 'MARKETING',
+            'transactional' => 'UTILITY',
+            'reminder' => 'UTILITY',
+            default => 'UTILITY',
         };
     }
 

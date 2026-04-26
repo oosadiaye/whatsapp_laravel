@@ -138,16 +138,45 @@
                             </div>
 
                             {{-- Actions --}}
-                            <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 rounded-b-lg flex items-center justify-end gap-3">
+                            <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 rounded-b-lg flex items-center justify-end gap-3 flex-wrap">
                                 <button type="button"
                                         @click="previewTemplate = {{ Js::from($template) }}; previewOpen = true"
                                         class="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors duration-150">
                                     {{ __('Preview') }}
                                 </button>
-                                <a href="{{ route('templates.edit', $template) }}"
-                                   class="text-sm font-medium text-[#25D366] hover:text-[#1da851] transition-colors duration-150">
-                                    {{ __('Edit') }}
-                                </a>
+
+                                @if(! $template->isRemote() && $instances->isNotEmpty())
+                                    {{-- Local template + at least one Cloud instance available — offer Meta submission --}}
+                                    <div class="relative" x-data="{ open: false }">
+                                        <button type="button"
+                                                @click="open = !open"
+                                                @click.outside="open = false"
+                                                class="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150">
+                                            {{ __('Submit to Meta') }}
+                                        </button>
+                                        <div x-show="open" x-transition x-cloak
+                                             class="absolute right-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-20 p-2">
+                                            <p class="text-xs text-gray-500 px-2 mb-1">{{ __('Submit via:') }}</p>
+                                            @foreach($instances as $inst)
+                                                <form method="POST" action="{{ route('templates.submit', $template) }}">
+                                                    @csrf
+                                                    <input type="hidden" name="whatsapp_instance_id" value="{{ $inst->id }}">
+                                                    <button type="submit"
+                                                            class="w-full text-left px-2 py-1.5 rounded hover:bg-gray-50 text-sm text-gray-800">
+                                                        {{ $inst->instance_name }}
+                                                    </button>
+                                                </form>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
+
+                                @unless($template->isRemote())
+                                    <a href="{{ route('templates.edit', $template) }}"
+                                       class="text-sm font-medium text-[#25D366] hover:text-[#1da851] transition-colors duration-150">
+                                        {{ __('Edit') }}
+                                    </a>
+                                @endunless
                                 <form method="POST"
                                       action="{{ route('templates.destroy', $template) }}"
                                       onsubmit="return confirm('{{ __('Are you sure you want to delete this template?') }}')">

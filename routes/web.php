@@ -67,6 +67,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Message Templates
     Route::post('/templates/sync', [MessageTemplateController::class, 'sync'])->name('templates.sync');
+    Route::post('/templates/{template}/submit', [MessageTemplateController::class, 'submitToMeta'])->name('templates.submit');
     Route::resource('templates', MessageTemplateController::class);
 
     // Campaigns
