@@ -16,18 +16,16 @@ Route::get('/', function () {
     return redirect()->route('dashboard');
 });
 
-// Webhooks (no CSRF, no auth — external services post here)
+// Webhooks — external providers post here. CSRF-excluded in bootstrap/app.php
+// so SubstituteBindings still resolves {instance} for route model binding.
 Route::post('/webhook/evolution', [WebhookController::class, 'handle'])
-    ->name('webhook.evolution')
-    ->withoutMiddleware(['web']);
+    ->name('webhook.evolution');
 
 // Meta Cloud API per-instance webhook (verify GET + events POST)
 Route::get('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'verify'])
-    ->name('webhook.cloud.verify')
-    ->withoutMiddleware(['web']);
+    ->name('webhook.cloud.verify');
 Route::post('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'handle'])
-    ->name('webhook.cloud.handle')
-    ->withoutMiddleware(['web']);
+    ->name('webhook.cloud.handle');
 
 // Authenticated routes
 Route::middleware(['auth', 'verified'])->group(function () {

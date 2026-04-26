@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Casts\AsEncryptedString;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WhatsAppInstance extends Model
 {
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
 
     public const DRIVER_CLOUD = 'cloud';
     public const DRIVER_EVOLUTION = 'evolution';
@@ -52,9 +52,9 @@ class WhatsAppInstance extends Model
         return [
             'is_default' => 'boolean',
             // Encrypt-at-rest so a DB dump leak doesn't expose the raw tokens.
-            'access_token' => AsEncryptedString::class,
-            'app_secret' => AsEncryptedString::class,
-            'api_token' => AsEncryptedString::class,
+            'access_token' => 'encrypted',
+            'app_secret' => 'encrypted',
+            'api_token' => 'encrypted',
         ];
     }
 
