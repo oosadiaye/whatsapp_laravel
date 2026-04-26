@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\MessageTemplate;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreCampaignRequest extends FormRequest
@@ -33,5 +35,42 @@ class StoreCampaignRequest extends FormRequest
             'scheduled_at' => ['nullable', 'date', 'after:now'],
             'status' => ['nullable', 'in:DRAFT,QUEUED'],
         ];
+    }
+
+    /**
+     * Cross-field validation that can't live in the rules array:
+     *
+     *   - If a template was picked, it must be APPROVED (PENDING/REJECTED would
+     *     fail at Meta's side anyway, so block at the form).
+     *   - If no template is picked, warn loudly that the send will only work
+     *     for contacts already inside a 24-hour conversation window.
+     *     We don't BLOCK no-template campaigns because freeform sends are
+     *     legitimate for service-conversation replies — but the user should
+     *     know what they're signing up for.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $v): void {
+            $templateId = $this->input('message_template_id');
+
+            if ($templateId === null || $templateId === '') {
+                return;  // No template — handled by view warning, not error.
+            }
+
+            $template = MessageTemplate::where('user_id', auth()->id())
+                ->where('id', $templateId)
+                ->first();
+
+            if ($template === null) {
+                return;  // exists:message_templates rule will handle it
+            }
+
+            if ($template->isRemote() && $template->status !== MessageTemplate::STATUS_APPROVED) {
+                $v->errors()->add(
+                    'message_template_id',
+                    "Template \"{$template->name}\" has status {$template->status} — only APPROVED templates can be sent. Sync the template list to refresh status, or pick a different template."
+                );
+            }
+        });
     }
 }

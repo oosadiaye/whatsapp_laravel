@@ -66,15 +66,25 @@
                 </div>
 
                 {{-- Tab 3: Message --}}
-                <div x-show="tab === 'message'" class="rounded-xl bg-white p-6 shadow-sm">
+                <div x-show="tab === 'message'" x-data="{ templatePicked: !!@js(old('message_template_id')) }" class="rounded-xl bg-white p-6 shadow-sm">
+
+                    {{-- Warning banner when no template selected --}}
+                    <div x-show="!templatePicked" x-cloak
+                         class="mb-4 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+                        <p class="font-semibold mb-1">{{ __('Sending without a template') }}</p>
+                        <p>
+                            {{ __('Freeform messages only deliver to contacts who messaged you within the last 24 hours. For marketing blasts to fresh contacts, pick a Meta-approved template above.') }}
+                        </p>
+                    </div>
+
                     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">{{ __('Template') }}</label>
                             <select name="message_template_id"
-                                    x-data
                                     class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm"
                                     @change="
                                         const opt = $event.target.selectedOptions[0];
+                                        templatePicked = !!opt.value;
                                         if (opt.value) {
                                             message = opt.dataset.content;
                                             $refs.messageArea.value = message;
@@ -116,6 +126,9 @@
                             <p class="mt-1 text-xs text-gray-500">
                                 {{ __('Approved templates send via Meta\'s template API. Local templates just paste their content into the message body.') }}
                             </p>
+                            @error('message_template_id')
+                                <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
 
                             <div class="mt-4">
                                 <label class="block text-sm font-medium text-gray-700">Message *</label>
