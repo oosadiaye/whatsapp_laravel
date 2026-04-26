@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Exceptions\EvolutionApiException;
+use App\Exceptions\WhatsAppApiException;
 use App\Models\WhatsAppInstance;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
  * the instance as its first argument so that the same service handles many
  * customers/numbers without re-binding singletons.
  *
- * Reuses {@see EvolutionApiException} for now to keep error handling consistent
+ * Reuses {@see WhatsAppApiException} for now to keep error handling consistent
  * across the codebase; renaming to a neutral "WhatsAppApiException" can happen
  * after the Evolution path is removed in a later cleanup pass.
  *
@@ -39,7 +39,7 @@ class WhatsAppCloudApiService
     private function client(WhatsAppInstance $instance): PendingRequest
     {
         if (! $instance->isCloudReady()) {
-            throw new EvolutionApiException(
+            throw new WhatsAppApiException(
                 "Instance {$instance->id} is missing Cloud API credentials (waba_id / phone_number_id / access_token)."
             );
         }
@@ -66,7 +66,7 @@ class WhatsAppCloudApiService
      *
      * @return array{messages: array<int, array{id: string}>}|array<string, mixed>
      *
-     * @throws EvolutionApiException
+     * @throws WhatsAppApiException
      */
     public function sendText(WhatsAppInstance $instance, string $phone, string $message): array
     {
@@ -85,7 +85,7 @@ class WhatsAppCloudApiService
     /**
      * Send a media message (image/document/audio/video).
      *
-     * @throws EvolutionApiException
+     * @throws WhatsAppApiException
      */
     public function sendMedia(
         WhatsAppInstance $instance,
@@ -116,7 +116,7 @@ class WhatsAppCloudApiService
      *
      * @param  array<int, array<string, mixed>>  $components  body/header/button parameter substitutions
      *
-     * @throws EvolutionApiException
+     * @throws WhatsAppApiException
      */
     public function sendTemplate(
         WhatsAppInstance $instance,
@@ -162,7 +162,7 @@ class WhatsAppCloudApiService
      *
      * @return array<int, array<string, mixed>>
      *
-     * @throws EvolutionApiException
+     * @throws WhatsAppApiException
      */
     public function fetchTemplates(WhatsAppInstance $instance, int $limit = 100): array
     {
@@ -175,7 +175,7 @@ class WhatsAppCloudApiService
             if ($response->failed()) {
                 $this->logHttp('fetchTemplates', $instance, $response->status(), $response->body());
 
-                throw new EvolutionApiException(
+                throw new WhatsAppApiException(
                     "Failed to fetch templates: {$response->status()} - {$response->body()}"
                 );
             }
@@ -194,7 +194,7 @@ class WhatsAppCloudApiService
      *
      * @param  array<int, array<string, mixed>>  $components  e.g. [['type' => 'BODY', 'text' => 'Hello {{1}}']]
      *
-     * @throws EvolutionApiException
+     * @throws WhatsAppApiException
      */
     public function createTemplate(
         WhatsAppInstance $instance,
@@ -216,7 +216,7 @@ class WhatsAppCloudApiService
         if ($response->failed()) {
             $this->logHttp('createTemplate', $instance, $response->status(), $response->body());
 
-            throw new EvolutionApiException(
+            throw new WhatsAppApiException(
                 "Failed to create template: {$response->status()} - {$response->body()}"
             );
         }
@@ -227,7 +227,7 @@ class WhatsAppCloudApiService
     /**
      * Delete a template by name (Meta also accepts hsm_id for stricter targeting).
      *
-     * @throws EvolutionApiException
+     * @throws WhatsAppApiException
      */
     public function deleteTemplate(WhatsAppInstance $instance, string $name): array
     {
@@ -239,7 +239,7 @@ class WhatsAppCloudApiService
         if ($response->failed()) {
             $this->logHttp('deleteTemplate', $instance, $response->status(), $response->body());
 
-            throw new EvolutionApiException(
+            throw new WhatsAppApiException(
                 "Failed to delete template: {$response->status()} - {$response->body()}"
             );
         }
@@ -256,7 +256,7 @@ class WhatsAppCloudApiService
      * Used both as a credential validity check on instance setup and for
      * periodic health refresh.
      *
-     * @throws EvolutionApiException
+     * @throws WhatsAppApiException
      */
     public function getPhoneNumberInfo(WhatsAppInstance $instance): array
     {
@@ -268,7 +268,7 @@ class WhatsAppCloudApiService
         if ($response->failed()) {
             $this->logHttp('getPhoneNumberInfo', $instance, $response->status(), $response->body());
 
-            throw new EvolutionApiException(
+            throw new WhatsAppApiException(
                 "Failed to fetch phone number info: {$response->status()} - {$response->body()}"
             );
         }
@@ -294,7 +294,7 @@ class WhatsAppCloudApiService
         if ($response->failed()) {
             $this->logHttp('postMessage', $instance, $response->status(), $response->body());
 
-            throw new EvolutionApiException(
+            throw new WhatsAppApiException(
                 "Cloud API send failed: {$response->status()} - {$response->body()}"
             );
         }

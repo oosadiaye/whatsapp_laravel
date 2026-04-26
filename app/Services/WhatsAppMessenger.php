@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Exceptions\EvolutionApiException;
+use App\Exceptions\WhatsAppApiException;
 use App\Models\WhatsAppInstance;
 
 /**
@@ -33,7 +33,7 @@ class WhatsAppMessenger
      * Send a freeform text message. For first contact (outside the 24h window)
      * use {@see sendTemplate()} instead — Cloud API will reject text otherwise.
      *
-     * @throws EvolutionApiException
+     * @throws WhatsAppApiException
      */
     public function sendText(WhatsAppInstance $instance, string $phone, string $message): SendResult
     {
@@ -57,7 +57,7 @@ class WhatsAppMessenger
     /**
      * Send a media message (image/document/audio/video) with optional caption.
      *
-     * @throws EvolutionApiException
+     * @throws WhatsAppApiException
      */
     public function sendMedia(
         WhatsAppInstance $instance,
@@ -96,7 +96,7 @@ class WhatsAppMessenger
      *
      * @param  array<int, array<string, mixed>>  $components  Body/header/button parameter arrays
      *
-     * @throws EvolutionApiException
+     * @throws WhatsAppApiException
      */
     public function sendTemplate(
         WhatsAppInstance $instance,
@@ -106,7 +106,7 @@ class WhatsAppMessenger
         array $components = [],
     ): SendResult {
         if (! $instance->isCloud()) {
-            throw new EvolutionApiException(
+            throw new WhatsAppApiException(
                 'Template messages are only supported for Cloud API instances. '.
                 'Evolution/Baileys instances must use sendText() or sendMedia().'
             );

@@ -5,7 +5,9 @@
 
     <div class="py-6">
         <div class="mx-auto max-w-4xl sm:px-6 lg:px-8">
-            <form action="{{ route('campaigns.update', $campaign) }}" method="POST" enctype="multipart/form-data" class="space-y-6">
+            <form action="{{ route('campaigns.update', $campaign) }}" method="POST" enctype="multipart/form-data"
+                  x-data="{ message: @js(old('message', $campaign->message)) }"
+                  class="space-y-6">
                 @csrf
                 @method('PUT')
 
@@ -39,9 +41,55 @@
                         @endforeach
                     </div>
                     <div>
+                        <label class="block text-sm font-medium text-gray-700">{{ __('Template') }}</label>
+                        @php
+                            $remoteTemplates = $templates->filter(fn ($t) => $t->isRemote());
+                            $localTemplates = $templates->filter(fn ($t) => ! $t->isRemote());
+                        @endphp
+                        <select name="message_template_id"
+                                class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm"
+                                @change="
+                                    const opt = $event.target.selectedOptions[0];
+                                    if (opt.value) {
+                                        message = opt.dataset.content;
+                                        $refs.messageArea.value = message;
+                                        $refs.langInput.value = opt.dataset.language || 'en_US';
+                                    } else {
+                                        $refs.langInput.value = '';
+                                    }
+                                ">
+                            <option value="">{{ __('Compose from scratch (24h window only)') }}</option>
+                            @if($remoteTemplates->isNotEmpty())
+                                <optgroup label="{{ __('Approved by Meta — sendable any time') }}">
+                                    @foreach($remoteTemplates as $template)
+                                        <option value="{{ $template->id }}"
+                                                data-content="{{ $template->content }}"
+                                                data-language="{{ $template->language }}"
+                                                {{ old('message_template_id', $campaign->message_template_id) == $template->id ? 'selected' : '' }}>
+                                            {{ $template->name }} · {{ $template->language }} · {{ $template->status }}
+                                        </option>
+                                    @endforeach
+                                </optgroup>
+                            @endif
+                            @if($localTemplates->isNotEmpty())
+                                <optgroup label="{{ __('Local — only fills the message body') }}">
+                                    @foreach($localTemplates as $template)
+                                        <option value=""
+                                                data-content="{{ $template->content }}"
+                                                data-language="{{ $template->language ?? 'en_US' }}">
+                                            {{ $template->name }}
+                                        </option>
+                                    @endforeach
+                                </optgroup>
+                            @endif
+                        </select>
+                        <input type="hidden" name="template_language" x-ref="langInput"
+                               value="{{ old('template_language', $campaign->template_language) }}">
+                    </div>
+                    <div>
                         <label class="block text-sm font-medium text-gray-700">Message *</label>
-                        <textarea name="message" rows="6" required
-                                  class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">{{ old('message', $campaign->message) }}</textarea>
+                        <textarea name="message" x-ref="messageArea" x-model="message" rows="6" required
+                                  class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]"></textarea>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Media (optional)</label>
