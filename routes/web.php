@@ -57,6 +57,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/groups/{group}/export', [ContactController::class, 'exportGroup'])->name('contacts.exportGroup');
 
     // Message Templates
+    Route::post('/templates/sync', [MessageTemplateController::class, 'sync'])->name('templates.sync');
     Route::resource('templates', MessageTemplateController::class);
 
     // Campaigns

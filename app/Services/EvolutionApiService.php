@@ -242,6 +242,83 @@ class EvolutionApiService
     }
 
     /**
+     * Fetch all WhatsApp Business templates registered against this instance.
+     *
+     * Requires the Evolution API instance to be connected via the WhatsApp Cloud
+     * API integration (Baileys/Web instances will return an empty list because
+     * the underlying protocol does not expose Meta-approved templates).
+     *
+     * @return array<int, array<string, mixed>> Raw template payload from Evolution API.
+     *
+     * @throws EvolutionApiException
+     */
+    public function fetchTemplates(string $instance): array
+    {
+        $response = Http::withHeaders(['apikey' => $this->apiKey])
+            ->get("{$this->baseUrl}/template/find/{$instance}");
+
+        if ($response->failed()) {
+            Log::error('EvolutionAPI fetchTemplates failed', [
+                'instance' => $instance,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            throw new EvolutionApiException(
+                "Failed to fetch templates: {$response->status()} - {$response->body()}"
+            );
+        }
+
+        $data = $response->json();
+
+        // Evolution API may return either a flat array or { data: [...] }.
+        if (isset($data['data']) && is_array($data['data'])) {
+            return $data['data'];
+        }
+
+        return is_array($data) ? $data : [];
+    }
+
+    /**
+     * Send a Meta-approved template message via Evolution API (Cloud API integration).
+     *
+     * @param  array<int, array<string, mixed>>  $components  e.g. body parameter substitutions
+     *
+     * @throws EvolutionApiException
+     */
+    public function sendTemplate(
+        string $instance,
+        string $phone,
+        string $templateName,
+        string $language = 'en_US',
+        array $components = [],
+    ): array {
+        $response = Http::withHeaders(['apikey' => $this->apiKey])
+            ->post("{$this->baseUrl}/message/sendTemplate/{$instance}", [
+                'number' => $phone,
+                'name' => $templateName,
+                'language' => $language,
+                'components' => $components,
+            ]);
+
+        if ($response->failed()) {
+            Log::error('EvolutionAPI sendTemplate failed', [
+                'instance' => $instance,
+                'phone' => $phone,
+                'template' => $templateName,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            throw new EvolutionApiException(
+                "Failed to send template: {$response->status()} - {$response->body()}"
+            );
+        }
+
+        return $response->json();
+    }
+
+    /**
      * Map a media type string to its corresponding MIME type.
      */
     private function getMimeType(string $mediaType): string
