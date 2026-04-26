@@ -7,6 +7,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\CloudWebhookController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\WhatsAppInstanceController;
 use Illuminate\Support\Facades\Route;
@@ -15,9 +16,17 @@ Route::get('/', function () {
     return redirect()->route('dashboard');
 });
 
-// Webhook (no CSRF, no auth)
+// Webhooks (no CSRF, no auth — external services post here)
 Route::post('/webhook/evolution', [WebhookController::class, 'handle'])
     ->name('webhook.evolution')
+    ->withoutMiddleware(['web']);
+
+// Meta Cloud API per-instance webhook (verify GET + events POST)
+Route::get('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'verify'])
+    ->name('webhook.cloud.verify')
+    ->withoutMiddleware(['web']);
+Route::post('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'handle'])
+    ->name('webhook.cloud.handle')
     ->withoutMiddleware(['web']);
 
 // Authenticated routes
