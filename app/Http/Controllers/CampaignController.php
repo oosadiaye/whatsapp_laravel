@@ -36,7 +36,13 @@ class CampaignController extends Controller
         return view('campaigns.create', [
             'groups' => ContactGroup::where('user_id', $userId)->get(),
             'instances' => WhatsAppInstance::where('user_id', $userId)->get(),
-            'templates' => MessageTemplate::where('user_id', $userId)->get(),
+            // Only APPROVED remote templates are eligible for live campaign sends.
+            // Local templates remain available to manually populate the message body.
+            'templates' => MessageTemplate::where('user_id', $userId)
+                ->whereIn('status', [MessageTemplate::STATUS_APPROVED, MessageTemplate::STATUS_LOCAL])
+                ->orderBy('whatsapp_instance_id')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -47,6 +53,8 @@ class CampaignController extends Controller
             'name' => $request->validated('name'),
             'message' => $request->validated('message'),
             'instance_id' => $request->validated('instance_id'),
+            'message_template_id' => $request->validated('message_template_id'),
+            'template_language' => $request->validated('template_language'),
             'rate_per_minute' => $request->validated('rate_per_minute', 10),
             'delay_min' => $request->validated('delay_min', 3),
             'delay_max' => $request->validated('delay_max', 10),
@@ -101,6 +109,8 @@ class CampaignController extends Controller
             'name' => $request->validated('name'),
             'message' => $request->validated('message'),
             'instance_id' => $request->validated('instance_id'),
+            'message_template_id' => $request->validated('message_template_id'),
+            'template_language' => $request->validated('template_language'),
             'rate_per_minute' => $request->validated('rate_per_minute', 10),
             'delay_min' => $request->validated('delay_min', 3),
             'delay_max' => $request->validated('delay_max', 10),

@@ -22,6 +22,8 @@ class StoreCampaignRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string'],
             'instance_id' => ['nullable', 'exists:whatsapp_instances,id'],
+            'message_template_id' => ['nullable', 'exists:message_templates,id'],
+            'template_language' => ['nullable', 'string', 'max:16'],
             'groups' => ['required', 'array', 'min:1'],
             'groups.*' => ['exists:contact_groups,id'],
             'media' => ['nullable', 'file', 'max:5120', 'mimes:jpg,jpeg,png,gif,pdf,mp3,ogg'],

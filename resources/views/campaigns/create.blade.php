@@ -69,14 +69,53 @@
                 <div x-show="tab === 'message'" class="rounded-xl bg-white p-6 shadow-sm">
                     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">Use Template (optional)</label>
-                            <select class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm"
-                                    @change="if ($event.target.value) { message = $event.target.selectedOptions[0].dataset.content; $refs.messageArea.value = message; }">
-                                <option value="">Compose from scratch...</option>
-                                @foreach($templates as $template)
-                                <option value="{{ $template->id }}" data-content="{{ $template->content }}">{{ $template->name }}</option>
-                                @endforeach
+                            <label class="block text-sm font-medium text-gray-700">{{ __('Template') }}</label>
+                            <select name="message_template_id"
+                                    x-data
+                                    class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm"
+                                    @change="
+                                        const opt = $event.target.selectedOptions[0];
+                                        if (opt.value) {
+                                            message = opt.dataset.content;
+                                            $refs.messageArea.value = message;
+                                            $refs.langInput.value = opt.dataset.language || 'en_US';
+                                        } else {
+                                            $refs.langInput.value = '';
+                                        }
+                                    ">
+                                <option value="">{{ __('Compose from scratch (24h window only)') }}</option>
+                                @php
+                                    $remoteTemplates = $templates->filter(fn ($t) => $t->isRemote());
+                                    $localTemplates = $templates->filter(fn ($t) => ! $t->isRemote());
+                                @endphp
+                                @if($remoteTemplates->isNotEmpty())
+                                    <optgroup label="{{ __('Approved by Meta — sendable any time') }}">
+                                        @foreach($remoteTemplates as $template)
+                                            <option value="{{ $template->id }}"
+                                                    data-content="{{ $template->content }}"
+                                                    data-language="{{ $template->language }}"
+                                                    {{ old('message_template_id') == $template->id ? 'selected' : '' }}>
+                                                {{ $template->name }} · {{ $template->language }} · {{ $template->status }}
+                                            </option>
+                                        @endforeach
+                                    </optgroup>
+                                @endif
+                                @if($localTemplates->isNotEmpty())
+                                    <optgroup label="{{ __('Local — only fills the message body') }}">
+                                        @foreach($localTemplates as $template)
+                                            <option value=""
+                                                    data-content="{{ $template->content }}"
+                                                    data-language="{{ $template->language ?? 'en_US' }}">
+                                                {{ $template->name }}
+                                            </option>
+                                        @endforeach
+                                    </optgroup>
+                                @endif
                             </select>
+                            <input type="hidden" name="template_language" x-ref="langInput" value="{{ old('template_language', '') }}">
+                            <p class="mt-1 text-xs text-gray-500">
+                                {{ __('Approved templates send via Meta\'s template API. Local templates just paste their content into the message body.') }}
+                            </p>
 
                             <div class="mt-4">
                                 <label class="block text-sm font-medium text-gray-700">Message *</label>
