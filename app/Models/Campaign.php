@@ -15,6 +15,8 @@ class Campaign extends Model
     protected $fillable = [
         'user_id',
         'instance_id',
+        'message_template_id',
+        'template_language',
         'name',
         'message',
         'media_path',
@@ -56,6 +58,22 @@ class Campaign extends Model
     public function whatsAppInstance(): BelongsTo
     {
         return $this->belongsTo(WhatsAppInstance::class, 'instance_id');
+    }
+
+    public function messageTemplate(): BelongsTo
+    {
+        return $this->belongsTo(MessageTemplate::class);
+    }
+
+    /**
+     * True when the campaign should be sent via Meta's template API rather than
+     * freeform text. Requires both a template selection and a Cloud API instance
+     * — Evolution instances cannot send templates.
+     */
+    public function shouldSendAsTemplate(): bool
+    {
+        return $this->message_template_id !== null
+            && $this->whatsAppInstance?->isCloud() === true;
     }
 
     public function contactGroups(): BelongsToMany

@@ -9,7 +9,7 @@ use App\Models\Contact;
 use App\Models\MessageLog;
 use App\Services\CampaignService;
 use App\Services\ContactImportService;
-use App\Services\EvolutionApiService;
+use App\Services\WhatsAppMessenger;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -19,6 +19,20 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
+/**
+ * Dispatches one WhatsApp message for a single contact in a campaign.
+ *
+ * Uses {@see WhatsAppMessenger} so the underlying driver (Cloud API vs
+ * Evolution) is picked based on the campaign's instance — this job has no
+ * direct dependency on either provider.
+ *
+ * Decision tree on every send:
+ *   - Campaign cancelled?            → mark FAILED, exit.
+ *   - Campaign paused?               → re-queue with delay.
+ *   - Campaign has template + cloud? → sendTemplate (with personalized params).
+ *   - Campaign has media?            → sendMedia.
+ *   - Otherwise                      → sendText.
+ */
 class SendWhatsAppMessage implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -35,7 +49,7 @@ class SendWhatsAppMessage implements ShouldQueue
         $this->onQueue('messages');
     }
 
-    public function handle(EvolutionApiService $api): void
+    public function handle(WhatsAppMessenger $messenger): void
     {
         $this->campaign->refresh();
 
@@ -56,26 +70,60 @@ class SendWhatsAppMessage implements ShouldQueue
             return;
         }
 
+        $instance = $this->campaign->whatsAppInstance;
+
+        if ($instance === null) {
+            $this->log->update([
+                'status' => 'FAILED',
+                'error_message' => 'Campaign has no WhatsApp instance attached',
+            ]);
+
+            return;
+        }
+
         $personalizer = new ContactImportService();
-        $message = $personalizer->personalizeMessage(
-            $this->campaign->message,
-            $this->contact,
-            $this->campaign->name,
-        );
 
-        $instanceName = $this->campaign->whatsAppInstance->instance_name;
+        // Branch 1: Cloud-API + template-driven send (production path).
+        if ($this->campaign->shouldSendAsTemplate()) {
+            $template = $this->campaign->messageTemplate;
+            $language = $this->campaign->template_language
+                ?? $template?->language
+                ?? 'en_US';
 
-        if ($this->campaign->media_path) {
-            $response = $api->sendMedia(
-                $instanceName,
+            $components = $this->buildTemplateComponents($template?->components ?? [], $personalizer);
+
+            $result = $messenger->sendTemplate(
+                $instance,
                 $this->contact->phone,
-                $message,
+                $template?->name ?? '',
+                $language,
+                $components,
+            );
+        } elseif ($this->campaign->media_path) {
+            // Branch 2: media + caption (legacy + cloud both support this).
+            $caption = $personalizer->personalizeMessage(
+                $this->campaign->message,
+                $this->contact,
+                $this->campaign->name,
+            );
+
+            $result = $messenger->sendMedia(
+                $instance,
+                $this->contact->phone,
+                $caption,
                 asset($this->campaign->media_path),
-                $this->campaign->media_type,
+                (string) $this->campaign->media_type,
             );
         } else {
-            $response = $api->sendText(
-                $instanceName,
+            // Branch 3: plain text (legacy + cloud both support this within 24h window).
+            $message = $personalizer->personalizeMessage(
+                $this->campaign->message,
+                $this->contact,
+                $this->campaign->name,
+            );
+
+            $result = $messenger->sendText(
+                $instance,
                 $this->contact->phone,
                 $message,
             );
@@ -83,14 +131,81 @@ class SendWhatsAppMessage implements ShouldQueue
 
         $this->log->update([
             'status' => 'SENT',
-            'whatsapp_message_id' => $response['key']['id'] ?? null,
+            'whatsapp_message_id' => $result->messageId,
             'sent_at' => Carbon::now(),
         ]);
 
         $this->campaign->increment('sent_count');
 
-        $campaignService = new CampaignService();
-        $campaignService->checkCompletion($this->campaign);
+        (new CampaignService())->checkCompletion($this->campaign);
+    }
+
+    /**
+     * Build per-contact `components` for a template send by personalizing the
+     * BODY component's variable parameters ({{1}}, {{2}}, ...) with contact
+     * fields. Header/button components are passed through as-is for now —
+     * Phase 5 will add a real component-mapping UI.
+     *
+     * @param  array<int, array<string, mixed>>  $templateComponents
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildTemplateComponents(array $templateComponents, ContactImportService $personalizer): array
+    {
+        $output = [];
+
+        foreach ($templateComponents as $component) {
+            $type = strtoupper((string) ($component['type'] ?? ''));
+
+            if ($type !== 'BODY') {
+                // For HEADER / FOOTER / BUTTONS we don't yet personalize — pass through.
+                continue;
+            }
+
+            $bodyText = (string) ($component['text'] ?? '');
+            $variableCount = preg_match_all('/{{\s*(\d+)\s*}}/', $bodyText, $matches);
+
+            if ($variableCount === 0 || $variableCount === false) {
+                continue;
+            }
+
+            $parameters = [];
+            foreach ($matches[1] as $position) {
+                $parameters[] = [
+                    'type' => 'text',
+                    'text' => $this->resolveTemplateVariable((int) $position),
+                ];
+            }
+
+            $output[] = [
+                'type' => 'body',
+                'parameters' => $parameters,
+            ];
+        }
+
+        return $output;
+    }
+
+    /**
+     * Map a positional template variable ({{1}}, {{2}}, ...) to a contact field.
+     * Mirrors the existing personalization order — name, phone, first_name,
+     * custom_field_1, then a sane default.
+     */
+    private function resolveTemplateVariable(int $position): string
+    {
+        return match ($position) {
+            1 => $this->contact->name ?? $this->contact->phone,
+            2 => $this->contact->phone,
+            3 => $this->firstName($this->contact->name ?? ''),
+            4 => (string) ($this->contact->custom_fields['custom_field_1'] ?? ''),
+            default => '',
+        };
+    }
+
+    private function firstName(string $fullName): string
+    {
+        $parts = preg_split('/\s+/', trim($fullName));
+
+        return $parts[0] ?? '';
     }
 
     public function failed(Throwable $exception): void
@@ -102,8 +217,7 @@ class SendWhatsAppMessage implements ShouldQueue
 
         $this->campaign->increment('failed_count');
 
-        $campaignService = new CampaignService();
-        $campaignService->checkCompletion($this->campaign);
+        (new CampaignService())->checkCompletion($this->campaign);
 
         Log::error('SendWhatsAppMessage failed', [
             'campaign_id' => $this->campaign->id,
