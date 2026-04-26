@@ -10,7 +10,11 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Wraps all HTTP calls to the Evolution API.
+ * Wraps all HTTP calls to the legacy Evolution API (Baileys-based).
+ *
+ * @deprecated Replaced by {@see WhatsAppCloudApiService}. Kept in place during
+ *             the multi-phase pivot to Meta Cloud API so existing instances
+ *             with driver='evolution' keep working until Phase 5 cleanup.
  */
 class EvolutionApiService
 {
