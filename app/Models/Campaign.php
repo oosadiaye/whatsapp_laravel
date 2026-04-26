@@ -67,14 +67,13 @@ class Campaign extends Model
     }
 
     /**
-     * True when the campaign should be sent via Meta's template API rather than
-     * freeform text. Requires both a template selection and a Cloud API instance
-     * — Evolution instances cannot send templates.
+     * True when the campaign should be sent via Meta's template API rather
+     * than freeform text. Required for any outreach outside the 24h
+     * conversation window (i.e. all marketing campaigns to fresh contacts).
      */
     public function shouldSendAsTemplate(): bool
     {
-        return $this->message_template_id !== null
-            && $this->whatsAppInstance?->isCloud() === true;
+        return $this->message_template_id !== null;
     }
 
     public function contactGroups(): BelongsToMany

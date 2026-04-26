@@ -83,7 +83,7 @@ class SendWhatsAppMessage implements ShouldQueue
 
         $personalizer = new ContactImportService();
 
-        // Branch 1: Cloud-API + template-driven send (production path).
+        // Branch 1: template-driven send (production path for cold outreach).
         if ($this->campaign->shouldSendAsTemplate()) {
             $template = $this->campaign->messageTemplate;
             $language = $this->campaign->template_language
@@ -100,7 +100,7 @@ class SendWhatsAppMessage implements ShouldQueue
                 $components,
             );
         } elseif ($this->campaign->media_path) {
-            // Branch 2: media + caption (legacy + cloud both support this).
+            // Branch 2: media + caption (only legal inside the 24h window).
             $caption = $personalizer->personalizeMessage(
                 $this->campaign->message,
                 $this->contact,
@@ -115,7 +115,7 @@ class SendWhatsAppMessage implements ShouldQueue
                 (string) $this->campaign->media_type,
             );
         } else {
-            // Branch 3: plain text (legacy + cloud both support this within 24h window).
+            // Branch 3: plain text (only legal inside the 24h conversation window).
             $message = $personalizer->personalizeMessage(
                 $this->campaign->message,
                 $this->contact,

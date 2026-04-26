@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Exceptions\EvolutionApiException;
+use App\Exceptions\WhatsAppApiException;
 use App\Models\WhatsAppInstance;
-use App\Services\EvolutionApiService;
 use App\Services\WhatsAppCloudApiService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -17,18 +15,16 @@ use Illuminate\View\View;
 use Throwable;
 
 /**
- * Handles WhatsApp instance lifecycle for both supported drivers:
- *   - 'cloud'     — Meta Cloud API (credentials pasted from Meta dashboard)
- *   - 'evolution' — legacy Baileys (QR-code scan)
+ * WhatsApp Cloud API instance lifecycle: setup, credential validation,
+ * health refresh, deletion.
  *
- * The submitted `driver` field on the create form switches between two
- * validation + provisioning paths in {@see store()}. Likewise {@see show()}
- * picks a different status-fetching strategy per driver.
+ * Each instance is one Meta phone number with its own credentials. The
+ * controller never stores credentials in plaintext — the model's
+ * 'encrypted' casts handle that — and never logs them.
  */
 class WhatsAppInstanceController extends Controller
 {
     public function __construct(
-        private readonly EvolutionApiService $evolutionApi,
         private readonly WhatsAppCloudApiService $cloudApi,
     ) {}
 
@@ -46,138 +42,12 @@ class WhatsAppInstanceController extends Controller
         return view('instances.create');
     }
 
+    /**
+     * Create a Cloud API instance. Probes Meta on save to confirm credentials
+     * are real — if Meta rejects them, we still save (so user can fix typos
+     * without losing data) but flag the row CREDENTIALS_INVALID.
+     */
     public function store(Request $request): RedirectResponse
-    {
-        $driver = $request->input('driver', WhatsAppInstance::DRIVER_CLOUD);
-
-        return $driver === WhatsAppInstance::DRIVER_CLOUD
-            ? $this->storeCloudInstance($request)
-            : $this->storeEvolutionInstance($request);
-    }
-
-    public function show(string $id): View
-    {
-        $instance = WhatsAppInstance::where('user_id', auth()->id())
-            ->findOrFail($id);
-
-        $status = $instance->status;
-        $phoneInfo = null;
-
-        if ($instance->isCloud() && $instance->isCloudReady()) {
-            try {
-                $phoneInfo = $this->cloudApi->getPhoneNumberInfo($instance);
-                $status = 'CONNECTED';
-
-                // Refresh quality + tier from Meta on each show — they change over time.
-                $instance->update([
-                    'quality_rating' => $phoneInfo['quality_rating'] ?? $instance->quality_rating,
-                    'messaging_limit_tier' => $phoneInfo['messaging_limit_tier'] ?? $instance->messaging_limit_tier,
-                    'business_phone_number' => $phoneInfo['display_phone_number'] ?? $instance->business_phone_number,
-                    'display_name' => $phoneInfo['verified_name'] ?? $instance->display_name,
-                    'status' => 'CONNECTED',
-                ]);
-            } catch (Throwable $e) {
-                Log::warning('Cloud API getPhoneNumberInfo failed', ['error' => $e->getMessage()]);
-                $status = 'CREDENTIALS_INVALID';
-            }
-        } elseif ($instance->isEvolution()) {
-            try {
-                $status = $this->evolutionApi->getInstanceStatus($instance->instance_name);
-            } catch (Throwable $e) {
-                Log::warning('Evolution API getInstanceStatus failed: '.$e->getMessage());
-            }
-        }
-
-        return view('instances.show', [
-            'instance' => $instance,
-            'status' => $status,
-            'phoneInfo' => $phoneInfo,
-            'cloudWebhookUrl' => $instance->isCloud()
-                ? route('webhook.cloud.handle', ['instance' => $instance->id])
-                : null,
-        ]);
-    }
-
-    public function destroy(string $id): RedirectResponse
-    {
-        $instance = WhatsAppInstance::where('user_id', auth()->id())
-            ->findOrFail($id);
-
-        if ($instance->isEvolution()) {
-            try {
-                $this->evolutionApi->deleteInstance($instance->instance_name);
-            } catch (Throwable $e) {
-                Log::warning('Evolution API deleteInstance failed: '.$e->getMessage());
-            }
-        }
-        // For cloud instances we only delete the local record — the Meta-side
-        // configuration is owned by the customer's Meta App, not by us.
-
-        $instance->delete();
-
-        return redirect()
-            ->route('instances.index')
-            ->with('success', 'Instance deleted successfully.');
-    }
-
-    public function setDefault(string $id): RedirectResponse
-    {
-        $userId = auth()->id();
-
-        WhatsAppInstance::where('user_id', $userId)->update(['is_default' => false]);
-        WhatsAppInstance::where('user_id', $userId)->where('id', $id)->update(['is_default' => true]);
-
-        return redirect()->back()->with('success', 'Default instance updated.');
-    }
-
-    /**
-     * Polled by the evolution-driven QR scan view. Cloud API instances don't
-     * use this — their connection state is managed entirely in the Meta dashboard.
-     */
-    public function qrStatus(string $id): JsonResponse
-    {
-        $instance = WhatsAppInstance::where('user_id', auth()->id())
-            ->findOrFail($id);
-
-        if ($instance->isCloud()) {
-            return response()->json([
-                'status' => 'CONNECTED',
-                'qr_code' => null,
-                'error' => 'Cloud API instances do not use QR codes.',
-            ]);
-        }
-
-        $status = $instance->status;
-        $qrCode = null;
-        $error = null;
-
-        try {
-            $status = $this->evolutionApi->getInstanceStatus($instance->instance_name);
-            if ($status !== 'open' && $status !== 'CONNECTED') {
-                $qrCode = $this->evolutionApi->getQrCode($instance->instance_name);
-            }
-        } catch (Throwable $e) {
-            $error = $e->getMessage();
-            Log::warning('Evolution API qrStatus failed: '.$e->getMessage());
-        }
-
-        return response()->json([
-            'status' => $status,
-            'qr_code' => $qrCode,
-            'error' => $error,
-        ]);
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Driver-specific provisioning
-    // ──────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Create a Cloud API instance. Validates the pasted credentials by calling
-     * GET /{phone_number_id} against Meta — if that fails, we still save the
-     * instance (so the user can fix typos) but flag it as CREDENTIALS_INVALID.
-     */
-    private function storeCloudInstance(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'instance_name' => ['required', 'string', 'max:255', 'unique:whatsapp_instances,instance_name'],
@@ -189,24 +59,19 @@ class WhatsAppInstanceController extends Controller
             'webhook_verify_token' => ['nullable', 'string', 'max:255'],
         ]);
 
-        // Auto-generate a verify token if user didn't supply one — they'll copy
-        // it into Meta's webhook config.
-        $verifyToken = $validated['webhook_verify_token'] ?: Str::random(32);
-
         $instance = WhatsAppInstance::create([
             'user_id' => auth()->id(),
-            'driver' => WhatsAppInstance::DRIVER_CLOUD,
             'instance_name' => $validated['instance_name'],
             'display_name' => $validated['display_name'] ?? $validated['instance_name'],
             'waba_id' => $validated['waba_id'],
             'phone_number_id' => $validated['phone_number_id'],
             'access_token' => $validated['access_token'],
             'app_secret' => $validated['app_secret'],
-            'webhook_verify_token' => $verifyToken,
+            // Auto-generate verify token when blank — user copies it into Meta.
+            'webhook_verify_token' => $validated['webhook_verify_token'] ?: Str::random(32),
             'status' => 'PENDING_VERIFICATION',
         ]);
 
-        // Probe Meta to confirm credentials are valid; fill phone metadata if so.
         try {
             $info = $this->cloudApi->getPhoneNumberInfo($instance);
 
@@ -220,8 +85,8 @@ class WhatsAppInstanceController extends Controller
 
             return redirect()
                 ->route('instances.show', $instance)
-                ->with('success', 'Cloud API instance connected. Copy the webhook URL & verify token into your Meta App dashboard.');
-        } catch (EvolutionApiException $e) {
+                ->with('success', 'Instance connected. Copy the webhook URL and verify token into your Meta App dashboard.');
+        } catch (WhatsAppApiException $e) {
             $instance->update(['status' => 'CREDENTIALS_INVALID']);
 
             return redirect()
@@ -237,53 +102,59 @@ class WhatsAppInstanceController extends Controller
         }
     }
 
-    /**
-     * Create a legacy Evolution/Baileys instance via QR-code scan.
-     */
-    private function storeEvolutionInstance(Request $request): RedirectResponse
+    public function show(string $id): View
     {
-        $validated = $request->validate([
-            'instance_name' => ['required', 'string', 'max:255', 'unique:whatsapp_instances,instance_name'],
-            'display_name' => ['nullable', 'string', 'max:255'],
-        ]);
+        $instance = WhatsAppInstance::where('user_id', auth()->id())->findOrFail($id);
 
-        $apiToken = null;
-        $evolutionOk = true;
-        $evolutionError = null;
+        $status = $instance->status;
+        $phoneInfo = null;
 
-        try {
-            $apiResult = $this->evolutionApi->createInstance($validated['instance_name']);
-            $apiToken = $apiResult['hash'] ?? null;
-        } catch (Throwable $e) {
-            $evolutionOk = false;
-            $evolutionError = $e->getMessage();
-            Log::warning('Evolution API createInstance failed: '.$e->getMessage());
-        }
-
-        $instance = WhatsAppInstance::create([
-            'user_id' => auth()->id(),
-            'driver' => WhatsAppInstance::DRIVER_EVOLUTION,
-            'instance_name' => $validated['instance_name'],
-            'display_name' => $validated['display_name'] ?? $validated['instance_name'],
-            'status' => 'DISCONNECTED',
-            'api_token' => $apiToken,
-        ]);
-
-        if ($evolutionOk) {
+        if ($instance->isReady()) {
             try {
-                $webhookUrl = config('app.url').'/webhook/evolution';
-                $this->evolutionApi->setWebhook($validated['instance_name'], $webhookUrl);
-            } catch (Throwable $e) {
-                Log::warning('Evolution API setWebhook failed: '.$e->getMessage());
-            }
+                $phoneInfo = $this->cloudApi->getPhoneNumberInfo($instance);
+                $status = 'CONNECTED';
 
-            return redirect()
-                ->route('instances.show', $instance)
-                ->with('success', 'Evolution instance created. Scan the QR code to connect.');
+                $instance->update([
+                    'quality_rating' => $phoneInfo['quality_rating'] ?? $instance->quality_rating,
+                    'messaging_limit_tier' => $phoneInfo['messaging_limit_tier'] ?? $instance->messaging_limit_tier,
+                    'business_phone_number' => $phoneInfo['display_phone_number'] ?? $instance->business_phone_number,
+                    'display_name' => $phoneInfo['verified_name'] ?? $instance->display_name,
+                    'status' => 'CONNECTED',
+                ]);
+            } catch (Throwable $e) {
+                Log::warning('Cloud API getPhoneNumberInfo failed', ['error' => $e->getMessage()]);
+                $status = 'CREDENTIALS_INVALID';
+            }
         }
+
+        return view('instances.show', [
+            'instance' => $instance,
+            'status' => $status,
+            'phoneInfo' => $phoneInfo,
+            'cloudWebhookUrl' => route('webhook.cloud.handle', ['instance' => $instance->id]),
+        ]);
+    }
+
+    public function destroy(string $id): RedirectResponse
+    {
+        $instance = WhatsAppInstance::where('user_id', auth()->id())->findOrFail($id);
+
+        // Only the local row is removed — Meta-side configuration is owned by
+        // the customer's Meta App, not by us. Customer revokes access there.
+        $instance->delete();
 
         return redirect()
-            ->route('instances.show', $instance)
-            ->with('warning', 'Instance saved, but Evolution API is unreachable. Error: '.$evolutionError);
+            ->route('instances.index')
+            ->with('success', 'Instance deleted successfully.');
+    }
+
+    public function setDefault(string $id): RedirectResponse
+    {
+        $userId = auth()->id();
+
+        WhatsAppInstance::where('user_id', $userId)->update(['is_default' => false]);
+        WhatsAppInstance::where('user_id', $userId)->where('id', $id)->update(['is_default' => true]);
+
+        return redirect()->back()->with('success', 'Default instance updated.');
     }
 }

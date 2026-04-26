@@ -21,9 +21,6 @@ class SettingsController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'evolution_api_url' => ['nullable', 'url', 'max:500'],
-            'evolution_api_key' => ['nullable', 'string', 'max:500'],
-            'webhook_secret' => ['nullable', 'string', 'max:255'],
             'default_rate_per_minute' => ['nullable', 'integer', 'min:1', 'max:60'],
             'default_delay_min' => ['nullable', 'integer', 'min:1', 'max:30'],
             'default_delay_max' => ['nullable', 'integer', 'min:1', 'max:60'],

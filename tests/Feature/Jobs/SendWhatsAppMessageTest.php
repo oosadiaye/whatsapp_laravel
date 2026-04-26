@@ -38,7 +38,7 @@ class SendWhatsAppMessageTest extends TestCase
     public function test_uses_template_send_for_cloud_instance_with_template(): void
     {
         $user = User::factory()->create();
-        $instance = WhatsAppInstance::factory()->cloud()->create(['user_id' => $user->id]);
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         $template = MessageTemplate::factory()->remote()->create([
             'user_id' => $user->id,
             'whatsapp_instance_id' => $instance->id,
@@ -75,7 +75,7 @@ class SendWhatsAppMessageTest extends TestCase
     public function test_uses_text_send_when_campaign_has_no_template(): void
     {
         $user = User::factory()->create();
-        $instance = WhatsAppInstance::factory()->cloud()->create(['user_id' => $user->id]);
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         [$campaign, $contact, $log] = $this->setupSend($user, $instance, [
             'message' => 'Hello {{name}}!',
         ]);
@@ -99,38 +99,10 @@ class SendWhatsAppMessageTest extends TestCase
         $this->assertSame('wamid.text_send', $log->fresh()->whatsapp_message_id);
     }
 
-    public function test_template_path_skipped_for_evolution_instance_even_with_template(): void
-    {
-        // Evolution instances cannot send templates — the job must fall back to text
-        // even if the campaign has a message_template_id set.
-        $user = User::factory()->create();
-        $instance = WhatsAppInstance::factory()->evolution()->create([
-            'user_id' => $user->id,
-            'instance_name' => 'evo_main',
-        ]);
-        $template = MessageTemplate::factory()->create(['user_id' => $user->id]);
-
-        [$campaign, $contact, $log] = $this->setupSend($user, $instance, [
-            'message_template_id' => $template->id,
-            'message' => 'Plain text fallback',
-        ]);
-
-        Http::fake([
-            '*' => Http::response(['key' => ['id' => 'evo_msg_id']], 200),
-        ]);
-
-        SendWhatsAppMessage::dispatch($log, $campaign, $contact);
-
-        // No outbound graph.facebook.com calls — Evolution path used.
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'graph.facebook.com'));
-
-        $this->assertSame('SENT', $log->fresh()->status);
-    }
-
     public function test_cancelled_campaign_marks_log_failed_without_sending(): void
     {
         $user = User::factory()->create();
-        $instance = WhatsAppInstance::factory()->cloud()->create(['user_id' => $user->id]);
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         [$campaign, $contact, $log] = $this->setupSend($user, $instance, [
             'status' => 'CANCELLED',
         ]);

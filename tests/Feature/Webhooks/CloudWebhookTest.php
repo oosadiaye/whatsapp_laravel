@@ -25,7 +25,7 @@ class CloudWebhookTest extends TestCase
 
     public function test_get_verify_returns_challenge_when_token_matches(): void
     {
-        $instance = WhatsAppInstance::factory()->cloud()->create([
+        $instance = WhatsAppInstance::factory()->create([
             'webhook_verify_token' => 'EXPECTED_TOKEN',
         ]);
 
@@ -43,7 +43,7 @@ class CloudWebhookTest extends TestCase
 
     public function test_get_verify_rejects_mismatched_token(): void
     {
-        $instance = WhatsAppInstance::factory()->cloud()->create([
+        $instance = WhatsAppInstance::factory()->create([
             'webhook_verify_token' => 'EXPECTED_TOKEN',
         ]);
 
@@ -57,7 +57,7 @@ class CloudWebhookTest extends TestCase
 
     public function test_get_verify_rejects_non_subscribe_mode(): void
     {
-        $instance = WhatsAppInstance::factory()->cloud()->create([
+        $instance = WhatsAppInstance::factory()->create([
             'webhook_verify_token' => 'TOKEN',
         ]);
 
@@ -71,7 +71,7 @@ class CloudWebhookTest extends TestCase
 
     public function test_post_without_signature_header_is_rejected(): void
     {
-        $instance = WhatsAppInstance::factory()->cloud()->create();
+        $instance = WhatsAppInstance::factory()->create();
 
         $this->postJson(route('webhook.cloud.handle', $instance), [
             'entry' => [],
@@ -80,7 +80,7 @@ class CloudWebhookTest extends TestCase
 
     public function test_post_with_invalid_signature_is_rejected(): void
     {
-        $instance = WhatsAppInstance::factory()->cloud()->create([
+        $instance = WhatsAppInstance::factory()->create([
             'app_secret' => 'CORRECT_SECRET',
         ]);
 
@@ -139,7 +139,7 @@ class CloudWebhookTest extends TestCase
 
     public function test_unknown_message_id_is_silently_dropped(): void
     {
-        $instance = WhatsAppInstance::factory()->cloud()->create(['app_secret' => 'S']);
+        $instance = WhatsAppInstance::factory()->create(['app_secret' => 'S']);
 
         // Status for a message_id that doesn't exist in our DB — typical for
         // inbound replies or messages sent through other means.
@@ -209,7 +209,7 @@ class CloudWebhookTest extends TestCase
     /** @return array{0: WhatsAppInstance, 1: MessageLog} */
     private function seedInstanceWithLog(string $secret): array
     {
-        $instance = WhatsAppInstance::factory()->cloud()->create(['app_secret' => $secret]);
+        $instance = WhatsAppInstance::factory()->create(['app_secret' => $secret]);
 
         $campaign = Campaign::factory()->create([
             'user_id' => $instance->user_id,

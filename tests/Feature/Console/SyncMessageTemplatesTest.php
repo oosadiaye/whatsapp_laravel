@@ -28,24 +28,10 @@ class SyncMessageTemplatesTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_skips_evolution_instances(): void
-    {
-        $user = User::factory()->create();
-        $evo = WhatsAppInstance::factory()->evolution()->create(['user_id' => $user->id]);
-        Campaign::factory()->create(['user_id' => $user->id, 'instance_id' => $evo->id]);
-
-        Http::fake();
-
-        $exitCode = Artisan::call('templates:sync-status');
-
-        $this->assertSame(0, $exitCode);
-        Http::assertNothingSent();
-    }
-
     public function test_skips_cloud_instances_with_missing_credentials(): void
     {
         $user = User::factory()->create();
-        $cloud = WhatsAppInstance::factory()->cloud()->create([
+        $cloud = WhatsAppInstance::factory()->create([
             'user_id' => $user->id,
             'access_token' => null,
         ]);
@@ -60,7 +46,7 @@ class SyncMessageTemplatesTest extends TestCase
     {
         // No campaign → no point hitting Meta for this instance.
         $user = User::factory()->create();
-        WhatsAppInstance::factory()->cloud()->create(['user_id' => $user->id]);
+        WhatsAppInstance::factory()->create(['user_id' => $user->id]);
 
         Http::fake();
         Artisan::call('templates:sync-status');
@@ -70,7 +56,7 @@ class SyncMessageTemplatesTest extends TestCase
     public function test_syncs_active_cloud_instance_and_creates_templates(): void
     {
         $user = User::factory()->create();
-        $cloud = WhatsAppInstance::factory()->cloud()->create(['user_id' => $user->id]);
+        $cloud = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         Campaign::factory()->create(['user_id' => $user->id, 'instance_id' => $cloud->id]);
 
         Http::fake([
@@ -99,11 +85,11 @@ class SyncMessageTemplatesTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $broken = WhatsAppInstance::factory()->cloud()->create([
+        $broken = WhatsAppInstance::factory()->create([
             'user_id' => $user->id,
             'waba_id' => 'BROKEN_WABA',
         ]);
-        $working = WhatsAppInstance::factory()->cloud()->create([
+        $working = WhatsAppInstance::factory()->create([
             'user_id' => $user->id,
             'waba_id' => 'WORKING_WABA',
         ]);
@@ -134,8 +120,8 @@ class SyncMessageTemplatesTest extends TestCase
     public function test_instance_flag_scopes_to_a_single_instance(): void
     {
         $user = User::factory()->create();
-        $a = WhatsAppInstance::factory()->cloud()->create(['user_id' => $user->id, 'waba_id' => 'A']);
-        $b = WhatsAppInstance::factory()->cloud()->create(['user_id' => $user->id, 'waba_id' => 'B']);
+        $a = WhatsAppInstance::factory()->create(['user_id' => $user->id, 'waba_id' => 'A']);
+        $b = WhatsAppInstance::factory()->create(['user_id' => $user->id, 'waba_id' => 'B']);
         // Note: no campaigns required when --instance is supplied; flag bypasses the activity filter.
 
         Http::fake([

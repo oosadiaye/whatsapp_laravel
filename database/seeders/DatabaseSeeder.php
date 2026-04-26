@@ -20,9 +20,6 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $settings = [
-            'evolution_api_url' => 'http://localhost:8080',
-            'evolution_api_key' => 'changeme',
-            'webhook_secret' => 'changeme-secret',
             'default_rate_per_minute' => '10',
             'default_delay_min' => '2',
             'default_delay_max' => '8',

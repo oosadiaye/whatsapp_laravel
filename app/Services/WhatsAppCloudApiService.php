@@ -38,7 +38,7 @@ class WhatsAppCloudApiService
      */
     private function client(WhatsAppInstance $instance): PendingRequest
     {
-        if (! $instance->isCloudReady()) {
+        if (! $instance->isReady()) {
             throw new WhatsAppApiException(
                 "Instance {$instance->id} is missing Cloud API credentials (waba_id / phone_number_id / access_token)."
             );

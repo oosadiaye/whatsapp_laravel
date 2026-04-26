@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Exceptions\EvolutionApiException;
+use App\Exceptions\WhatsAppApiException;
 use App\Http\Requests\StoreTemplateRequest;
 use App\Models\MessageTemplate;
 use App\Models\WhatsAppInstance;
@@ -44,10 +44,7 @@ class MessageTemplateController extends Controller
             ->latest()
             ->get();
 
-        // Only Cloud instances can fetch / submit templates — surface them
-        // to the view so the dropdown can be populated.
         $instances = WhatsAppInstance::where('user_id', auth()->id())
-            ->where('driver', WhatsAppInstance::DRIVER_CLOUD)
             ->orderBy('is_default', 'desc')
             ->orderBy('instance_name')
             ->get(['id', 'instance_name', 'business_phone_number', 'phone_number', 'status']);
@@ -144,7 +141,7 @@ class MessageTemplateController extends Controller
 
         // For remote templates, also tell Meta to delete — otherwise the local row
         // disappears but Meta still bills/uses the template name.
-        if ($template->isRemote() && $template->whatsappInstance?->isCloud()) {
+        if ($template->isRemote() && $template->whatsappInstance) {
             try {
                 $this->cloudApi->deleteTemplate($template->whatsappInstance, $template->name);
             } catch (Throwable $e) {
@@ -176,13 +173,7 @@ class MessageTemplateController extends Controller
         $instance = WhatsAppInstance::where('user_id', auth()->id())
             ->findOrFail($validated['whatsapp_instance_id']);
 
-        if (! $instance->isCloud()) {
-            return redirect()
-                ->route('templates.index')
-                ->with('error', 'Template sync only works for Cloud API instances. Evolution instances do not have message templates.');
-        }
-
-        if (! $instance->isCloudReady()) {
+        if (! $instance->isReady()) {
             return redirect()
                 ->route('templates.index')
                 ->with('error', 'Instance is missing Cloud API credentials. Reopen its settings to fix.');
@@ -190,7 +181,7 @@ class MessageTemplateController extends Controller
 
         try {
             $remoteTemplates = $this->cloudApi->fetchTemplates($instance);
-        } catch (EvolutionApiException $e) {
+        } catch (WhatsAppApiException $e) {
             return redirect()
                 ->route('templates.index')
                 ->with('error', "Sync failed: {$e->getMessage()}");
@@ -232,14 +223,13 @@ class MessageTemplateController extends Controller
 
         $template = MessageTemplate::where('user_id', auth()->id())->findOrFail($id);
         $instance = WhatsAppInstance::where('user_id', auth()->id())
-            ->where('driver', WhatsAppInstance::DRIVER_CLOUD)
             ->findOrFail($validated['whatsapp_instance_id']);
 
         if ($template->isRemote()) {
             return redirect()->back()->with('error', 'Template is already managed by Meta.');
         }
 
-        if (! $instance->isCloudReady()) {
+        if (! $instance->isReady()) {
             return redirect()->back()->with('error', 'Instance is missing Cloud API credentials.');
         }
 

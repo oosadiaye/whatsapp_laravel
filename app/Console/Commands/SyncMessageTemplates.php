@@ -44,7 +44,6 @@ class SyncMessageTemplates extends Command
     public function handle(WhatsAppCloudApiService $cloudApi): int
     {
         $query = WhatsAppInstance::query()
-            ->where('driver', WhatsAppInstance::DRIVER_CLOUD)
             ->whereNotNull('access_token')
             ->whereNotNull('phone_number_id')
             ->whereNotNull('waba_id');

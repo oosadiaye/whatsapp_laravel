@@ -10,23 +10,26 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * One WhatsApp Cloud API phone number with its Meta credentials.
+ *
+ * Single-driver model after Phase 8 cleanup — every instance is Cloud API.
+ * The legacy `driver`, `instance_name` (now repurposed as internal handle),
+ * and `api_token` columns remain on the table for forward-compat but are no
+ * longer populated by application code.
+ */
 class WhatsAppInstance extends Model
 {
     use HasFactory, SoftDeletes;
-
-    public const DRIVER_CLOUD = 'cloud';
-    public const DRIVER_EVOLUTION = 'evolution';
 
     protected $table = 'whatsapp_instances';
 
     protected $fillable = [
         'user_id',
-        'driver',
         'instance_name',
         'phone_number',
         'display_name',
         'status',
-        'api_token',
         'waba_id',
         'phone_number_id',
         'access_token',
@@ -44,7 +47,6 @@ class WhatsAppInstance extends Model
     protected $hidden = [
         'access_token',
         'app_secret',
-        'api_token',
     ];
 
     protected function casts(): array
@@ -54,7 +56,6 @@ class WhatsAppInstance extends Model
             // Encrypt-at-rest so a DB dump leak doesn't expose the raw tokens.
             'access_token' => 'encrypted',
             'app_secret' => 'encrypted',
-            'api_token' => 'encrypted',
         ];
     }
 
@@ -70,23 +71,13 @@ class WhatsAppInstance extends Model
         return $this->hasMany(Campaign::class, 'instance_id');
     }
 
-    public function isCloud(): bool
-    {
-        return $this->driver === self::DRIVER_CLOUD;
-    }
-
-    public function isEvolution(): bool
-    {
-        return $this->driver === self::DRIVER_EVOLUTION;
-    }
-
     /**
-     * True only when the Cloud API instance has every credential needed to send.
+     * True when the instance has every credential needed to talk to Meta.
+     * False during the brief window between create and credential validation.
      */
-    public function isCloudReady(): bool
+    public function isReady(): bool
     {
-        return $this->isCloud()
-            && filled($this->waba_id)
+        return filled($this->waba_id)
             && filled($this->phone_number_id)
             && filled($this->access_token);
     }

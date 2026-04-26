@@ -7,14 +7,10 @@ namespace App\Exceptions;
 use RuntimeException;
 
 /**
- * Driver-agnostic exception for any WhatsApp provider failure (Cloud API,
- * Evolution, future drivers like Twilio/Vonage/360dialog).
+ * Thrown when a call to Meta's WhatsApp Cloud API fails.
  *
- * Use this as the base type when catching provider errors so callers don't
- * need to know which underlying driver raised it. The legacy
- * {@see EvolutionApiException} now extends this for backward compatibility —
- * existing `catch (EvolutionApiException $e)` blocks keep working, and new
- * code can `catch (WhatsAppApiException $e)` to handle errors from any driver.
+ * Carries the upstream HTTP status and response body in its message so the
+ * caller can decide whether to retry, surface to the user, or escalate.
  */
 class WhatsAppApiException extends RuntimeException
 {

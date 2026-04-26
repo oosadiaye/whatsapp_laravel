@@ -8,7 +8,6 @@ use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\CloudWebhookController;
-use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\WhatsAppInstanceController;
 use Illuminate\Support\Facades\Route;
 
@@ -16,12 +15,8 @@ Route::get('/', function () {
     return redirect()->route('dashboard');
 });
 
-// Webhooks — external providers post here. CSRF-excluded in bootstrap/app.php
-// so SubstituteBindings still resolves {instance} for route model binding.
-Route::post('/webhook/evolution', [WebhookController::class, 'handle'])
-    ->name('webhook.evolution');
-
 // Meta Cloud API per-instance webhook (verify GET + events POST)
+// CSRF excluded in bootstrap/app.php; SubstituteBindings still resolves {instance}.
 Route::get('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'verify'])
     ->name('webhook.cloud.verify');
 Route::post('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'handle'])
@@ -45,7 +40,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/instances/{instance}', [WhatsAppInstanceController::class, 'show'])->name('instances.show');
     Route::delete('/instances/{instance}', [WhatsAppInstanceController::class, 'destroy'])->name('instances.destroy');
     Route::post('/instances/{instance}/default', [WhatsAppInstanceController::class, 'setDefault'])->name('instances.setDefault');
-    Route::get('/instances/{instance}/qr-status', [WhatsAppInstanceController::class, 'qrStatus'])->name('instances.qrStatus');
 
     // Contact Groups
     Route::get('/groups', [ContactGroupController::class, 'index'])->name('groups.index');

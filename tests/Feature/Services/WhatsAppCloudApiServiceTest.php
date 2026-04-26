@@ -183,7 +183,6 @@ class WhatsAppCloudApiServiceTest extends TestCase
     {
         // Explicitly unset credentials to verify the guard, not network failure.
         $bare = WhatsAppInstance::factory()->create([
-            'driver' => 'cloud',
             'waba_id' => null,
             'phone_number_id' => null,
             'access_token' => null,
@@ -201,7 +200,6 @@ class WhatsAppCloudApiServiceTest extends TestCase
     private function makeCloudInstance(): WhatsAppInstance
     {
         return WhatsAppInstance::factory()->create([
-            'driver' => 'cloud',
             'waba_id' => 'WABA_FAKE',
             'phone_number_id' => 'PHONE_ID_FAKE',
             'access_token' => 'ACCESS_TOKEN_FAKE',

@@ -9,28 +9,12 @@
                 @csrf
                 @method('PUT')
 
-                {{-- Evolution API --}}
-                <div class="rounded-xl bg-white p-6 shadow-sm">
-                    <h3 class="text-lg font-medium text-gray-900">Evolution API</h3>
-                    <p class="mt-1 text-sm text-gray-500">Configure your WhatsApp API connection.</p>
-                    <div class="mt-4 space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">API URL</label>
-                            <input type="url" name="evolution_api_url" value="{{ $settings['evolution_api_url'] ?? '' }}"
-                                   placeholder="http://localhost:8080"
-                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">API Key</label>
-                            <input type="password" name="evolution_api_key" value="{{ $settings['evolution_api_key'] ?? '' }}"
-                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Webhook Secret</label>
-                            <input type="password" name="webhook_secret" value="{{ $settings['webhook_secret'] ?? '' }}"
-                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
-                        </div>
-                    </div>
+                <div class="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900">
+                    <p class="font-semibold mb-1">{{ __('WhatsApp credentials live per-instance.') }}</p>
+                    <p>
+                        {{ __('Each instance you connect carries its own Meta access token, app secret, and webhook config — set those up under') }}
+                        <a href="{{ route('instances.index') }}" class="underline font-medium">{{ __('Instances') }}</a>.
+                    </p>
                 </div>
 
                 {{-- Sending Defaults --}}
