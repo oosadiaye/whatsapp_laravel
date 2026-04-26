@@ -65,7 +65,9 @@ class WhatsAppInstance extends Model
 
     public function campaigns(): HasMany
     {
-        return $this->hasMany(Campaign::class);
+        // Explicit FK because the column is `instance_id`, not Laravel's
+        // auto-derived `whats_app_instance_id`.
+        return $this->hasMany(Campaign::class, 'instance_id');
     }
 
     public function isCloud(): bool
