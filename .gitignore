@@ -33,3 +33,7 @@ Thumbs.db
 /storage/logs
 /.claude/settings.local.json
 /.claude/launch.json
+
+# Local archive — never commit
+/laravel whatsapp_new.zip
+*.zip
