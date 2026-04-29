@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\Campaign;
 use App\Models\MessageLog;
 use App\Models\WhatsAppInstance;
+use App\Services\InboundMessageProcessor;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
@@ -29,6 +30,10 @@ use Illuminate\Support\Facades\Log;
  */
 class CloudWebhookController extends Controller
 {
+    public function __construct(
+        private readonly InboundMessageProcessor $inboundProcessor,
+    ) {}
+
     /**
      * Meta calls this once when the webhook URL is added or modified in the
      * App dashboard. We must echo `hub.challenge` (as plain text, not JSON)
@@ -83,7 +88,13 @@ class CloudWebhookController extends Controller
 
                 $value = (array) ($change['value'] ?? []);
                 $this->processStatuses($value['statuses'] ?? []);
-                // Inbound `messages[]` handling deferred — reply / inbox features land later.
+
+                // Inbound messages from contacts → conversation thread.
+                $this->inboundProcessor->processMessages(
+                    $instance,
+                    (array) ($value['messages'] ?? []),
+                    (array) ($value['contacts'] ?? []),
+                );
             }
         }
 

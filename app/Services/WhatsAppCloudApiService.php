@@ -277,6 +277,60 @@ class WhatsAppCloudApiService
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // Inbound media
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Resolve a Meta media_id to a temporary download URL.
+     *
+     * The URL Meta returns is signed and expires in ~5 minutes — call
+     * {@see downloadMediaContent()} immediately after this; don't queue.
+     *
+     * @return array{url: string, mime_type: string, sha256: string, file_size: int, id: string, messaging_product: string}
+     *
+     * @throws WhatsAppApiException
+     */
+    public function getMediaUrl(WhatsAppInstance $instance, string $mediaId): array
+    {
+        $response = $this->client($instance)->get($this->url($mediaId));
+
+        if ($response->failed()) {
+            $this->logHttp('getMediaUrl', $instance, $response->status(), $response->body());
+
+            throw new WhatsAppApiException(
+                "Failed to fetch media URL: {$response->status()} - {$response->body()}"
+            );
+        }
+
+        return $response->json();
+    }
+
+    /**
+     * Download the actual media bytes from Meta's signed URL.
+     *
+     * Meta requires the same Bearer token here even though the URL is signed.
+     * Returns the raw binary; caller writes to local storage.
+     *
+     * @throws WhatsAppApiException
+     */
+    public function downloadMediaContent(WhatsAppInstance $instance, string $signedUrl): string
+    {
+        $response = Http::withToken((string) $instance->access_token)
+            ->timeout(30)
+            ->get($signedUrl);
+
+        if ($response->failed()) {
+            $this->logHttp('downloadMediaContent', $instance, $response->status(), 'binary');
+
+            throw new WhatsAppApiException(
+                "Failed to download media: {$response->status()}"
+            );
+        }
+
+        return $response->body();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // Internal helpers
     // ──────────────────────────────────────────────────────────────────────────
 
