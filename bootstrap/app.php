@@ -13,6 +13,13 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminOnly::class,
+            // spatie/laravel-permission middleware aliases — usage:
+            //   ->middleware('role:admin')
+            //   ->middleware('permission:users.create')
+            //   ->middleware('role_or_permission:admin|users.view')
+            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
 
         // Meta posts here without CSRF tokens. Excluding only the CSRF check

@@ -13,6 +13,7 @@
         "livewire/livewire": "^4.2",
         "maatwebsite/excel": "^3.1",
         "spatie/laravel-activitylog": "^4.7",
+        "spatie/laravel-permission": "*",
         "symfony/clock": "^7.0",
         "symfony/css-selector": "^7.0",
         "symfony/event-dispatcher": "^7.0",

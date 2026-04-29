@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Models\Setting;
@@ -11,13 +13,18 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        User::create([
-            'name' => 'Admin',
-            'email' => 'admin@blastiq.com',
-            'password' => Hash::make('password'),
-            'role' => 'admin',
-            'email_verified_at' => now(),
-        ]);
+        // Idempotent: firstOrCreate so re-seeding a populated DB doesn't
+        // collide on the unique email index.
+        User::firstOrCreate(
+            ['email' => 'admin@blastiq.com'],
+            [
+                'name' => 'Admin',
+                'password' => Hash::make('password'),
+                'role' => 'admin',
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ],
+        );
 
         $settings = [
             'default_rate_per_minute' => '10',
@@ -31,5 +38,8 @@ class DatabaseSeeder extends Seeder
         foreach ($settings as $key => $value) {
             Setting::set($key, $value);
         }
+
+        // Roles + permissions + admin role assignment.
+        $this->call(RolesAndPermissionsSeeder::class);
     }
 }
