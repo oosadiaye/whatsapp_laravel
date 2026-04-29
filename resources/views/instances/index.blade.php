@@ -110,7 +110,6 @@
                                                 @unless ($instance->is_default)
                                                     <form action="{{ route('instances.setDefault', $instance) }}" method="POST" class="inline">
                                                         @csrf
-                                                        @method('PATCH')
                                                         <button type="submit"
                                                                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition">
                                                             Set Default
