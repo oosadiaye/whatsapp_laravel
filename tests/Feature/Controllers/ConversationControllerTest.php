@@ -181,6 +181,80 @@ class ConversationControllerTest extends TestCase
         $this->actingAs($u)->get(route('conversations.index'))->assertForbidden();
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Assignment workflow (Phase 14)
+    // ──────────────────────────────────────────────────────────────────────
+
+    public function test_admin_can_assign_conversation_to_agent(): void
+    {
+        $admin = $this->makeUser('admin');
+        $agent = $this->makeUser('agent');
+        $conv = Conversation::factory()->create(['user_id' => $admin->id]);
+
+        $this->actingAs($admin)
+            ->post(route('conversations.assign', $conv), ['user_id' => $agent->id])
+            ->assertRedirect(route('conversations.show', $conv))
+            ->assertSessionHas('success');
+
+        $this->assertSame($agent->id, $conv->fresh()->assigned_to_user_id);
+    }
+
+    public function test_admin_can_unassign_conversation(): void
+    {
+        $admin = $this->makeUser('admin');
+        $agent = $this->makeUser('agent');
+        $conv = Conversation::factory()->assignedTo($agent)->create(['user_id' => $admin->id]);
+
+        $this->actingAs($admin)
+            ->post(route('conversations.assign', $conv), ['user_id' => null])
+            ->assertRedirect();
+
+        $this->assertNull($conv->fresh()->assigned_to_user_id);
+    }
+
+    public function test_agent_cannot_assign_conversations(): void
+    {
+        // 'agent' role lacks conversations.assign — only admin/manager get it.
+        $admin = $this->makeUser('admin');
+        $agent = $this->makeUser('agent');
+        $otherAgent = $this->makeUser('agent', 'other-agent@example.com');
+        $conv = Conversation::factory()->assignedTo($agent)->create(['user_id' => $admin->id]);
+
+        $this->actingAs($agent)
+            ->post(route('conversations.assign', $conv), ['user_id' => $otherAgent->id])
+            ->assertForbidden();
+
+        // Original assignment unchanged.
+        $this->assertSame($agent->id, $conv->fresh()->assigned_to_user_id);
+    }
+
+    public function test_assigning_to_deactivated_user_is_blocked(): void
+    {
+        $admin = $this->makeUser('admin');
+        $deactivated = $this->makeUser('agent');
+        $deactivated->update(['is_active' => false]);
+        $conv = Conversation::factory()->create(['user_id' => $admin->id]);
+
+        $this->actingAs($admin)
+            ->post(route('conversations.assign', $conv), ['user_id' => $deactivated->id])
+            ->assertStatus(422);
+
+        $this->assertNull($conv->fresh()->assigned_to_user_id);
+    }
+
+    public function test_self_assign_works_for_managers(): void
+    {
+        // Common pattern: a manager browsing the unassigned pool clicks "take this one".
+        $manager = $this->makeUser('manager');
+        $conv = Conversation::factory()->create(['user_id' => $manager->id]);
+
+        $this->actingAs($manager)
+            ->post(route('conversations.assign', $conv), ['user_id' => $manager->id])
+            ->assertRedirect();
+
+        $this->assertSame($manager->id, $conv->fresh()->assigned_to_user_id);
+    }
+
     private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([

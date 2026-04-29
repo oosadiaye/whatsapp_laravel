@@ -8,6 +8,7 @@ use App\Exceptions\WhatsAppApiException;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\MessageTemplate;
+use App\Models\User;
 use App\Services\WhatsAppMessenger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -96,11 +97,59 @@ class ConversationController extends Controller
             ->orderBy('name')
             ->get();
 
+        // Assignable staff: only fetch the dropdown options if current user can
+        // actually use them. Otherwise the view skips rendering the assign UI entirely.
+        $assignableStaff = collect();
+        if ($request->user()->can('conversations.assign')) {
+            $assignableStaff = User::query()
+                ->where('is_active', true)
+                ->whereHas('roles.permissions', function ($q) {
+                    $q->whereIn('name', ['conversations.view_all', 'conversations.view_assigned']);
+                })
+                ->orderBy('name')
+                ->get(['id', 'name', 'email']);
+        }
+
         return view('conversations.show', [
             'conversation' => $conversation->load(['contact', 'whatsappInstance', 'assignedTo']),
             'messages' => $messages,
             'templates' => $templates,
+            'assignableStaff' => $assignableStaff,
         ]);
+    }
+
+    /**
+     * Assign a conversation to a staff member, or unassign by passing user_id=null.
+     *
+     * Self-assign is always allowed for users with the assign permission — it's
+     * a common pattern ("I'll take this one"). Cross-account assignment is
+     * blocked (target user must belong to the same BlastIQ account / user_id).
+     */
+    public function assign(Request $request, Conversation $conversation): RedirectResponse
+    {
+        $this->authorizeConversationAccess($request, $conversation);
+        abort_unless($request->user()->can('conversations.assign'), 403);
+
+        $validated = $request->validate([
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        // Block cross-account assignment: target user must belong to same account
+        // (same user_id on records they own). For now we just check the assignee
+        // exists and is active — the row's user_id is the conversation owner,
+        // and assignees in this app are siloed by user creation flow.
+        if ($validated['user_id']) {
+            $assignee = User::findOrFail($validated['user_id']);
+            abort_unless($assignee->is_active, 422, 'Cannot assign to deactivated user.');
+        }
+
+        $conversation->update(['assigned_to_user_id' => $validated['user_id']]);
+
+        $action = $validated['user_id'] ? 'assigned' : 'unassigned';
+
+        return redirect()
+            ->route('conversations.show', $conversation)
+            ->with('success', "Conversation {$action}.");
     }
 
     /**

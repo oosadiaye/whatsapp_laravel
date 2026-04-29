@@ -88,6 +88,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:conversations.reply')->group(function () {
         Route::post('/conversations/{conversation}/reply', [ConversationController::class, 'reply'])->name('conversations.reply');
     });
+    Route::middleware('permission:conversations.assign')->group(function () {
+        Route::post('/conversations/{conversation}/assign', [ConversationController::class, 'assign'])->name('conversations.assign');
+    });
 
     // Settings
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');

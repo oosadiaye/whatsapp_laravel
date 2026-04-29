@@ -9,11 +9,67 @@
                     <h2 class="font-semibold text-lg text-gray-800 leading-tight">
                         {{ $conversation->contact->name ?? $conversation->contact->phone }}
                     </h2>
-                    <p class="text-xs text-gray-500">
-                        {{ $conversation->contact->phone }} · via {{ $conversation->whatsappInstance->instance_name }}
-                        @if($conversation->assignedTo)
-                            · {{ __('Assigned to') }} {{ $conversation->assignedTo->name }}
-                        @endif
+                    <p class="text-xs text-gray-500 flex items-center gap-2">
+                        <span>{{ $conversation->contact->phone }} · via {{ $conversation->whatsappInstance->instance_name }}</span>
+
+                        @can('conversations.assign')
+                            {{-- Assignment dropdown for managers/admins --}}
+                            <span class="inline-flex items-center gap-1" x-data="{ open: false }">
+                                ·
+                                <button type="button"
+                                        @click="open = !open"
+                                        @click.outside="open = false"
+                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded {{ $conversation->assignedTo ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700' }} hover:opacity-80">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                    {{ $conversation->assignedTo ? $conversation->assignedTo->name : __('Unassigned') }}
+                                </button>
+
+                                <div x-show="open" x-cloak x-transition
+                                     class="absolute mt-6 right-0 z-30 bg-white border border-gray-200 rounded-lg shadow-lg p-2 w-64 max-h-80 overflow-y-auto">
+                                    <p class="text-[10px] uppercase tracking-wide text-gray-400 px-2 mb-1">{{ __('Assign to') }}</p>
+
+                                    {{-- Self-assign quick action --}}
+                                    @if($conversation->assigned_to_user_id !== auth()->id())
+                                        <form method="POST" action="{{ route('conversations.assign', $conversation) }}">
+                                            @csrf
+                                            <input type="hidden" name="user_id" value="{{ auth()->id() }}">
+                                            <button type="submit" class="w-full text-left px-2 py-1.5 rounded hover:bg-gray-50 text-sm font-medium text-[#25D366]">
+                                                {{ __('Take this conversation (assign to me)') }}
+                                            </button>
+                                        </form>
+                                        <hr class="my-1">
+                                    @endif
+
+                                    {{-- Other staff --}}
+                                    @foreach($assignableStaff as $staff)
+                                        @if($staff->id !== auth()->id() && $staff->id !== $conversation->assigned_to_user_id)
+                                            <form method="POST" action="{{ route('conversations.assign', $conversation) }}">
+                                                @csrf
+                                                <input type="hidden" name="user_id" value="{{ $staff->id }}">
+                                                <button type="submit" class="w-full text-left px-2 py-1.5 rounded hover:bg-gray-50 text-sm text-gray-800">
+                                                    {{ $staff->name }} <span class="text-xs text-gray-400">· {{ $staff->email }}</span>
+                                                </button>
+                                            </form>
+                                        @endif
+                                    @endforeach
+
+                                    @if($conversation->assignedTo)
+                                        <hr class="my-1">
+                                        <form method="POST" action="{{ route('conversations.assign', $conversation) }}">
+                                            @csrf
+                                            <input type="hidden" name="user_id" value="">
+                                            <button type="submit" class="w-full text-left px-2 py-1.5 rounded hover:bg-red-50 text-sm text-red-600">
+                                                {{ __('Unassign') }}
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
+                            </span>
+                        @else
+                            @if($conversation->assignedTo)
+                                · {{ __('Assigned to') }} {{ $conversation->assignedTo->name }}
+                            @endif
+                        @endcan
                     </p>
                 </div>
             </div>
