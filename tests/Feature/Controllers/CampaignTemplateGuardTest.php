@@ -9,25 +9,35 @@ use App\Models\ContactGroup;
 use App\Models\MessageTemplate;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
  * The "marketing safeguard" — block campaign creation when the picked
  * template is in a state Meta will reject (PENDING / REJECTED).
- *
- * Catches the failure mode where a user submits a template, doesn't wait
- * for Meta's approval, then tries to launch a campaign — every send would
- * fail at Meta with a cryptic error code. We surface the issue at form
- * time instead.
  */
 class CampaignTemplateGuardTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_pending_template_is_rejected_with_clear_error(): void
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RolesAndPermissionsSeeder::class);
+    }
+
+    private function makeAdmin(): User
     {
         $user = User::factory()->create();
+        $user->assignRole('super_admin');
+
+        return $user;
+    }
+
+    public function test_pending_template_is_rejected_with_clear_error(): void
+    {
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         $group = ContactGroup::create(['user_id' => $user->id, 'name' => 'Test']);
 
@@ -54,7 +64,7 @@ class CampaignTemplateGuardTest extends TestCase
 
     public function test_rejected_template_is_blocked(): void
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         $group = ContactGroup::create(['user_id' => $user->id, 'name' => 'Test']);
 
@@ -77,7 +87,7 @@ class CampaignTemplateGuardTest extends TestCase
 
     public function test_approved_template_passes_validation(): void
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         $group = ContactGroup::create(['user_id' => $user->id, 'name' => 'Test']);
 
@@ -103,7 +113,7 @@ class CampaignTemplateGuardTest extends TestCase
     {
         // Local templates have status=LOCAL but are still valid to use as
         // pre-fills for the message body. They don't go through Meta approval.
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         $group = ContactGroup::create(['user_id' => $user->id, 'name' => 'Test']);
 
@@ -127,7 +137,7 @@ class CampaignTemplateGuardTest extends TestCase
     {
         // Compose-from-scratch is allowed (legitimate for service replies),
         // we just show a banner in the UI. Don't block at validation level.
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         $group = ContactGroup::create(['user_id' => $user->id, 'name' => 'Test']);
 

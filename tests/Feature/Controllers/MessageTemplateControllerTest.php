@@ -7,6 +7,7 @@ namespace Tests\Feature\Controllers;
 use App\Models\MessageTemplate;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -24,9 +25,29 @@ class MessageTemplateControllerTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Phase 11+ permission gates require seeded roles. Phase 15 added
+        // permission middleware to /templates/* — every test user needs a
+        // role with template permissions to reach the controller actions.
+        $this->seed(RolesAndPermissionsSeeder::class);
+    }
+
+    /**
+     * Helper: factory user + super_admin role so all permission gates pass.
+     */
+    private function makeAdmin(?string $email = null): User
+    {
+        $user = User::factory()->create($email ? ['email' => $email] : []);
+        $user->assignRole('super_admin');
+
+        return $user;
+    }
+
     public function test_sync_creates_local_rows_from_meta_templates(): void
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
 
         Http::fake([
@@ -72,7 +93,7 @@ class MessageTemplateControllerTest extends TestCase
     public function test_sync_updates_existing_row_on_re_run(): void
     {
         // Idempotency: running sync twice mustn't create duplicate rows.
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
 
         // Pre-existing PENDING row for the same template.
@@ -107,7 +128,7 @@ class MessageTemplateControllerTest extends TestCase
 
     public function test_sync_rejects_unconfigured_cloud_instance(): void
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create([
             'user_id' => $user->id,
             'access_token' => null,  // Missing — instance isn't ready
@@ -124,7 +145,7 @@ class MessageTemplateControllerTest extends TestCase
 
     public function test_sync_warns_when_meta_returns_empty_list(): void
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
 
         Http::fake(['graph.facebook.com/*' => Http::response(['data' => []], 200)]);
@@ -140,8 +161,8 @@ class MessageTemplateControllerTest extends TestCase
     {
         // Tenancy boundary: User A must not be able to sync User B's instance
         // by submitting their instance ID.
-        $userA = User::factory()->create();
-        $userB = User::factory()->create();
+        $userA = $this->makeAdmin();
+        $userB = $this->makeAdmin('userb-tenancy@example.com');
         $instanceB = WhatsAppInstance::factory()->create(['user_id' => $userB->id]);
 
         $this->actingAs($userA)
@@ -151,7 +172,7 @@ class MessageTemplateControllerTest extends TestCase
 
     public function test_submit_to_meta_pushes_template_and_captures_response(): void
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         $template = MessageTemplate::factory()->create([
             'user_id' => $user->id,
@@ -191,7 +212,7 @@ class MessageTemplateControllerTest extends TestCase
 
     public function test_submit_to_meta_blocks_already_remote_template(): void
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         $template = MessageTemplate::factory()->remote()->create([
             'user_id' => $user->id,
@@ -209,7 +230,7 @@ class MessageTemplateControllerTest extends TestCase
 
     public function test_destroy_remote_template_also_calls_meta_delete(): void
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
         $template = MessageTemplate::factory()->remote()->create([
             'user_id' => $user->id,
@@ -234,7 +255,7 @@ class MessageTemplateControllerTest extends TestCase
 
     public function test_destroy_local_template_does_not_call_meta(): void
     {
-        $user = User::factory()->create();
+        $user = $this->makeAdmin();
         $template = MessageTemplate::factory()->create(['user_id' => $user->id]);
 
         Http::fake();
