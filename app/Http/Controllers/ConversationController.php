@@ -1,0 +1,216 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers;
+
+use App\Exceptions\WhatsAppApiException;
+use App\Models\Conversation;
+use App\Models\ConversationMessage;
+use App\Models\MessageTemplate;
+use App\Services\WhatsAppMessenger;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
+
+/**
+ * Inbox + chat thread.
+ *
+ * Visibility model:
+ *   - users with `conversations.view_all` see every conversation owned by
+ *     their account (admins, managers)
+ *   - users with `conversations.view_assigned` see only conversations whose
+ *     assigned_to_user_id = current user (agents)
+ *   - users without either permission get 403 from middleware before reaching
+ *     these actions
+ *
+ * Reply send flow uses {@see WhatsAppMessenger} → Cloud API. After Meta
+ * accepts, we create the outbound ConversationMessage row mirroring the
+ * sent message, with status=sent and wamid captured.
+ */
+class ConversationController extends Controller
+{
+    public function __construct(
+        private readonly WhatsAppMessenger $messenger,
+    ) {
+    }
+
+    /**
+     * Inbox view — list of conversations with last-message preview.
+     */
+    public function index(Request $request): View
+    {
+        $user = $request->user();
+
+        $query = Conversation::with(['contact', 'whatsappInstance', 'assignedTo'])
+            ->orderByDesc('last_message_at');
+
+        // Visibility: admins/managers see everything in the account; agents only see
+        // conversations assigned to them. The conversations.view_all permission
+        // controls which side of this branch you land on.
+        if ($user->can('conversations.view_all')) {
+            $query->where('user_id', $user->id);
+        } else {
+            $query->where('assigned_to_user_id', $user->id);
+        }
+
+        // Optional filter: ?filter=unassigned shows the unassigned pool (for managers
+        // doing assignment work). Only meaningful for view_all users.
+        if ($request->query('filter') === 'unassigned' && $user->can('conversations.view_all')) {
+            $query->whereNull('assigned_to_user_id');
+        }
+
+        return view('conversations.index', [
+            'conversations' => $query->paginate(25),
+            'currentFilter' => $request->query('filter'),
+        ]);
+    }
+
+    /**
+     * One conversation thread + reply form.
+     */
+    public function show(Request $request, Conversation $conversation): View
+    {
+        $this->authorizeConversationAccess($request, $conversation);
+
+        // Mark as read when opening — clears the inbox unread badge for this thread.
+        if ($conversation->unread_count > 0) {
+            $conversation->update(['unread_count' => 0]);
+        }
+
+        // Eager load messages + sender info (for outbound rows showing "Sent by Alice").
+        $messages = $conversation->messages()->with('sentBy')->get();
+
+        // Approved templates from the same instance, used when the 24h window is closed.
+        $templates = MessageTemplate::where('user_id', $conversation->user_id)
+            ->where(function ($q) use ($conversation) {
+                $q->where('whatsapp_instance_id', $conversation->whatsapp_instance_id)
+                  ->orWhereNull('whatsapp_instance_id');
+            })
+            ->where('status', MessageTemplate::STATUS_APPROVED)
+            ->orderBy('name')
+            ->get();
+
+        return view('conversations.show', [
+            'conversation' => $conversation->load(['contact', 'whatsappInstance', 'assignedTo']),
+            'messages' => $messages,
+            'templates' => $templates,
+        ]);
+    }
+
+    /**
+     * Send a reply in this conversation.
+     *
+     * Inside the 24-hour window: freeform text accepted.
+     * Outside the window: only template sends accepted (caller must specify
+     * message_template_id; Meta would reject freeform anyway).
+     */
+    public function reply(Request $request, Conversation $conversation): RedirectResponse
+    {
+        $this->authorizeConversationAccess($request, $conversation);
+        abort_unless($request->user()->can('conversations.reply'), 403);
+
+        $validated = $request->validate([
+            'body' => ['nullable', 'string', 'max:4096'],
+            'message_template_id' => ['nullable', 'integer', 'exists:message_templates,id'],
+        ]);
+
+        $instance = $conversation->whatsappInstance;
+        $phone = $conversation->contact->phone;
+
+        // Branch: template (outside window or by user choice) vs freeform text
+        try {
+            if (! empty($validated['message_template_id'])) {
+                $template = MessageTemplate::findOrFail($validated['message_template_id']);
+                $result = $this->messenger->sendTemplate(
+                    $instance,
+                    $phone,
+                    $template->name,
+                    $template->language ?? 'en_US',
+                    [],  // Component params — empty for now; Phase 15 can add UI for this
+                );
+                $type = 'template';
+                $body = $template->content;
+            } else {
+                if (! $conversation->isWindowOpen()) {
+                    return redirect()->back()->with('error',
+                        'The 24-hour reply window is closed. Pick an approved template instead.');
+                }
+
+                if (empty($validated['body'])) {
+                    return redirect()->back()->with('error', 'Message body is required.');
+                }
+
+                $result = $this->messenger->sendText($instance, $phone, $validated['body']);
+                $type = 'text';
+                $body = $validated['body'];
+            }
+        } catch (WhatsAppApiException $e) {
+            return redirect()->back()->with('error', "Send failed: {$e->getMessage()}");
+        } catch (Throwable $e) {
+            return redirect()->back()->with('error', 'Send failed (network error). Please retry.');
+        }
+
+        // Persist the outbound message so it appears in the thread immediately.
+        ConversationMessage::create([
+            'conversation_id' => $conversation->id,
+            'direction' => ConversationMessage::DIRECTION_OUTBOUND,
+            'whatsapp_message_id' => $result->messageId,
+            'type' => $type,
+            'body' => $body,
+            'sent_by_user_id' => $request->user()->id,
+            'status' => 'SENT',
+            'received_at' => Carbon::now(),
+        ]);
+
+        $conversation->update(['last_message_at' => Carbon::now()]);
+
+        return redirect()->route('conversations.show', $conversation);
+    }
+
+    /**
+     * Serve inbound media files. They live under storage/app/ (not public/) so
+     * we can permission-check before streaming. Each request is gated by the
+     * same conversation access check as the thread view.
+     */
+    public function downloadMedia(Request $request, ConversationMessage $message): BinaryFileResponse|StreamedResponse
+    {
+        $this->authorizeConversationAccess($request, $message->conversation);
+
+        abort_if($message->media_path === null, 404);
+        abort_unless(Storage::exists($message->media_path), 404);
+
+        return Storage::download(
+            $message->media_path,
+            null,
+            ['Content-Type' => $message->media_mime ?? 'application/octet-stream'],
+        );
+    }
+
+    /**
+     * 403 if the user can't see this conversation under their permission set.
+     *
+     * Two paths to access:
+     *   1. user has conversations.view_all + conversation belongs to their account
+     *   2. user has conversations.view_assigned + conversation is assigned to them
+     */
+    private function authorizeConversationAccess(Request $request, Conversation $conversation): void
+    {
+        $user = $request->user();
+
+        if ($user->can('conversations.view_all') && $conversation->user_id === $user->id) {
+            return;
+        }
+
+        if ($user->can('conversations.view_assigned') && $conversation->assigned_to_user_id === $user->id) {
+            return;
+        }
+
+        abort(403, 'You do not have access to this conversation.');
+    }
+}

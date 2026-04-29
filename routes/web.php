@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\ContactGroupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MessageTemplateController;
@@ -77,6 +78,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/campaigns/{campaign}/cancel', [CampaignController::class, 'cancel'])->name('campaigns.cancel');
     Route::post('/campaigns/{campaign}/clone', [CampaignController::class, 'clone'])->name('campaigns.clone');
     Route::get('/campaigns/{campaign}/export', [CampaignController::class, 'exportLogs'])->name('campaigns.exportLogs');
+
+    // Conversations / chat — visibility gated by 'conversations.view_*' permissions
+    Route::middleware('role_or_permission:conversations.view_all|conversations.view_assigned')->group(function () {
+        Route::get('/conversations', [ConversationController::class, 'index'])->name('conversations.index');
+        Route::get('/conversations/{conversation}', [ConversationController::class, 'show'])->name('conversations.show');
+        Route::get('/conversations/messages/{message}/media', [ConversationController::class, 'downloadMedia'])->name('conversations.media');
+    });
+    Route::middleware('permission:conversations.reply')->group(function () {
+        Route::post('/conversations/{conversation}/reply', [ConversationController::class, 'reply'])->name('conversations.reply');
+    });
 
     // Settings
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
