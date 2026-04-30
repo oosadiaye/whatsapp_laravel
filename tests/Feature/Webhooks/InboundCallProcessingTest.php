@@ -142,4 +142,43 @@ class InboundCallProcessingTest extends TestCase
 
         $this->assertSame(0, CallLog::count());
     }
+
+    public function test_webhook_with_calls_field_dispatches_to_processor(): void
+    {
+        $instance = WhatsAppInstance::factory()->create(['app_secret' => 'TEST_SECRET']);
+
+        $payload = [
+            'object' => 'whatsapp_business_account',
+            'entry' => [[
+                'id' => 'WABA',
+                'changes' => [[
+                    'field' => 'calls',
+                    'value' => [
+                        'messaging_product' => 'whatsapp',
+                        'metadata' => ['phone_number_id' => $instance->phone_number_id],
+                        'calls' => [[
+                            'id' => 'wacid.via_webhook',
+                            'from' => '2348012345678',
+                            'to' => $instance->business_phone_number,
+                            'event' => 'connect',
+                            'timestamp' => '1714500000',
+                        ]],
+                    ],
+                ]],
+            ]],
+        ];
+
+        $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        $signature = 'sha256='.hash_hmac('sha256', $body, 'TEST_SECRET');
+
+        $this->call(
+            'POST',
+            route('webhook.cloud.handle', $instance),
+            [], [], [],
+            ['CONTENT_TYPE' => 'application/json', 'HTTP_X_HUB_SIGNATURE_256' => $signature],
+            $body,
+        )->assertOk();
+
+        $this->assertSame(1, \App\Models\CallLog::count());
+    }
 }

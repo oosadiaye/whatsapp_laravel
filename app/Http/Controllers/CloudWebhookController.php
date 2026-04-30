@@ -8,6 +8,7 @@ use App\Models\Campaign;
 use App\Models\MessageLog;
 use App\Models\WhatsAppInstance;
 use App\Services\InboundMessageProcessor;
+use App\Services\InboundCallProcessor;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
@@ -32,6 +33,7 @@ class CloudWebhookController extends Controller
 {
     public function __construct(
         private readonly InboundMessageProcessor $inboundProcessor,
+        private readonly InboundCallProcessor $inboundCallProcessor,
     ) {}
 
     /**
@@ -82,19 +84,24 @@ class CloudWebhookController extends Controller
         // Meta always wraps under entry[].changes[].value
         foreach ((array) ($payload['entry'] ?? []) as $entry) {
             foreach ((array) ($entry['changes'] ?? []) as $change) {
-                if (($change['field'] ?? '') !== 'messages') {
-                    continue;
-                }
-
+                $field = $change['field'] ?? '';
                 $value = (array) ($change['value'] ?? []);
-                $this->processStatuses($value['statuses'] ?? []);
 
-                // Inbound messages from contacts → conversation thread.
-                $this->inboundProcessor->processMessages(
-                    $instance,
-                    (array) ($value['messages'] ?? []),
-                    (array) ($value['contacts'] ?? []),
-                );
+                if ($field === 'messages') {
+                    $this->processStatuses($value['statuses'] ?? []);
+                    $this->inboundProcessor->processMessages(
+                        $instance,
+                        (array) ($value['messages'] ?? []),
+                        (array) ($value['contacts'] ?? []),
+                    );
+                } elseif ($field === 'calls') {
+                    $this->inboundCallProcessor->processCalls(
+                        $instance,
+                        (array) ($value['calls'] ?? []),
+                        (array) ($value['contacts'] ?? []),
+                    );
+                }
+                // Unknown fields are silently ignored
             }
         }
 
