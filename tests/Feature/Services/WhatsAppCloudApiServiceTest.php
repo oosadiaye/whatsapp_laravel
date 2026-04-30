@@ -197,6 +197,42 @@ class WhatsAppCloudApiServiceTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_initiate_call_posts_to_calls_endpoint_with_phone(): void
+    {
+        Http::fake([
+            'graph.facebook.com/*' => Http::response([
+                'messaging_product' => 'whatsapp',
+                'calls' => [['id' => 'wacid.outbound_xyz']],
+            ], 200),
+        ]);
+
+        $result = $this->service->initiateCall($this->instance, '2348012345678');
+
+        $this->assertSame('wacid.outbound_xyz', $result);
+
+        Http::assertSent(function (Request $request) {
+            return $request->method() === 'POST'
+                && str_contains($request->url(), '/v20.0/PHONE_ID_FAKE/calls')
+                && $request->header('Authorization')[0] === 'Bearer ACCESS_TOKEN_FAKE'
+                && $request['messaging_product'] === 'whatsapp'
+                && $request['to'] === '2348012345678';
+        });
+    }
+
+    public function test_initiate_call_throws_on_meta_error(): void
+    {
+        Http::fake([
+            'graph.facebook.com/*' => Http::response([
+                'error' => ['message' => 'Number not registered'],
+            ], 400),
+        ]);
+
+        $this->expectException(WhatsAppApiException::class);
+        $this->expectExceptionMessageMatches('/initiate call/i');
+
+        $this->service->initiateCall($this->instance, '234');
+    }
+
     private function makeCloudInstance(): WhatsAppInstance
     {
         return WhatsAppInstance::factory()->create([

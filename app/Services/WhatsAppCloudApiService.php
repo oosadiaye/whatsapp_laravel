@@ -141,6 +141,43 @@ class WhatsAppCloudApiService
     }
 
     /**
+     * Initiate an outbound call to the given phone number via Meta's Cloud
+     * Calling API. The call will ring on the customer's WhatsApp; audio
+     * terminates wherever the WhatsApp Business app is registered for this
+     * phone_number_id.
+     *
+     * Endpoint: POST /v20.0/{phone_number_id}/calls
+     *
+     * @return string  Meta's call ID (wacid.xxx) — store on call_log for webhook correlation
+     *
+     * @throws WhatsAppApiException
+     */
+    public function initiateCall(WhatsAppInstance $instance, string $phone): string
+    {
+        $response = $this->client($instance)->post(
+            $this->url("{$instance->phone_number_id}/calls"),
+            [
+                'messaging_product' => 'whatsapp',
+                'to' => $this->normalizePhone($phone),
+            ],
+        );
+
+        if ($response->failed()) {
+            $this->logHttp('initiateCall', $instance, $response->status(), $response->body());
+
+            throw new WhatsAppApiException(
+                "Failed to initiate call: {$response->status()} - {$response->body()}"
+            );
+        }
+
+        $body = $response->json();
+
+        return (string) ($body['calls'][0]['id'] ?? throw new WhatsAppApiException(
+            'Meta accepted the call request but returned no call ID — cannot correlate with future webhooks.'
+        ));
+    }
+
+    /**
      * Mark an inbound message as read so the user sees the blue ticks.
      */
     public function markAsRead(WhatsAppInstance $instance, string $messageId): array
