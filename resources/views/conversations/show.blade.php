@@ -144,6 +144,8 @@
         </div>
     </x-slot>
 
+    @livewire('in-flight-call', ['conversationId' => $conversation->id])
+
     <div class="py-6">
         <div class="max-w-3xl mx-auto sm:px-6 lg:px-8 space-y-4">
 
