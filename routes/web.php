@@ -154,6 +154,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::middleware('permission:conversations.call')->group(function () {
         Route::post('/conversations/{conversation}/call', [ConversationController::class, 'initiateCall'])->name('conversations.initiateCall');
+        Route::post('/conversations/{conversation}/calls/{call}/end', [ConversationController::class, 'endCall'])->name('conversations.endCall');
     });
 
     // ─── Settings ──────────────────────────────────────────────────────────

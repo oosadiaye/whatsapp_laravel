@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Exceptions\WhatsAppApiException;
+use App\Models\CallLog;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\MessageTemplate;
@@ -176,6 +177,34 @@ class ConversationController extends Controller
         return redirect()
             ->route('conversations.show', $conversation)
             ->with('success', "Calling {$conversation->contact->name}...");
+    }
+
+    /**
+     * End an in-flight outbound call. Mirrors initiateCall's permission
+     * checks (same route middleware, same access guard).
+     */
+    public function endCall(Request $request, Conversation $conversation, CallLog $call): RedirectResponse
+    {
+        $this->authorizeConversationAccess($request, $conversation);
+
+        if ($call->conversation_id !== $conversation->id) {
+            abort(404);
+        }
+
+        if (! $call->isInFlight()) {
+            return redirect()->route('conversations.show', $conversation)
+                ->with('warning', 'Call is no longer in flight; nothing to end.');
+        }
+
+        try {
+            $this->outboundCalls->end($call);
+        } catch (WhatsAppApiException $e) {
+            return redirect()->route('conversations.show', $conversation)
+                ->with('error', "Could not end call: {$e->getMessage()}");
+        }
+
+        return redirect()->route('conversations.show', $conversation)
+            ->with('success', 'Call ended.');
     }
 
     /**

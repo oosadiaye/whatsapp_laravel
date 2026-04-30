@@ -90,6 +90,46 @@ class OutboundCallTest extends TestCase
         $this->assertSame(0, CallLog::count());
     }
 
+    public function test_admin_can_end_in_flight_call(): void
+    {
+        $admin = $this->makeUser('admin');
+        $conv = Conversation::factory()->create(['user_id' => $admin->id]);
+        $callLog = \App\Models\CallLog::factory()->inFlight()->outbound($admin)->create([
+            'conversation_id' => $conv->id,
+            'contact_id' => $conv->contact_id,
+            'whatsapp_instance_id' => $conv->whatsapp_instance_id,
+        ]);
+
+        Http::fake(['graph.facebook.com/*' => Http::response(['success' => true], 200)]);
+
+        $this->actingAs($admin)
+            ->post(route('conversations.endCall', ['conversation' => $conv, 'call' => $callLog]))
+            ->assertRedirect();
+
+        $callLog->refresh();
+        $this->assertSame('ended', $callLog->status);
+    }
+
+    public function test_end_call_for_other_account_is_forbidden(): void
+    {
+        $userA = $this->makeUser('admin');
+        $userB = $this->makeUser('admin', 'b@example.com');
+        $convB = Conversation::factory()->create(['user_id' => $userB->id]);
+        $callB = \App\Models\CallLog::factory()->inFlight()->outbound($userB)->create([
+            'conversation_id' => $convB->id,
+            'contact_id' => $convB->contact_id,
+            'whatsapp_instance_id' => $convB->whatsapp_instance_id,
+        ]);
+
+        Http::fake();
+
+        $this->actingAs($userA)
+            ->post(route('conversations.endCall', ['conversation' => $convB, 'call' => $callB]))
+            ->assertForbidden();
+
+        Http::assertNothingSent();
+    }
+
     private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([
