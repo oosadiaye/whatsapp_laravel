@@ -46,4 +46,20 @@ class OutboundCallServiceTest extends TestCase
         $this->assertSame($conv->id, $callLog->conversation_id);
         $this->assertSame($contact->phone, $callLog->to_phone);
     }
+
+    public function test_end_marks_call_log_as_ended_optimistically(): void
+    {
+        Http::fake(['graph.facebook.com/*' => Http::response(['success' => true], 200)]);
+
+        $callLog = CallLog::factory()->inFlight()->create([
+            'meta_call_id' => 'wacid.live',
+        ]);
+
+        $service = new OutboundCallService($this->app->make(WhatsAppCloudApiService::class));
+        $service->end($callLog);
+
+        $callLog->refresh();
+        $this->assertSame('ended', $callLog->status);
+        $this->assertNotNull($callLog->ended_at);
+    }
 }

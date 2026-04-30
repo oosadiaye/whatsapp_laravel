@@ -233,6 +233,23 @@ class WhatsAppCloudApiServiceTest extends TestCase
         $this->service->initiateCall($this->instance, '234');
     }
 
+    public function test_end_call_posts_to_terminate_endpoint(): void
+    {
+        Http::fake([
+            'graph.facebook.com/*' => Http::response(['success' => true], 200),
+        ]);
+
+        $this->service->endCall($this->instance, 'wacid.live_call');
+
+        Http::assertSent(function (Request $request) {
+            return $request->method() === 'POST'
+                && str_contains($request->url(), '/v20.0/PHONE_ID_FAKE/calls')
+                && $request['messaging_product'] === 'whatsapp'
+                && $request['call_id'] === 'wacid.live_call'
+                && $request['action'] === 'terminate';
+        });
+    }
+
     private function makeCloudInstance(): WhatsAppInstance
     {
         return WhatsAppInstance::factory()->create([

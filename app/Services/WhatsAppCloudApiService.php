@@ -178,6 +178,35 @@ class WhatsAppCloudApiService
     }
 
     /**
+     * Hang up an in-flight outbound call.
+     *
+     * Endpoint pattern based on Meta's Calling API conventions: POST /calls
+     * with action=terminate and call_id. Exact endpoint may differ — verify
+     * during implementation against Meta's published Calling API docs.
+     *
+     * @throws WhatsAppApiException
+     */
+    public function endCall(WhatsAppInstance $instance, string $metaCallId): void
+    {
+        $response = $this->client($instance)->post(
+            $this->url("{$instance->phone_number_id}/calls"),
+            [
+                'messaging_product' => 'whatsapp',
+                'call_id' => $metaCallId,
+                'action' => 'terminate',
+            ],
+        );
+
+        if ($response->failed()) {
+            $this->logHttp('endCall', $instance, $response->status(), $response->body());
+
+            throw new WhatsAppApiException(
+                "Failed to end call: {$response->status()} - {$response->body()}"
+            );
+        }
+    }
+
+    /**
      * Mark an inbound message as read so the user sees the blue ticks.
      */
     public function markAsRead(WhatsAppInstance $instance, string $messageId): array

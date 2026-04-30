@@ -48,4 +48,27 @@ class OutboundCallService
             'raw_event_log' => [],
         ]);
     }
+
+    /**
+     * Hang up an in-flight call. Updates the call_log optimistically to
+     * status=ended; if Meta's API rejects, the call is still on at Meta's
+     * side — caller can retry or wait for the natural disconnect webhook.
+     *
+     * @throws WhatsAppApiException
+     */
+    public function end(CallLog $callLog): void
+    {
+        if ($callLog->meta_call_id === null) {
+            throw new WhatsAppApiException(
+                'Cannot end call without meta_call_id (was the call ever initiated successfully?)'
+            );
+        }
+
+        $this->cloudApi->endCall($callLog->whatsappInstance, $callLog->meta_call_id);
+
+        $callLog->update([
+            'status' => CallLog::STATUS_ENDED,
+            'ended_at' => now(),
+        ]);
+    }
 }
