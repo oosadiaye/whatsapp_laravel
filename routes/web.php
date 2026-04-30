@@ -146,6 +146,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/conversations/{conversation}', [ConversationController::class, 'show'])->name('conversations.show');
         Route::get('/conversations/messages/{message}/media', [ConversationController::class, 'downloadMedia'])->name('conversations.media');
     });
+
+    // ─── Calls feed (Phase 15) ─────────────────────────────────────────────
+    Route::middleware('role_or_permission:conversations.view_all|conversations.view_assigned')->group(function () {
+        Route::get('/calls', [\App\Http\Controllers\CallController::class, 'index'])
+            ->name('calls.index');
+    });
     Route::middleware('permission:conversations.reply')->group(function () {
         Route::post('/conversations/{conversation}/reply', [ConversationController::class, 'reply'])->name('conversations.reply');
     });
