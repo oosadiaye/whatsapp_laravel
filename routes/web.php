@@ -152,6 +152,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:conversations.assign')->group(function () {
         Route::post('/conversations/{conversation}/assign', [ConversationController::class, 'assign'])->name('conversations.assign');
     });
+    Route::middleware('permission:conversations.call')->group(function () {
+        Route::post('/conversations/{conversation}/call', [ConversationController::class, 'initiateCall'])->name('conversations.initiateCall');
+    });
 
     // ─── Settings ──────────────────────────────────────────────────────────
     Route::middleware('permission:settings.view')->group(function () {

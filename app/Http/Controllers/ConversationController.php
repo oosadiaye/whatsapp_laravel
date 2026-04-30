@@ -9,6 +9,7 @@ use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\MessageTemplate;
 use App\Models\User;
+use App\Services\OutboundCallService;
 use App\Services\WhatsAppMessenger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,6 +39,7 @@ class ConversationController extends Controller
 {
     public function __construct(
         private readonly WhatsAppMessenger $messenger,
+        private readonly OutboundCallService $outboundCalls,
     ) {
     }
 
@@ -150,6 +152,30 @@ class ConversationController extends Controller
         return redirect()
             ->route('conversations.show', $conversation)
             ->with('success', "Conversation {$action}.");
+    }
+
+    /**
+     * Place an outbound call from this conversation's instance to its contact.
+     * Permission gated via route middleware (`conversations.call`).
+     *
+     * @throws WhatsAppApiException  if Meta rejects the call (caught and surfaced
+     *                                as a flash error, no call_log row created)
+     */
+    public function initiateCall(Request $request, Conversation $conversation): RedirectResponse
+    {
+        $this->authorizeConversationAccess($request, $conversation);
+
+        try {
+            $this->outboundCalls->initiate($conversation, $request->user());
+        } catch (WhatsAppApiException $e) {
+            return redirect()
+                ->route('conversations.show', $conversation)
+                ->with('error', "Could not place call: {$e->getMessage()}");
+        }
+
+        return redirect()
+            ->route('conversations.show', $conversation)
+            ->with('success', "Calling {$conversation->contact->name}...");
     }
 
     /**
