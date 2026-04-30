@@ -1,17 +1,19 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between">
+        <div x-data class="flex items-center justify-between">
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
                 {{ __('Contact Groups') }}
             </h2>
-            <button @click="$dispatch('open-create-group')"
-                    class="inline-flex items-center px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm hover:opacity-90 transition"
-                    style="background-color: #25D366;">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-                Create Group
-            </button>
+            @can('groups.create')
+                <button @click="$dispatch('open-create-group')"
+                        class="inline-flex items-center px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm hover:opacity-90 transition"
+                        style="background-color: #25D366;">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Create Group
+                </button>
+            @endcan
         </div>
     </x-slot>
 
@@ -38,13 +40,15 @@
                         </svg>
                         <h3 class="mt-4 text-sm font-medium text-gray-900">No groups yet</h3>
                         <p class="mt-1 text-sm text-gray-500">Create a group to organize your contacts for blast messaging.</p>
-                        <div class="mt-6">
-                            <button @click="$dispatch('open-create-group')"
-                                    class="inline-flex items-center px-4 py-2 text-sm font-medium text-white rounded-lg hover:opacity-90 transition"
-                                    style="background-color: #25D366;">
-                                Create Your First Group
-                            </button>
-                        </div>
+                        @can('groups.create')
+                            <div x-data class="mt-6">
+                                <button @click="$dispatch('open-create-group')"
+                                        class="inline-flex items-center px-4 py-2 text-sm font-medium text-white rounded-lg hover:opacity-90 transition"
+                                        style="background-color: #25D366;">
+                                    Create Your First Group
+                                </button>
+                            </div>
+                        @endcan
                     </div>
                 </div>
             @else
@@ -86,7 +90,10 @@
         </div>
     </div>
 
-    {{-- Create Group Modal --}}
+    {{-- Create Group Modal — only rendered if the user can actually create.
+         Saves a few KB of HTML and prevents the modal's internal text from
+         leaking through to permission-denied users. --}}
+    @can('groups.create')
     <div x-data="{ open: false }"
          @open-create-group.window="open = true"
          x-show="open"
@@ -158,4 +165,5 @@
             </div>
         </div>
     </div>
+    @endcan
 </x-app-layout>
