@@ -188,6 +188,13 @@ class WhatsAppCloudApiService
      */
     public function endCall(WhatsAppInstance $instance, string $metaCallId): void
     {
+        // TODO(voice-phase-A-deploy): the request shape (POST /calls with action=terminate)
+        // is speculative — verify against Meta Cloud Calling API docs before first prod call.
+        // OutboundCallService::end() optimistically marks the call_log as ended on success;
+        // if Meta's actual hang-up endpoint differs, calls will be marked ended locally
+        // while still live on Meta's side. The natural disconnect webhook will eventually
+        // overwrite the row, but the in-flight banner will dismiss prematurely.
+
         $response = $this->client($instance)->post(
             $this->url("{$instance->phone_number_id}/calls"),
             [

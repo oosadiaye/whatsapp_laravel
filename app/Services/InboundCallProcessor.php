@@ -118,12 +118,15 @@ class InboundCallProcessor
     private function applyEvent(CallLog $callLog, string $eventName, array $payload): void
     {
         $eventTime = $this->eventTime($payload);
-        $callLog->appendRawEvent($eventName, $payload);
 
         switch ($eventName) {
             case 'connect':
-                // First-event case is handled by processOne above.
-                // If the row was already created, this is a duplicate connect — no-op.
+                // First-event creation is handled by processOne above.
+                // A duplicate connect on an already-ringing log is a webhook
+                // retry — drop it entirely to keep raw_event_log bounded.
+                if ($callLog->status === CallLog::STATUS_RINGING) {
+                    return;
+                }
                 break;
 
             case 'accept':
@@ -161,13 +164,17 @@ class InboundCallProcessor
                 break;
 
             default:
-                // Unknown events: log already appended above, no status change.
                 Log::warning('Unknown call event from Meta', [
                     'event' => $eventName,
                     'wacid' => $callLog->meta_call_id,
                 ]);
+                // Fall through: append unknown events to raw log for debugging,
+                // but no status change.
         }
 
+        // Only reached when the event causes a genuine state transition or is an
+        // unknown event worth recording. Duplicate connects returned early above.
+        $callLog->appendRawEvent($eventName, $payload);
         $callLog->save();
     }
 

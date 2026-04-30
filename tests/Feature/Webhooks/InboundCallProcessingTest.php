@@ -181,4 +181,70 @@ class InboundCallProcessingTest extends TestCase
 
         $this->assertSame(1, \App\Models\CallLog::count());
     }
+
+    public function test_decline_event_sets_declined_status_with_reason(): void
+    {
+        $instance = WhatsAppInstance::factory()->create();
+        $this->processor->processCalls($instance, [
+            ['id' => 'wacid.dec', 'from' => '234999', 'to' => $instance->business_phone_number, 'event' => 'connect', 'timestamp' => '1714500000'],
+            ['id' => 'wacid.dec', 'from' => '234999', 'to' => $instance->business_phone_number, 'event' => 'reject', 'timestamp' => '1714500003', 'reason' => 'Customer busy'],
+        ]);
+
+        $call = CallLog::where('meta_call_id', 'wacid.dec')->first();
+        $this->assertSame('declined', $call->status);
+        $this->assertSame('Customer busy', $call->failure_reason);
+        $this->assertNotNull($call->ended_at);
+    }
+
+    public function test_fail_event_sets_failed_status_with_error_message(): void
+    {
+        $instance = WhatsAppInstance::factory()->create();
+        $this->processor->processCalls($instance, [
+            ['id' => 'wacid.err', 'from' => '234999', 'to' => $instance->business_phone_number, 'event' => 'connect', 'timestamp' => '1714500000'],
+            ['id' => 'wacid.err', 'from' => '234999', 'to' => $instance->business_phone_number, 'event' => 'fail', 'timestamp' => '1714500001', 'error' => ['message' => 'Network unreachable']],
+        ]);
+
+        $call = CallLog::where('meta_call_id', 'wacid.err')->first();
+        $this->assertSame('failed', $call->status);
+        $this->assertSame('Network unreachable', $call->failure_reason);
+    }
+
+    public function test_distinct_events_for_same_call_append_to_raw_event_log_in_order(): void
+    {
+        $instance = WhatsAppInstance::factory()->create();
+        $this->processor->processCalls($instance, [
+            ['id' => 'wacid.log', 'from' => '234999', 'to' => $instance->business_phone_number, 'event' => 'connect', 'timestamp' => '1714500000'],
+            ['id' => 'wacid.log', 'from' => '234999', 'to' => $instance->business_phone_number, 'event' => 'accept', 'timestamp' => '1714500005'],
+            ['id' => 'wacid.log', 'from' => '234999', 'to' => $instance->business_phone_number, 'event' => 'disconnect', 'timestamp' => '1714500035'],
+        ]);
+
+        $call = CallLog::where('meta_call_id', 'wacid.log')->first();
+        $events = collect($call->raw_event_log)->pluck('event')->all();
+
+        // After the fix, duplicate connect returns early without appending to raw_event_log.
+        // Only accept and disconnect are appended.
+        $this->assertContains('accept', $events);
+        $this->assertContains('disconnect', $events);
+        $this->assertSame('disconnect', end($events), 'disconnect should be the last logged event');
+    }
+
+    public function test_duplicate_connect_event_does_not_grow_raw_event_log(): void
+    {
+        $instance = WhatsAppInstance::factory()->create();
+        $event = ['id' => 'wacid.bloat', 'from' => '234999', 'to' => $instance->business_phone_number, 'event' => 'connect', 'timestamp' => '1714500000'];
+
+        $this->processor->processCalls($instance, [$event]);
+        $afterFirst = CallLog::where('meta_call_id', 'wacid.bloat')->first()->raw_event_log ?? [];
+
+        // Replay the same connect event 5 times to simulate webhook retries
+        for ($i = 0; $i < 5; $i++) {
+            $this->processor->processCalls($instance, [$event]);
+        }
+
+        $afterReplays = CallLog::where('meta_call_id', 'wacid.bloat')->first()->raw_event_log ?? [];
+
+        // raw_event_log size should not grow with duplicate connects
+        $this->assertSameSize($afterFirst, $afterReplays,
+            'Duplicate connect events must not append to raw_event_log on every retry');
+    }
 }

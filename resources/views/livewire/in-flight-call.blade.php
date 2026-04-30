@@ -8,7 +8,7 @@
             $statusText = match($call->status) {
                 'initiated' => 'Connecting to Meta...',
                 'ringing' => 'Calling ' . ($call->contact->name ?? $call->to_phone) . '...',
-                'connected' => 'Call connected · ' . gmdate('i:s', max(0, (int) $call->connected_at->diffInSeconds(now()))),
+                'connected' => 'Call connected · ' . gmdate('i:s', max(0, (int) now()->diffInSeconds($call->connected_at))),
                 default => $call->status,
             };
         @endphp
