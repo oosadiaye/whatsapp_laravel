@@ -95,15 +95,31 @@ class User extends Authenticatable
      * Returns true for super_admin OR admin role (spatie) OR legacy
      * `role='admin'` column so middleware decisions stay consistent across
      * both systems during the migration.
+     *
+     * Wrapped in try/catch so a partial deploy where the Phase 11 spatie
+     * tables (model_has_roles, etc.) don't yet exist falls back gracefully
+     * to the legacy column check instead of throwing on every request and
+     * 500'ing the login page.
      */
     public function isAdmin(): bool
     {
-        return $this->hasAnyRole([self::ROLE_SUPER_ADMIN, self::ROLE_ADMIN])
-            || $this->role === 'admin';
+        try {
+            if ($this->hasAnyRole([self::ROLE_SUPER_ADMIN, self::ROLE_ADMIN])) {
+                return true;
+            }
+        } catch (\Throwable) {
+            // spatie tables missing — fall through to legacy column check
+        }
+
+        return $this->role === 'admin';
     }
 
     public function isAgent(): bool
     {
-        return $this->hasRole(self::ROLE_AGENT);
+        try {
+            return $this->hasRole(self::ROLE_AGENT);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }
