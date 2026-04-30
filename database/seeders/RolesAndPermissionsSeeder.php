@@ -83,6 +83,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'conversations.view_assigned', // see only assigned-to-me
             'conversations.reply',
             'conversations.assign',        // route a chat to a staff member
+            'conversations.call',          // initiate voice calls
 
             // Settings
             'settings.view',
