@@ -74,6 +74,59 @@
                 </div>
             </div>
 
+            @can('conversations.call')
+                <div x-data="{ open: false }">
+                    <button type="button"
+                            @click="open = true"
+                            class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition"
+                            title="Call {{ $conversation->contact->name }}">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
+                        </svg>
+                    </button>
+
+                    <template x-teleport="body">
+                        <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                             @click.self="open = false">
+                            <div class="absolute inset-0 bg-black/50"></div>
+
+                            <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-2">Call {{ $conversation->contact->name }}?</h3>
+                                <dl class="text-sm space-y-1 mb-4">
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">Number:</dt>
+                                        <dd class="text-gray-900 font-mono">{{ $conversation->contact->phone }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">From:</dt>
+                                        <dd class="text-gray-900">{{ $conversation->whatsappInstance->display_name ?? $conversation->whatsappInstance->instance_name }}</dd>
+                                    </div>
+                                </dl>
+                                <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-4">
+                                    This will count toward your daily Meta call quota. Audio will ring on the device where this WhatsApp Business number is registered.
+                                </p>
+                                <div class="flex justify-end gap-2">
+                                    <button type="button" @click="open = false"
+                                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                                        Cancel
+                                    </button>
+                                    <form method="POST" action="{{ route('conversations.initiateCall', $conversation) }}">
+                                        @csrf
+                                        <button type="submit"
+                                                class="inline-flex items-center px-5 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
+                                            </svg>
+                                            Call now
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            @endcan
+
             {{-- 24h window indicator --}}
             <div class="text-right">
                 @if($conversation->isWindowOpen())
