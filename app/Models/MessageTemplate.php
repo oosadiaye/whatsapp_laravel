@@ -58,4 +58,33 @@ class MessageTemplate extends Model
     {
         return $this->whatsapp_template_id !== null;
     }
+
+    /**
+     * Returns the HEADER component's media format if it requires a media URL
+     * at send time ('IMAGE', 'VIDEO', 'DOCUMENT'), or null if the template's
+     * header is text or absent.
+     *
+     * Drives both the campaign form's conditional "Header Media URL" field
+     * and the StoreCampaignRequest pre-flight guard that prevents 132012.
+     */
+    public function headerMediaFormat(): ?string
+    {
+        $components = $this->components ?? [];
+        if (! is_array($components)) {
+            return null;
+        }
+
+        foreach ($components as $component) {
+            $type = strtoupper((string) ($component['type'] ?? ''));
+            if ($type !== 'HEADER') {
+                continue;
+            }
+            $format = strtoupper((string) ($component['format'] ?? 'TEXT'));
+            if (in_array($format, ['IMAGE', 'VIDEO', 'DOCUMENT'], true)) {
+                return $format;
+            }
+        }
+
+        return null;
+    }
 }

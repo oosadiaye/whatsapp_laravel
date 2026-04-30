@@ -141,10 +141,25 @@ class SendWhatsAppMessage implements ShouldQueue
     }
 
     /**
-     * Build per-contact `components` for a template send by personalizing the
-     * BODY component's variable parameters ({{1}}, {{2}}, ...) with contact
-     * fields. Header/button components are passed through as-is for now —
-     * Phase 5 will add a real component-mapping UI.
+     * Build per-contact `components` payload for a template send.
+     *
+     * Handles two component types Meta requires at send time:
+     *
+     *   1. HEADER with format=IMAGE/VIDEO/DOCUMENT
+     *      Meta requires the media URL provided at send time, even though the
+     *      template was approved with an example. Without this, Meta returns
+     *      error 132012 "Format mismatch, expected IMAGE, received UNKNOWN".
+     *      The URL comes from $campaign->header_media_url, which is required
+     *      by StoreCampaignRequest when a media-header template is selected.
+     *
+     *   2. BODY with {{1}}, {{2}} variable placeholders
+     *      Personalized per-contact via resolveTemplateVariable().
+     *
+     * Skipped intentionally:
+     *   - HEADER format=TEXT without variables (Meta doesn't require parameters)
+     *   - FOOTER (always static text — no parameters)
+     *   - BUTTONS (URL/quick-reply parameters not yet supported; defer until
+     *     a customer reports needing them)
      *
      * @param  array<int, array<string, mixed>>  $templateComponents
      * @return array<int, array<string, mixed>>
@@ -156,9 +171,16 @@ class SendWhatsAppMessage implements ShouldQueue
         foreach ($templateComponents as $component) {
             $type = strtoupper((string) ($component['type'] ?? ''));
 
-            if ($type !== 'BODY') {
-                // For HEADER / FOOTER / BUTTONS we don't yet personalize — pass through.
+            if ($type === 'HEADER') {
+                $headerComponent = $this->buildHeaderComponent($component);
+                if ($headerComponent !== null) {
+                    $output[] = $headerComponent;
+                }
                 continue;
+            }
+
+            if ($type !== 'BODY') {
+                continue;  // FOOTER / BUTTONS not yet supported
             }
 
             $bodyText = (string) ($component['text'] ?? '');
@@ -183,6 +205,57 @@ class SendWhatsAppMessage implements ShouldQueue
         }
 
         return $output;
+    }
+
+    /**
+     * Build the header component for a template send.
+     *
+     * @param  array<string, mixed>  $component  the HEADER component definition from the template
+     * @return array<string, mixed>|null  shaped for Meta's components[] array, or null if no params required
+     */
+    private function buildHeaderComponent(array $component): ?array
+    {
+        $format = strtoupper((string) ($component['format'] ?? 'TEXT'));
+
+        // Media headers — IMAGE/VIDEO/DOCUMENT all need the URL at send time
+        if (in_array($format, ['IMAGE', 'VIDEO', 'DOCUMENT'], true)) {
+            $url = (string) ($this->campaign->header_media_url ?? '');
+            if ($url === '') {
+                // Should never happen — StoreCampaignRequest blocks this — but be defensive.
+                return null;
+            }
+
+            $mediaKey = strtolower($format);
+
+            return [
+                'type' => 'header',
+                'parameters' => [[
+                    'type' => $mediaKey,
+                    $mediaKey => ['link' => $url],
+                ]],
+            ];
+        }
+
+        // TEXT header — only needs parameters if it has {{1}} variables
+        if ($format === 'TEXT') {
+            $headerText = (string) ($component['text'] ?? '');
+            if (preg_match_all('/{{\s*(\d+)\s*}}/', $headerText, $matches) > 0) {
+                $parameters = [];
+                foreach ($matches[1] as $position) {
+                    $parameters[] = [
+                        'type' => 'text',
+                        'text' => $this->resolveTemplateVariable((int) $position),
+                    ];
+                }
+
+                return [
+                    'type' => 'header',
+                    'parameters' => $parameters,
+                ];
+            }
+        }
+
+        return null;  // static text header / unknown format — no params needed
     }
 
     /**

@@ -18,6 +18,7 @@ class Campaign extends Model
         'instance_id',
         'message_template_id',
         'template_language',
+        'header_media_url',
         'name',
         'message',
         'media_path',

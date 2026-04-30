@@ -26,6 +26,7 @@ class StoreCampaignRequest extends FormRequest
             'instance_id' => ['nullable', 'exists:whatsapp_instances,id'],
             'message_template_id' => ['nullable', 'exists:message_templates,id'],
             'template_language' => ['nullable', 'string', 'max:16'],
+            'header_media_url' => ['nullable', 'url', 'max:2048'],
             'groups' => ['required', 'array', 'min:1'],
             'groups.*' => ['exists:contact_groups,id'],
             'media' => ['nullable', 'file', 'max:5120', 'mimes:jpg,jpeg,png,gif,pdf,mp3,ogg'],
@@ -70,7 +71,49 @@ class StoreCampaignRequest extends FormRequest
                     'message_template_id',
                     "Template \"{$template->name}\" has status {$template->status} — only APPROVED templates can be sent. Sync the template list to refresh status, or pick a different template."
                 );
+                return;
+            }
+
+            // Pre-flight: if the template has a media-format header (IMAGE / VIDEO / DOCUMENT),
+            // a header_media_url is REQUIRED — otherwise Meta returns error 132012
+            // ("Format mismatch, expected IMAGE, received UNKNOWN") and the entire
+            // campaign fails silently in the queue.
+            $headerFormat = $this->extractHeaderMediaFormat($template);
+            $headerUrl = $this->input('header_media_url');
+
+            if ($headerFormat !== null && empty($headerUrl)) {
+                $v->errors()->add(
+                    'header_media_url',
+                    "Template \"{$template->name}\" has a {$headerFormat} header — provide a publicly-reachable HTTPS URL for the header media."
+                );
             }
         });
+    }
+
+    /**
+     * Inspect a template's components to find a media-format header.
+     *
+     * Returns 'IMAGE', 'VIDEO', or 'DOCUMENT' if the template requires media,
+     * or null for text headers / no header at all.
+     */
+    private function extractHeaderMediaFormat(MessageTemplate $template): ?string
+    {
+        $components = $template->components ?? [];
+        if (! is_array($components)) {
+            return null;
+        }
+
+        foreach ($components as $component) {
+            $type = strtoupper((string) ($component['type'] ?? ''));
+            if ($type !== 'HEADER') {
+                continue;
+            }
+            $format = strtoupper((string) ($component['format'] ?? 'TEXT'));
+            if (in_array($format, ['IMAGE', 'VIDEO', 'DOCUMENT'], true)) {
+                return $format;
+            }
+        }
+
+        return null;
     }
 }

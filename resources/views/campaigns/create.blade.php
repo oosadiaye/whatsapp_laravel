@@ -66,7 +66,12 @@
                 </div>
 
                 {{-- Tab 3: Message --}}
-                <div x-show="tab === 'message'" x-data="{ templatePicked: !!@js(old('message_template_id')) }" class="rounded-xl bg-white p-6 shadow-sm">
+                <div x-show="tab === 'message'"
+                     x-data="{
+                         templatePicked: !!@js(old('message_template_id')),
+                         headerMediaFormat: @js(old('_initial_header_format', '')),
+                     }"
+                     class="rounded-xl bg-white p-6 shadow-sm">
 
                     {{-- Warning banner when no template selected --}}
                     <div x-show="!templatePicked" x-cloak
@@ -85,6 +90,7 @@
                                     @change="
                                         const opt = $event.target.selectedOptions[0];
                                         templatePicked = !!opt.value;
+                                        headerMediaFormat = opt.dataset.headerFormat || '';
                                         if (opt.value) {
                                             message = opt.dataset.content;
                                             $refs.messageArea.value = message;
@@ -104,8 +110,10 @@
                                             <option value="{{ $template->id }}"
                                                     data-content="{{ $template->content }}"
                                                     data-language="{{ $template->language }}"
+                                                    data-header-format="{{ $template->headerMediaFormat() ?? '' }}"
                                                     {{ old('message_template_id') == $template->id ? 'selected' : '' }}>
                                                 {{ $template->name }} · {{ $template->language }} · {{ $template->status }}
+                                                @if($template->headerMediaFormat()) · {{ $template->headerMediaFormat() }} HEADER @endif
                                             </option>
                                         @endforeach
                                     </optgroup>
@@ -129,6 +137,24 @@
                             @error('message_template_id')
                                 <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                             @enderror
+
+                            {{-- Conditional: appears when the picked template has IMAGE/VIDEO/DOCUMENT header.
+                                 Required by Meta — without this URL, the send returns error 132012
+                                 ("Format mismatch, expected IMAGE, received UNKNOWN"). --}}
+                            <div x-show="headerMediaFormat" x-cloak class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                <label class="block text-sm font-medium text-amber-900">
+                                    {{ __('Header Media URL') }} <span x-text="'(' + headerMediaFormat + ')'" class="text-xs"></span>
+                                </label>
+                                <input type="url" name="header_media_url" value="{{ old('header_media_url') }}"
+                                       placeholder="https://example.com/header-image.jpg"
+                                       class="mt-1 block w-full rounded-md border-amber-300 text-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                <p class="mt-1 text-xs text-amber-800">
+                                    {{ __('This template requires a media URL for its header. Must be a publicly-reachable HTTPS URL.') }}
+                                </p>
+                                @error('header_media_url')
+                                    <p class="mt-1 text-sm text-red-700">{{ $message }}</p>
+                                @enderror
+                            </div>
 
                             <div class="mt-4">
                                 <label class="block text-sm font-medium text-gray-700">Message *</label>
