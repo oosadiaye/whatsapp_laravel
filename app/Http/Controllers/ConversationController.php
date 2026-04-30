@@ -90,6 +90,11 @@ class ConversationController extends Controller
         // Eager load messages + sender info (for outbound rows showing "Sent by Alice").
         $messages = $conversation->messages()->with('sentBy')->get();
 
+        $callLogs = $conversation->callLogs()->with('placedBy')->get();
+
+        // Merge messages and call_logs into one chronological timeline
+        $timeline = $messages->concat($callLogs)->sortBy('created_at')->values();
+
         // Approved templates from the same instance, used when the 24h window is closed.
         $templates = MessageTemplate::where('user_id', $conversation->user_id)
             ->where(function ($q) use ($conversation) {
@@ -116,6 +121,8 @@ class ConversationController extends Controller
         return view('conversations.show', [
             'conversation' => $conversation->load(['contact', 'whatsappInstance', 'assignedTo']),
             'messages' => $messages,
+            'callLogs' => $callLogs,
+            'timeline' => $timeline,
             'templates' => $templates,
             'assignableStaff' => $assignableStaff,
         ]);
