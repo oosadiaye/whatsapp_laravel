@@ -11,6 +11,8 @@ use App\Models\MessageTemplate;
 use App\Models\WhatsAppInstance;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -55,7 +57,7 @@ class CampaignController extends Controller
             'instance_id' => $request->validated('instance_id'),
             'message_template_id' => $request->validated('message_template_id'),
             'template_language' => $request->validated('template_language'),
-            'header_media_url' => $request->validated('header_media_url'),
+            'header_media_url' => $this->storeHeaderMedia($request->file('header_media')),
             'rate_per_minute' => $request->validated('rate_per_minute', 10),
             'delay_min' => $request->validated('delay_min', 3),
             'delay_max' => $request->validated('delay_max', 10),
@@ -63,19 +65,33 @@ class CampaignController extends Controller
             'status' => 'DRAFT',
         ];
 
-        if ($request->hasFile('media')) {
-            $data['media_path'] = $request->file('media')->store('campaigns');
-            $data['media_type'] = $this->resolveMediaType(
-                $request->file('media')->getClientOriginalExtension(),
-            );
-        }
-
         $campaign = Campaign::create($data);
         $campaign->contactGroups()->attach($request->validated('groups'));
 
         return redirect()
             ->route('campaigns.show', $campaign)
             ->with('success', 'Campaign created successfully.');
+    }
+
+    /**
+     * Persist an uploaded header-media file on the public disk and return an
+     * absolute URL Meta can fetch. Returns null when no file was uploaded —
+     * caller is responsible for falling back to the campaign's existing URL
+     * (UPDATE flow) or omitting the header parameter (TEXT-header templates).
+     */
+    private function storeHeaderMedia(?UploadedFile $file): ?string
+    {
+        if ($file === null) {
+            return null;
+        }
+
+        // Stored under storage/app/public/campaign-headers/{hash.ext}
+        // and exposed via /storage/campaign-headers/... thanks to artisan storage:link.
+        $path = $file->store('campaign-headers', 'public');
+
+        // Storage::url() returns a path-relative URL (e.g. "/storage/campaign-headers/abc.jpg").
+        // Meta requires an absolute URL it can fetch publicly, so wrap with url().
+        return url(Storage::disk('public')->url($path));
     }
 
     public function show(string $id): View
@@ -106,13 +122,18 @@ class CampaignController extends Controller
     {
         $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
 
+        // Keep existing header URL if no new file was uploaded — users editing
+        // unrelated fields (e.g. groups, schedule) shouldn't lose their image.
+        $newHeaderUrl = $this->storeHeaderMedia($request->file('header_media'))
+            ?? $campaign->header_media_url;
+
         $campaign->update([
             'name' => $request->validated('name'),
             'message' => $request->validated('message'),
             'instance_id' => $request->validated('instance_id'),
             'message_template_id' => $request->validated('message_template_id'),
             'template_language' => $request->validated('template_language'),
-            'header_media_url' => $request->validated('header_media_url'),
+            'header_media_url' => $newHeaderUrl,
             'rate_per_minute' => $request->validated('rate_per_minute', 10),
             'delay_min' => $request->validated('delay_min', 3),
             'delay_max' => $request->validated('delay_max', 10),

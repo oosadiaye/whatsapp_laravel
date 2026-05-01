@@ -26,10 +26,13 @@ class StoreCampaignRequest extends FormRequest
             'instance_id' => ['nullable', 'exists:whatsapp_instances,id'],
             'message_template_id' => ['nullable', 'exists:message_templates,id'],
             'template_language' => ['nullable', 'string', 'max:16'],
-            'header_media_url' => ['nullable', 'url', 'max:2048'],
+            // Single file uploader (replaces the old `header_media_url` URL field).
+            // Stored on the public disk by the controller; the resulting URL is
+            // written to campaigns.header_media_url so SendWhatsAppMessage can
+            // pass it to Meta as the template-header parameter.
+            'header_media' => ['nullable', 'file', 'max:16384', 'mimes:jpg,jpeg,png,gif,mp4,mov,pdf'],
             'groups' => ['required', 'array', 'min:1'],
             'groups.*' => ['exists:contact_groups,id'],
-            'media' => ['nullable', 'file', 'max:5120', 'mimes:jpg,jpeg,png,gif,pdf,mp3,ogg'],
             'rate_per_minute' => ['integer', 'min:1', 'max:60'],
             'delay_min' => ['integer', 'min:1', 'max:30'],
             'delay_max' => ['integer', 'min:1', 'max:60'],
@@ -75,16 +78,21 @@ class StoreCampaignRequest extends FormRequest
             }
 
             // Pre-flight: if the template has a media-format header (IMAGE / VIDEO / DOCUMENT),
-            // a header_media_url is REQUIRED — otherwise Meta returns error 132012
+            // a header_media file is REQUIRED — otherwise Meta returns error 132012
             // ("Format mismatch, expected IMAGE, received UNKNOWN") and the entire
             // campaign fails silently in the queue.
+            //
+            // On UPDATE we also accept a previously-stored header URL on the campaign
+            // being edited (route-bound), so users editing a campaign don't have to
+            // re-upload the same file just to change unrelated fields.
             $headerFormat = $this->extractHeaderMediaFormat($template);
-            $headerUrl = $this->input('header_media_url');
+            $hasFile = $this->hasFile('header_media');
+            $existingUrl = $this->route('campaign')?->header_media_url;
 
-            if ($headerFormat !== null && empty($headerUrl)) {
+            if ($headerFormat !== null && ! $hasFile && empty($existingUrl)) {
                 $v->errors()->add(
-                    'header_media_url',
-                    "Template \"{$template->name}\" has a {$headerFormat} header — provide a publicly-reachable HTTPS URL for the header media."
+                    'header_media',
+                    "Template \"{$template->name}\" has a {$headerFormat} header — upload a {$headerFormat} file under the message box."
                 );
             }
         });

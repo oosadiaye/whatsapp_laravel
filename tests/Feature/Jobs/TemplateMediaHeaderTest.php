@@ -14,7 +14,9 @@ use App\Models\User;
 use App\Models\WhatsAppInstance;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -223,7 +225,7 @@ class TemplateMediaHeaderTest extends TestCase
         });
     }
 
-    public function test_form_blocks_campaign_creation_when_media_header_url_missing(): void
+    public function test_form_blocks_campaign_creation_when_media_header_file_missing(): void
     {
         // Pre-flight guard: Meta would return 132012, but we surface the error
         // at form-submit time instead of letting it 500 during send.
@@ -239,19 +241,23 @@ class TemplateMediaHeaderTest extends TestCase
                 'instance_id' => $instance->id,
                 'message_template_id' => $template->id,
                 'groups' => [$group->id],
-                // header_media_url INTENTIONALLY OMITTED
+                // header_media file INTENTIONALLY OMITTED
             ])
-            ->assertSessionHasErrors('header_media_url');
+            ->assertSessionHasErrors('header_media');
 
         $this->assertSame(0, Campaign::count());
     }
 
-    public function test_form_accepts_campaign_when_media_header_url_provided(): void
+    public function test_form_accepts_campaign_when_media_header_file_uploaded(): void
     {
+        Storage::fake('public');
+
         $admin = $this->makeAdmin();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
         $template = $this->makeImageHeaderTemplate($admin, $instance);
         $group = ContactGroup::create(['user_id' => $admin->id, 'name' => 'Test']);
+
+        $file = UploadedFile::fake()->image('promo.jpg', 800, 600);
 
         $this->actingAs($admin)
             ->post(route('campaigns.store'), [
@@ -259,7 +265,7 @@ class TemplateMediaHeaderTest extends TestCase
                 'message' => 'Body',
                 'instance_id' => $instance->id,
                 'message_template_id' => $template->id,
-                'header_media_url' => 'https://cdn.example.com/promo.jpg',
+                'header_media' => $file,
                 'groups' => [$group->id],
             ])
             ->assertRedirect()
@@ -267,7 +273,14 @@ class TemplateMediaHeaderTest extends TestCase
 
         $campaign = Campaign::first();
         $this->assertNotNull($campaign);
-        $this->assertSame('https://cdn.example.com/promo.jpg', $campaign->header_media_url);
+        $this->assertNotNull($campaign->header_media_url);
+        // File was actually persisted on the public disk under campaign-headers/...
+        $this->assertStringContainsString('/storage/campaign-headers/', $campaign->header_media_url);
+
+        // Verify the upload landed on disk (Storage::fake intercepts the public disk).
+        $relativePath = ltrim(parse_url($campaign->header_media_url, PHP_URL_PATH), '/');
+        $relativePath = str_replace('storage/', '', $relativePath);  // /storage/foo.jpg → foo.jpg
+        Storage::disk('public')->assertExists($relativePath);
     }
 
     // ──────────────────────────────────────────────────────────────────────

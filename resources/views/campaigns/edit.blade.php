@@ -101,24 +101,6 @@
                                        value="{{ old('template_language', $campaign->template_language) }}">
                             </div>
 
-                            {{-- Conditional: Header Media URL when picked template has IMAGE/VIDEO/DOCUMENT header --}}
-                            <div x-show="headerMediaFormat" x-cloak class="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                                <label class="block text-sm font-medium text-amber-900">
-                                    {{ __('Header Media URL') }} <span x-text="'(' + headerMediaFormat + ')'" class="text-xs"></span>
-                                </label>
-                                <input type="url" name="header_media_url"
-                                       x-model="headerMediaUrl"
-                                       @input="headerImageBroken = false"
-                                       placeholder="https://example.com/header-image.jpg"
-                                       class="mt-1 block w-full rounded-md border-amber-300 text-sm focus:border-[#25D366] focus:ring-[#25D366]">
-                                <p class="mt-1 text-xs text-amber-800">
-                                    {{ __('This template requires a media URL for its header. Must be a publicly-reachable HTTPS URL.') }}
-                                </p>
-                                @error('header_media_url')
-                                    <p class="mt-1 text-sm text-red-700">{{ $message }}</p>
-                                @enderror
-                            </div>
-
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Message *</label>
                                 <textarea name="message" x-ref="messageArea" x-model="message" rows="6" required
@@ -126,13 +108,56 @@
                                 @error('message') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
 
+                            {{-- Single header-media uploader (mirrors create.blade.php).
+                                 If the campaign already has a header URL, show a thumbnail of
+                                 the current image; uploading a new file replaces it. Leaving
+                                 the input empty keeps the existing URL on save. --}}
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Media (optional, in-message attachment)</label>
-                                @if($campaign->media_path)
-                                <p class="text-xs text-gray-500 mt-1">Current: {{ basename($campaign->media_path) }}</p>
+                                <label class="block text-sm font-medium text-gray-700">
+                                    {{ __('Header media') }}
+                                    <template x-if="headerMediaFormat">
+                                        <span class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800"
+                                              x-text="headerMediaFormat + ' required'"></span>
+                                    </template>
+                                </label>
+                                @if($campaign->header_media_url)
+                                    <div class="mt-2 flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-2">
+                                        @if(str_contains(strtolower($campaign->header_media_url), '.mp4') || str_contains(strtolower($campaign->header_media_url), '.mov'))
+                                            <video src="{{ $campaign->header_media_url }}" muted class="h-12 w-12 rounded object-cover bg-black"></video>
+                                        @elseif(str_contains(strtolower($campaign->header_media_url), '.pdf'))
+                                            <div class="flex h-12 w-12 items-center justify-center rounded bg-red-100">
+                                                <svg class="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                            </div>
+                                        @else
+                                            <img src="{{ $campaign->header_media_url }}" class="h-12 w-12 rounded object-cover bg-gray-200" alt="Current header">
+                                        @endif
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-xs font-medium text-gray-700">{{ __('Current header') }}</p>
+                                            <p class="text-[11px] text-gray-500 truncate">{{ basename($campaign->header_media_url) }}</p>
+                                        </div>
+                                    </div>
                                 @endif
-                                <input type="file" name="media" accept="image/*,.pdf,.mp3,.ogg"
-                                       class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-[#25D366] file:px-4 file:py-2 file:text-sm file:text-white">
+                                <input type="file" name="header_media"
+                                       x-bind:accept="headerMediaFormat === 'VIDEO' ? 'video/mp4,video/quicktime' : (headerMediaFormat === 'DOCUMENT' ? 'application/pdf' : 'image/jpeg,image/png,image/gif')"
+                                       x-on:change="
+                                           const f = $event.target.files[0];
+                                           if (!f) return;
+                                           const reader = new FileReader();
+                                           reader.onload = e => { headerMediaUrl = e.target.result; headerImageBroken = false; };
+                                           reader.readAsDataURL(f);
+                                       "
+                                       class="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-[#25D366] file:px-4 file:py-2 file:text-sm file:text-white">
+                                <p class="mt-1 text-xs text-gray-500">
+                                    <template x-if="headerMediaFormat">
+                                        <span x-text="'Upload a new ' + headerMediaFormat.toLowerCase() + ' to replace the current header. Leave empty to keep it. Max 16MB.'"></span>
+                                    </template>
+                                    <template x-if="!headerMediaFormat">
+                                        <span>{{ __('Optional. Attach an image, video, or PDF to send with this campaign.') }}</span>
+                                    </template>
+                                </p>
+                                @error('header_media')
+                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
                             </div>
                         </div>
 
