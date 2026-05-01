@@ -90,21 +90,4 @@
         </button>
     </form>
 
-    {{-- Demo credentials hint (local dev only) --}}
-    @if(app()->environment('local'))
-        <div class="mt-8 rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs text-amber-900">
-            <div class="flex items-start gap-2">
-                <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z"/>
-                </svg>
-                <div>
-                    <p class="font-medium">{{ __('Local development') }}</p>
-                    <p class="mt-0.5 text-amber-800/80">
-                        {{ __('Sign in with') }} <code class="font-mono text-[11px] bg-amber-100 px-1 py-0.5 rounded">admin@blastiq.com</code>
-                        / <code class="font-mono text-[11px] bg-amber-100 px-1 py-0.5 rounded">password</code>
-                    </p>
-                </div>
-            </div>
-        </div>
-    @endif
 </x-guest-layout>
