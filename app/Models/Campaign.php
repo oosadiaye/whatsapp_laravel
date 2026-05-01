@@ -18,9 +18,15 @@ class Campaign extends Model
         'instance_id',
         'message_template_id',
         'template_language',
-        'header_media_url',
+        'header_media_url',  // populated by CampaignController::storeHeaderMedia() from the form's "Header media" file upload; passed to Meta as the template-header parameter
         'name',
         'message',
+        // media_path / media_type: freeform-media-with-caption sends. Used by
+        // SendWhatsAppMessage Branch 2 ($campaign->media_path !== null) for
+        // sending images/videos with a caption inside an open 24h conversation
+        // window — DIFFERENT from header_media_url above. No UI surface today;
+        // populate via API/seeder if you need this path. Kept intentionally so
+        // freeform sends remain possible without re-introducing a schema change.
         'media_path',
         'media_type',
         'status',
