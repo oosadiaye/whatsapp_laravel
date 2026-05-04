@@ -72,7 +72,12 @@ class ContactController extends Controller
      */
     private function resolveInstance(Request $request): ?WhatsAppInstance
     {
+        // Only CONNECTED instances are usable for outbound API calls; a
+        // DISCONNECTED or PENDING instance would fail at Meta's edge anyway.
+        // ('status' is the actual schema column on whatsapp_instances —
+        // there is no `is_active` column.)
         $instances = WhatsAppInstance::where('user_id', $request->user()->id)
+            ->where('status', 'CONNECTED')
             ->get();
 
         if ($instances->count() === 0) {
@@ -93,6 +98,7 @@ class ContactController extends Controller
     private function instancePickError(Request $request): string
     {
         $count = WhatsAppInstance::where('user_id', $request->user()->id)
+            ->where('status', 'CONNECTED')
             ->count();
 
         return $count === 0
