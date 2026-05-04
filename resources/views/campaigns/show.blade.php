@@ -50,6 +50,20 @@
                     </form>
                 @endif
                 <a href="{{ route('campaigns.exportLogs', $campaign) }}" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Export CSV</a>
+
+                {{-- Delete: hidden on RUNNING (workers active mid-flight); visible on every
+                     other state including PAUSED, COMPLETED, FAILED, CANCELLED. Server also
+                     re-checks via DELETABLE_STATUSES so direct DELETE requests are blocked. --}}
+                @can('campaigns.delete')
+                    @if(in_array($campaign->status, ['DRAFT', 'QUEUED', 'PAUSED', 'COMPLETED', 'FAILED', 'CANCELLED'], true))
+                        <form action="{{ route('campaigns.destroy', $campaign) }}" method="POST" class="inline"
+                              onsubmit="return confirm('{{ __("Permanently delete this campaign and all its message logs? This cannot be undone.") }}');">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">{{ __('Delete') }}</button>
+                        </form>
+                    @endif
+                @endcan
             </div>
         </div>
     </x-slot>

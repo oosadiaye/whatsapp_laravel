@@ -89,6 +89,25 @@ class CampaignController extends Controller
         // and exposed via /storage/campaign-headers/... thanks to artisan storage:link.
         $path = $file->store('campaign-headers', 'public');
 
+        // The 'public' disk has 'throw' => false (config/filesystems.php), so
+        // permission/IO failures return false instead of throwing. Surface that
+        // explicitly with a helpful exception — silently returning null would
+        // create a campaign without the required header URL, then Meta would
+        // reject every send with error 132012 in the queue worker.
+        if ($path === false) {
+            \Illuminate\Support\Facades\Log::error('Failed to store campaign header media', [
+                'original_name' => $file->getClientOriginalName(),
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'storage_root' => storage_path('app/public/campaign-headers'),
+                'hint' => 'Check directory exists and is writable by the web user. Run: chmod -R 775 storage && chown -R www-data:www-data storage',
+            ]);
+            throw new \RuntimeException(
+                'Could not save header media. The web server may lack write permission on storage/app/public/. '
+                .'Run: chmod -R 775 storage && chown -R www-data:www-data storage'
+            );
+        }
+
         // Storage::url() returns a path-relative URL (e.g. "/storage/campaign-headers/abc.jpg").
         // Meta requires an absolute URL it can fetch publicly, so wrap with url().
         return url(Storage::disk('public')->url($path));
@@ -111,6 +130,14 @@ class CampaignController extends Controller
      * campaign instead of mutating one that's already done.
      */
     private const EDITABLE_STATUSES = ['DRAFT', 'QUEUED', 'PAUSED'];
+
+    /**
+     * Deletable statuses. Everything except RUNNING — RUNNING has live worker
+     * jobs in the queue that read this campaign's config to dispatch sends;
+     * deleting the row mid-flight orphans those jobs and they 500 when they
+     * try to refresh the model. Pause first, THEN delete.
+     */
+    private const DELETABLE_STATUSES = ['DRAFT', 'QUEUED', 'PAUSED', 'COMPLETED', 'FAILED', 'CANCELLED'];
 
     public function edit(string $id): View
     {
@@ -176,6 +203,16 @@ class CampaignController extends Controller
     public function destroy(string $id): RedirectResponse
     {
         $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
+
+        // Block deletion of RUNNING campaigns — see DELETABLE_STATUSES doc.
+        // The user must Pause or Cancel first, which both stop worker dispatch
+        // before the delete is allowed.
+        if (! in_array($campaign->status, self::DELETABLE_STATUSES, true)) {
+            return redirect()
+                ->route('campaigns.show', $campaign)
+                ->with('error', "Cannot delete a {$campaign->status} campaign. Pause or Cancel it first.");
+        }
+
         $campaign->delete();
 
         return redirect()

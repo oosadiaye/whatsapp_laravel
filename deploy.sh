@@ -13,28 +13,41 @@ echo "=== BlastIQ Deploy ==="
 echo "Working directory: $(pwd)"
 echo ""
 
-echo "[1/9] Pulling latest code..."
+echo "[1/11] Pulling latest code..."
 git pull origin main
 
-echo "[2/9] Removing Vite hot file (created if dev server ever ran here)..."
+echo "[2/11] Removing Vite hot file (created if dev server ever ran here)..."
 # Without this, Laravel's @vite() directive will keep emitting <script> tags
 # pointing to a long-dead local dev server, breaking every page with CORS errors.
 rm -f public/hot
 
-echo "[3/9] Installing PHP deps..."
+echo "[3/11] Installing PHP deps..."
 composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
-echo "[4/9] Installing JS deps + building assets..."
+echo "[4/11] Installing JS deps + building assets..."
 # `npm ci` is faster + reproducible (uses package-lock.json verbatim).
 # `--omit=dev` flag only skips devDependencies; build itself works fine because
 # laravel-vite-plugin and vite are in dependencies, not devDependencies.
 npm ci --omit=dev || npm install --omit=dev
 npm run build
 
-echo "[5/10] Running migrations..."
+echo "[5/11] Ensuring storage symlink exists..."
+# Phase 13.0+ writes campaign-header uploads to storage/app/public/campaign-headers/
+# and references them via /storage/campaign-headers/... — that URL only works if
+# the public/storage symlink exists. Idempotent: artisan recreates if broken.
+php artisan storage:link
+# Make sure the upload target dir exists with correct permissions even on first deploy.
+mkdir -p storage/app/public/campaign-headers
+# Fix common "Failed to store campaign header media" 500: storage/ owned by deploy
+# user but written-to by web user. Adjust www-data if your web user differs.
+chmod -R 775 storage bootstrap/cache 2>/dev/null || true
+chown -R "$(whoami):www-data" storage bootstrap/cache 2>/dev/null || \
+  chown -R "$(whoami):nginx" storage bootstrap/cache 2>/dev/null || true
+
+echo "[6/11] Running migrations..."
 php artisan migrate --force
 
-echo "[6/10] Seeding roles + permissions (idempotent — uses firstOrCreate)..."
+echo "[7/11] Seeding roles + permissions (idempotent — uses firstOrCreate)..."
 # After Phase 11 (spatie/laravel-permission), the roles + permissions tables
 # must contain rows for the User model's HasRoles trait to work. Without this,
 # ANY authenticated request 500s with "Table model_has_roles doesn't exist"
@@ -43,19 +56,19 @@ echo "[6/10] Seeding roles + permissions (idempotent — uses firstOrCreate)..."
 # admin@blastiq.com is upgraded to super_admin only if not already.
 php artisan db:seed --class=Database\\Seeders\\RolesAndPermissionsSeeder --force
 
-echo "[7/10] Clearing stale caches BEFORE re-caching..."
+echo "[8/11] Clearing stale caches BEFORE re-caching..."
 # Order matters: clear FIRST so re-cache picks up post-pull source, not pre-pull cached output.
 php artisan view:clear
 php artisan config:clear
 php artisan route:clear
 php artisan cache:clear
 
-echo "[8/10] Re-caching for production speed..."
+echo "[9/11] Re-caching for production speed..."
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-echo "[9/10] Restarting queue worker..."
+echo "[10/11] Restarting queue worker..."
 # Try Horizon first; fall back to plain queue:restart if Horizon isn't installed.
 if php artisan list 2>/dev/null | grep -q "horizon:terminate"; then
   php artisan horizon:terminate
@@ -65,7 +78,7 @@ else
   sudo supervisorctl restart blastiq-worker:* 2>/dev/null || true
 fi
 
-echo "[10/10] Final verification..."
+echo "[11/11] Final verification..."
 echo "  - Manifest exists?           $([ -f public/build/manifest.json ] && echo YES || echo NO)"
 echo "  - public/hot gone?           $([ ! -f public/hot ] && echo YES || echo NO)"
 ROLES=$(php artisan tinker --execute="echo Spatie\\Permission\\Models\\Role::count();" 2>/dev/null | tail -1)
