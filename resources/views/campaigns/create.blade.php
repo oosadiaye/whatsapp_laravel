@@ -37,20 +37,31 @@
                       next() {
                           // Per-tab client-side validation: prevent advancing past required fields.
                           // Server validates again, this just helps the user fix mistakes early.
+                          //
+                          // Selectors use Alpine $refs — scoped to this x-data root (the form),
+                          // safer than querySelector because they don't depend on attribute-
+                          // selector parsing rules or DOM-naming-collision quirks. Null-guarded
+                          // so a missing ref flashes through instead of throwing.
                           if (this.tab === 'basic') {
-                              const name = this.$el.querySelector('[name=name]');
-                              if (!name.value.trim()) { name.focus(); name.reportValidity(); return; }
+                              const el = this.$refs.nameField;
+                              if (el && !el.value.trim()) { el.focus(); el.reportValidity(); return; }
                           }
                           if (this.tab === 'recipients') {
-                              const checked = this.$el.querySelectorAll('[name=\'groups[]\']:checked');
+                              const container = this.$refs.recipientsTab;
+                              const checked = container ? container.querySelectorAll('input:checked') : [];
                               if (checked.length === 0) {
                                   alert('Pick at least one contact group before continuing.');
                                   return;
                               }
                           }
                           if (this.tab === 'message') {
-                              const msg = this.$el.querySelector('[name=message]');
-                              if (!msg.value.trim()) { msg.focus(); msg.reportValidity(); return; }
+                              // Message textarea lives inside a nested x-data scope, so $refs
+                              // declared there are NOT visible to this outer scope. Fall back
+                              // to a quoted attribute selector — 'message' has no reserved-
+                              // word collisions like 'name' did, and we tag-anchor with
+                              // `textarea` for specificity.
+                              const el = this.$el.querySelector(`textarea[name="message"]`);
+                              if (el && !el.value.trim()) { el.focus(); el.reportValidity(); return; }
                           }
                           this.tab = this.tabs[this.currentIndex() + 1];
                           window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -91,7 +102,7 @@
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Campaign Name *</label>
-                            <input type="text" name="name" value="{{ old('name') }}" required
+                            <input type="text" name="name" x-ref="nameField" value="{{ old('name') }}" required
                                    class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
                             @error('name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
@@ -110,7 +121,7 @@
                 </div>
 
                 {{-- Tab 2: Recipients --}}
-                <div x-show="tab === 'recipients'" class="rounded-xl bg-white p-6 shadow-sm">
+                <div x-show="tab === 'recipients'" x-ref="recipientsTab" class="rounded-xl bg-white p-6 shadow-sm">
                     <p class="mb-4 text-sm text-gray-600">Select contact groups to send to:</p>
                     <div class="space-y-3">
                         @foreach($groups as $group)
