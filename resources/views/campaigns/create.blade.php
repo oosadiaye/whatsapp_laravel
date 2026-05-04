@@ -55,12 +55,13 @@
                               }
                           }
                           if (this.tab === 'message') {
-                              // Message textarea lives inside a nested x-data scope, so $refs
-                              // declared there are NOT visible to this outer scope. Fall back
-                              // to a quoted attribute selector — 'message' has no reserved-
-                              // word collisions like 'name' did, and we tag-anchor with
-                              // `textarea` for specificity.
-                              const el = this.$el.querySelector(`textarea[name="message"]`);
+                              // Refs from nested x-data are NOT visible to this outer scope,
+                              // so use a CSS attribute selector. Unquoted value is intentional
+                              // because the HTML parser will close the outer x-data attribute
+                              // on any literal double-quote here, mangling every Alpine
+                              // binding below this line. CSS3 allows unquoted attribute
+                              // values when they match identifier syntax; message qualifies.
+                              const el = this.$el.querySelector('textarea[name=message]');
                               if (el && !el.value.trim()) { el.focus(); el.reportValidity(); return; }
                           }
                           this.tab = this.tabs[this.currentIndex() + 1];
