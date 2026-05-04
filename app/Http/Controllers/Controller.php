@@ -22,11 +22,25 @@ abstract class Controller
     protected function userFacingCallError(string $rawMessage): string
     {
         $hints = [
-            // 138015 — most common one for newly-activated accounts.
-            // Meta requires the WhatsApp Business Account to be on the
-            // Cloud Calling allowlist. Messaging approval is separate.
-            '138015' => 'This WhatsApp Business Account isn\'t approved for Cloud Calling yet. '
-                .'Check your Meta Business dashboard → WhatsApp → Phone Numbers → Calling.',
+            // 138013 — Business-Initiated Calling (BIC) not enabled.
+            // The WABA has Cloud Calling for inbound (customers calling
+            // you) but Business-Initiated Calling — where YOUR side
+            // initiates the call — is a separate Meta enrollment program
+            // in limited GA. Most likely error for newly-set-up accounts
+            // that activated Calling on the dashboard but didn't apply
+            // for BIC specifically. Requires separate request to Meta
+            // Business support / Solutions Provider.
+            '138013' => 'Business-Initiated Calling is not enabled on this WhatsApp Business Account. '
+                .'Cloud Calling lets customers call you, but YOU calling them is a separate Meta '
+                .'program. Apply via Meta Business Support: WhatsApp Manager → Account Tools → '
+                .'Calling → Business-initiated calls. (Currently a limited-rollout feature.)',
+
+            // 138015 — Calling not approved at all (broader rejection
+            // than 138013; covers accounts where neither inbound nor
+            // outbound Cloud Calling is enabled).
+            '138015' => 'This WhatsApp Business Account isn\'t approved for Cloud Calling at all. '
+                .'Check your Meta Business dashboard → WhatsApp → Phone Numbers → Calling and '
+                .'enable the feature on this number first.',
 
             // 138001 — recipient can't be called. They haven't opted in
             // to receive calls (recent inbound message) or the customer
