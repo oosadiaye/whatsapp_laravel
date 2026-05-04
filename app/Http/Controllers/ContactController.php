@@ -133,10 +133,10 @@ class ContactController extends Controller
         try {
             $outboundCallService->initiate($conversation, $request->user());
         } catch (WhatsAppApiException $e) {
-            // Log the full exception (including Meta's HTTP response body) but
-            // surface a generic message to the user. Meta's response can include
-            // tokens, internal IDs, and customer-specific data we don't want
-            // bleeding into a session flash.
+            // Log the full Meta response body server-side; flash a user-safe
+            // hint that explains the cause without leaking tokens/IDs. The
+            // userFacingCallError() helper on the base Controller is the
+            // single source of truth for this translation.
             \Illuminate\Support\Facades\Log::error('Outbound call failed', [
                 'conversation_id' => $conversation->id,
                 'contact_id' => $contact->id,
@@ -145,7 +145,7 @@ class ContactController extends Controller
             ]);
             return redirect()
                 ->route('conversations.show', $conversation)
-                ->with('error', 'Could not place call. Please try again or contact support.');
+                ->with('error', $this->userFacingCallError($e->getMessage()));
         }
 
         return redirect()
