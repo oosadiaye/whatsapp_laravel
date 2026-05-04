@@ -281,11 +281,51 @@ class SendWhatsAppMessage implements ShouldQueue
         return $parts[0] ?? '';
     }
 
+    /**
+     * Append a remediation hint when the message contains a known Meta
+     * Cloud API error code. Returns the original message unchanged when
+     * no known code matches. Hints are deliberately short and actionable.
+     */
+    private function annotateMetaError(string $message): string
+    {
+        $hints = [
+            // 131053 — the one this app hits most often. Meta couldn't fetch
+            // the URL we passed in the template's header parameter. Cause is
+            // almost always 'public/storage' symlink missing on the server,
+            // so /storage/campaign-headers/*.jpg returns 404 to Meta's fetcher.
+            '131053' => "\n\nHINT: Meta couldn't fetch the header-media URL. "
+                ."Most common cause: 'public/storage' symlink missing on the server. "
+                ."Fix: run 'php artisan storage:link', then re-launch the campaign.",
+
+            // 132012 — template format mismatch (header expected IMAGE, got UNKNOWN, etc).
+            '132012' => "\n\nHINT: Template-format mismatch. The template expects a media "
+                ."header but no media file was supplied (or wrong type). Edit the campaign "
+                ."and upload a header media file matching the template's expected format.",
+
+            // 131056 — per-pair rate limit. Same business+customer pair too frequently.
+            '131056' => "\n\nHINT: Meta per-pair rate limit hit. Same business+customer pair "
+                ."contacted too often. Lower campaign rate_per_minute or wait before retrying.",
+        ];
+
+        foreach ($hints as $code => $hint) {
+            if (str_contains($message, $code)) {
+                return $message.$hint;
+            }
+        }
+
+        return $message;
+    }
+
     public function failed(Throwable $exception): void
     {
+        // Annotate well-known Meta Cloud API error codes with a remediation
+        // hint so operators can act without trawling Meta's docs. The full
+        // original message is preserved; the hint is appended.
+        $message = $this->annotateMetaError($exception->getMessage());
+
         $this->log->update([
             'status' => 'FAILED',
-            'error_message' => $exception->getMessage(),
+            'error_message' => $message,
         ]);
 
         $this->campaign->increment('failed_count');

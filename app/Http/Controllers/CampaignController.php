@@ -12,6 +12,8 @@ use App\Models\WhatsAppInstance;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -110,7 +112,58 @@ class CampaignController extends Controller
 
         // Storage::url() returns a path-relative URL (e.g. "/storage/campaign-headers/abc.jpg").
         // Meta requires an absolute URL it can fetch publicly, so wrap with url().
-        return url(Storage::disk('public')->url($path));
+        $absoluteUrl = url(Storage::disk('public')->url($path));
+
+        // Pre-flight: verify the URL is reachable from THIS server. If we can't
+        // HEAD it ourselves, Meta certainly can't either, and we'd silently
+        // create a campaign whose every send fails with code 131053 "Media
+        // upload error" hours later in the queue worker.
+        //
+        // Most common reason for an unreachable URL: the public/storage
+        // symlink is missing (artisan storage:link was never run on this
+        // server). Skip this check in unit tests where Storage is faked
+        // and the URL is in-memory.
+        if (! app()->runningUnitTests()) {
+            $this->assertHeaderMediaReachable($absoluteUrl);
+        }
+
+        return $absoluteUrl;
+    }
+
+    /**
+     * HEAD-test a header-media URL to confirm it returns 2xx. Throws on
+     * failure with a remediation hint pointing at storage:link, which is
+     * the cause ~99% of the time when this assertion fires.
+     */
+    private function assertHeaderMediaReachable(string $url): void
+    {
+        try {
+            $response = Http::timeout(5)
+                ->withOptions(['verify' => false])  // self-signed certs in dev
+                ->head($url);
+        } catch (\Throwable $e) {
+            Log::error('Header media reachability check threw', [
+                'url' => $url,
+                'error' => $e->getMessage(),
+            ]);
+            throw new \RuntimeException(
+                "Saved the header media file but couldn't verify the resulting URL is reachable: "
+                ."{$e->getMessage()}. Meta will reject campaign sends if this URL doesn't work."
+            );
+        }
+
+        if ($response->failed()) {
+            Log::error('Header media URL not reachable from app server', [
+                'url' => $url,
+                'status' => $response->status(),
+            ]);
+            throw new \RuntimeException(
+                "Saved the header media file, but the URL '{$url}' returns HTTP {$response->status()}. "
+                ."Meta will reject every send with this URL (error 131053 'Media upload error'). "
+                ."The most common cause is the 'public/storage' symlink missing on the server. "
+                ."Fix: run 'php artisan storage:link' on the server, then try again."
+            );
+        }
     }
 
     public function show(string $id): View
