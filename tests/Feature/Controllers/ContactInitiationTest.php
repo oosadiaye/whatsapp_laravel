@@ -276,6 +276,43 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(0, Conversation::count());
     }
 
+    public function test_contact_index_exposes_is_engaged_flag_for_each_contact(): void
+    {
+        $admin = $this->makeUser('admin');
+        $instance = WhatsAppInstance::factory()->create([
+            'user_id' => $admin->id,
+            'status' => 'CONNECTED',
+        ]);
+
+        // Engaged contact — has a recent inbound message.
+        $engaged = Contact::factory()->create(['user_id' => $admin->id, 'name' => 'Engaged']);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'contact_id' => $engaged->id,
+            'whatsapp_instance_id' => $instance->id,
+        ]);
+        \App\Models\ConversationMessage::create([
+            'conversation_id' => $conv->id,
+            'direction' => 'inbound',
+            'whatsapp_message_id' => 'wamid.eager',
+            'type' => 'text',
+            'body' => 'hi',
+            'received_at' => now()->subDays(3),
+        ]);
+
+        // Cold contact — no activity.
+        Contact::factory()->create(['user_id' => $admin->id, 'name' => 'Cold']);
+
+        $response = $this->actingAs($admin)->get(route('contacts.index'));
+
+        $response->assertOk();
+        $contacts = $response->viewData('contacts');
+
+        $byName = $contacts->keyBy('name');
+        $this->assertTrue((bool) $byName['Engaged']->is_engaged);
+        $this->assertFalse((bool) $byName['Cold']->is_engaged);
+    }
+
     private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([

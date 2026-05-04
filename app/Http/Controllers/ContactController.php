@@ -20,11 +20,40 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ContactController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $contacts = Contact::where('user_id', auth()->id())
-            ->latest()
-            ->paginate(20);
+        $threshold = now()->subDays(\App\Models\Contact::ENGAGEMENT_WINDOW_DAYS);
+
+        $query = Contact::where('user_id', auth()->id())
+            ->withExists([
+                // True if at least one inbound message exists for any of this
+                // contact's conversations within the engagement window.
+                'conversationMessages as has_recent_inbound_message' => fn ($q) =>
+                    $q->where('conversation_messages.direction', 'inbound')
+                      ->where('received_at', '>=', $threshold),
+
+                // True if at least one inbound call exists within the window.
+                'callLogs as has_recent_inbound_call' => fn ($q) =>
+                    $q->where('call_logs.direction', \App\Models\CallLog::DIRECTION_INBOUND)
+                      ->where('call_logs.created_at', '>=', $threshold),
+            ]);
+
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search): void {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+
+        $contacts = $query->latest()->paginate(20);
+
+        // Compose `is_engaged` from the two eager-loaded flags so the view
+        // and the row-action visibility don't need to think about which
+        // signal triggered engagement.
+        $contacts->getCollection()->transform(function (Contact $c): Contact {
+            $c->is_engaged = (bool) ($c->has_recent_inbound_message || $c->has_recent_inbound_call);
+            return $c;
+        });
 
         return view('contacts.index', ['contacts' => $contacts]);
     }
