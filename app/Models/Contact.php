@@ -18,6 +18,17 @@ class Contact extends Model
 {
     use HasFactory, SoftDeletes;
 
+    /**
+     * Engagement window for the Phase 13.1 opt-in proxy. A contact is
+     * considered "engaged" (and therefore callable / chattable from the
+     * contact list) if they have at least one inbound message OR inbound
+     * call within this many days.
+     *
+     * Phase 14 will replace this with an explicit `opted_in_at` column;
+     * for now this constant is the single source of truth.
+     */
+    public const ENGAGEMENT_WINDOW_DAYS = 30;
+
     protected $fillable = [
         'user_id',
         'phone',
@@ -86,6 +97,37 @@ class Contact extends Model
             'id',
             'id',
         );
+    }
+
+    /**
+     * Engagement-based opt-in proxy for Meta WhatsApp Business policy.
+     * True if this contact has shown they want to talk to us — either
+     * messaged us OR called us (inbound, not outbound) within the last
+     * {@see self::ENGAGEMENT_WINDOW_DAYS} days.
+     *
+     * Used by ContactController::startCall as a server-side guard so
+     * a misconfigured UI can never bypass the policy check.
+     *
+     * Two short-circuiting `exists()` queries instead of one UNION because
+     * each runs against an indexed column and the first true wins.
+     */
+    public function isEngaged(): bool
+    {
+        $threshold = now()->subDays(self::ENGAGEMENT_WINDOW_DAYS);
+
+        $hasRecentInbound = $this->conversationMessages()
+            ->where('direction', 'inbound')
+            ->where('received_at', '>=', $threshold)
+            ->exists();
+
+        if ($hasRecentInbound) {
+            return true;
+        }
+
+        return $this->callLogs()
+            ->where('direction', CallLog::DIRECTION_INBOUND)
+            ->where('call_logs.created_at', '>=', $threshold)
+            ->exists();
     }
 
     public function scopeActive(Builder $query): Builder
