@@ -52,6 +52,14 @@ class CampaignController extends Controller
 
     public function store(StoreCampaignRequest $request): RedirectResponse
     {
+        // The form has TWO submit buttons whose 'status' field tells the
+        // controller what the user wants to happen:
+        //   - Save as Draft → status=DRAFT  (just persist; no send)
+        //   - Save & Launch → status=QUEUED (persist AND fan out to workers)
+        // The controller used to hardcode 'DRAFT' which made 'Save & Launch'
+        // silently broken — campaigns saved but never queued.
+        $requestedStatus = $request->validated('status') === 'QUEUED' ? 'QUEUED' : 'DRAFT';
+
         $data = [
             'user_id' => auth()->id(),
             'name' => $request->validated('name'),
@@ -64,15 +72,52 @@ class CampaignController extends Controller
             'delay_min' => $request->validated('delay_min', 3),
             'delay_max' => $request->validated('delay_max', 10),
             'scheduled_at' => $request->validated('scheduled_at'),
+            // Always start as DRAFT in the DB, then if the user chose Save &
+            // Launch we route through the same pipeline as the show-page
+            // Launch button (CampaignService::launch + reachability check).
+            // This keeps a single launch path with consistent guards.
             'status' => 'DRAFT',
         ];
 
         $campaign = Campaign::create($data);
         $campaign->contactGroups()->attach($request->validated('groups'));
 
+        if ($requestedStatus === 'QUEUED') {
+            // Mirror the launch() endpoint's strict reachability check, then
+            // hand off to the campaign service. If reachability fails, the
+            // campaign stays as DRAFT and we redirect with the actionable
+            // hint — the user can fix the issue and click Launch on the
+            // show page without re-creating the campaign.
+            if ($campaign->header_media_url) {
+                try {
+                    $response = Http::timeout(5)->withOptions(['verify' => false])->head($campaign->header_media_url);
+                    if ($response->failed()) {
+                        return redirect()
+                            ->route('campaigns.show', $campaign)
+                            ->with('warning',
+                                "Saved as draft. Could not launch — header media URL returned HTTP {$response->status()}. "
+                                ."Most common cause: 'public/storage' symlink missing on the server. "
+                                ."Fix: SSH and run 'php artisan storage:link', then click Launch on this page."
+                            );
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Pre-launch probe threw on store — proceeding anyway', [
+                        'campaign_id' => $campaign->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            $this->campaignService->launch($campaign);
+
+            return redirect()
+                ->route('campaigns.show', $campaign)
+                ->with('success', 'Campaign created and launched.');
+        }
+
         return redirect()
             ->route('campaigns.show', $campaign)
-            ->with('success', 'Campaign created successfully.');
+            ->with('success', 'Campaign saved as draft.');
     }
 
     /**
@@ -252,6 +297,40 @@ class CampaignController extends Controller
 
         $campaign->contactGroups()->sync($request->validated('groups'));
 
+        // Same Save-as-Draft vs Save-&-Launch dispatch as store(): if the
+        // edit form's button posted status=QUEUED, run the campaign through
+        // the launch pipeline. Without this, users editing a draft and
+        // clicking the green button would see 'Campaign updated' but the
+        // status stayed DRAFT — the exact bug user reported as
+        // 'still remain in draft status' after edit + launch.
+        if ($request->validated('status') === 'QUEUED' && $campaign->status === 'DRAFT') {
+            if ($campaign->header_media_url) {
+                try {
+                    $response = Http::timeout(5)->withOptions(['verify' => false])->head($campaign->header_media_url);
+                    if ($response->failed()) {
+                        return redirect()
+                            ->route('campaigns.show', $campaign)
+                            ->with('warning',
+                                "Updated as draft. Could not launch — header media URL returned HTTP {$response->status()}. "
+                                ."Most common cause: 'public/storage' symlink missing on the server. "
+                                ."Fix: SSH and run 'php artisan storage:link', then click Launch on this page."
+                            );
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Pre-launch probe threw on update — proceeding anyway', [
+                        'campaign_id' => $campaign->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            $this->campaignService->launch($campaign);
+
+            return redirect()
+                ->route('campaigns.show', $campaign)
+                ->with('success', 'Campaign updated and launched.');
+        }
+
         return redirect()
             ->route('campaigns.show', $campaign)
             ->with('success', 'Campaign updated successfully.');
@@ -281,10 +360,18 @@ class CampaignController extends Controller
     {
         $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
 
-        // Strict reachability check at launch time only. Unlike save-time, the
-        // URL MUST be reachable now — Meta's edge will fetch it within seconds
-        // of accepting the send request, and a 404 returns code 131053 "Media
-        // upload error" against every recipient.
+        // Reachability probe at launch — but warn-and-proceed rather than
+        // hard-block. Two reasons:
+        //   1. The app server's view of its own public URL doesn't always
+        //      match Meta's view (split-horizon DNS, internal firewall).
+        //      Meta's edge might fetch successfully even when our probe
+        //      can't.
+        //   2. Hard-blocking left users stuck in DRAFT with no way to launch
+        //      — exactly what they reported. Better to launch and surface
+        //      Meta's real error code on the message log if it actually
+        //      fails, since that error message now includes the storage:link
+        //      remediation hint.
+        $warnMessage = null;
         if ($campaign->header_media_url && ! app()->runningUnitTests()) {
             try {
                 $response = Http::timeout(5)
@@ -292,21 +379,17 @@ class CampaignController extends Controller
                     ->head($campaign->header_media_url);
 
                 if ($response->failed()) {
-                    return redirect()
-                        ->route('campaigns.show', $campaign)
-                        ->with('error',
-                            "Cannot launch — the header media URL returns HTTP {$response->status()}. "
-                            ."Meta will reject every send (error 131053). "
-                            ."Most common cause: 'public/storage' symlink missing on the server. "
-                            ."Fix: SSH and run 'php artisan storage:link', then try Launch again."
-                        );
+                    Log::warning('Launch-time reachability probe says 404 — launching anyway', [
+                        'campaign_id' => $campaign->id,
+                        'url' => $campaign->header_media_url,
+                        'status' => $response->status(),
+                    ]);
+                    $warnMessage = "Heads-up: header media URL probed as HTTP {$response->status()} from the server. "
+                        ."Launch proceeded — Meta may still reach it externally. "
+                        ."If sends fail with 131053, run 'php artisan storage:link' on the server.";
                 }
             } catch (\Throwable $e) {
-                // Could not probe — network/DNS/firewall issue from this server,
-                // but Meta might still reach the URL externally. Log + warn but
-                // proceed: we'd rather the user see a Meta-side failure with
-                // its real error code than block on our own connectivity.
-                Log::warning('Pre-launch reachability probe threw — proceeding anyway', [
+                Log::warning('Pre-launch probe threw — launching anyway', [
                     'campaign_id' => $campaign->id,
                     'url' => $campaign->header_media_url,
                     'error' => $e->getMessage(),
@@ -316,9 +399,13 @@ class CampaignController extends Controller
 
         $this->campaignService->launch($campaign);
 
+        $flash = $warnMessage
+            ? ['warning' => $warnMessage]
+            : ['success' => 'Campaign launched successfully.'];
+
         return redirect()
             ->route('campaigns.show', $campaign)
-            ->with('success', 'Campaign launched successfully.');
+            ->with($flash);
     }
 
     public function pause(string $id): RedirectResponse
