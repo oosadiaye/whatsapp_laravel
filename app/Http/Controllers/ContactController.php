@@ -25,11 +25,12 @@ class ContactController extends Controller
         $threshold = now()->subDays(\App\Models\Contact::ENGAGEMENT_WINDOW_DAYS);
 
         $query = Contact::where('user_id', auth()->id())
+            ->with('groups')   // prevents N+1 on the view's @foreach($contact->groups)
             ->withExists([
                 // True if at least one inbound message exists for any of this
                 // contact's conversations within the engagement window.
                 'conversationMessages as has_recent_inbound_message' => fn ($q) =>
-                    $q->where('conversation_messages.direction', 'inbound')
+                    $q->where('conversation_messages.direction', \App\Models\ConversationMessage::DIRECTION_INBOUND)
                       ->where('received_at', '>=', $threshold),
 
                 // True if at least one inbound call exists within the window.
@@ -55,7 +56,19 @@ class ContactController extends Controller
             return $c;
         });
 
-        return view('contacts.index', ['contacts' => $contacts]);
+        // Single source of truth for which instances the picker modal can show.
+        // Computed in the controller (not the view) so tests can assert on it
+        // and so the view stays a thin presenter.
+        $activeInstances = WhatsAppInstance::where('user_id', auth()->id())
+            ->where('status', WhatsAppInstance::STATUS_CONNECTED)
+            ->orderBy('display_name')
+            ->get(['id', 'display_name', 'instance_name', 'business_phone_number']);
+
+        return view('contacts.index', [
+            'contacts' => $contacts,
+            'activeInstances' => $activeInstances,
+            'needsInstancePicker' => $activeInstances->count() > 1,
+        ]);
     }
 
     /**
@@ -68,9 +81,9 @@ class ContactController extends Controller
     {
         $this->authorizeContactAccess($request, $contact);
 
-        $instance = $this->resolveInstance($request);
+        ['instance' => $instance, 'error' => $instanceError] = $this->resolveInstanceOrError($request);
         if ($instance === null) {
-            return back()->with('error', $this->instancePickError($request));
+            return back()->with('error', $instanceError);
         }
 
         $conversation = Conversation::firstOrCreate(
@@ -107,9 +120,9 @@ class ContactController extends Controller
             );
         }
 
-        $instance = $this->resolveInstance($request);
+        ['instance' => $instance, 'error' => $instanceError] = $this->resolveInstanceOrError($request);
         if ($instance === null) {
-            return back()->with('error', $this->instancePickError($request));
+            return back()->with('error', $instanceError);
         }
 
         $conversation = Conversation::firstOrCreate(
@@ -120,9 +133,19 @@ class ContactController extends Controller
         try {
             $outboundCallService->initiate($conversation, $request->user());
         } catch (WhatsAppApiException $e) {
+            // Log the full exception (including Meta's HTTP response body) but
+            // surface a generic message to the user. Meta's response can include
+            // tokens, internal IDs, and customer-specific data we don't want
+            // bleeding into a session flash.
+            \Illuminate\Support\Facades\Log::error('Outbound call failed', [
+                'conversation_id' => $conversation->id,
+                'contact_id' => $contact->id,
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
             return redirect()
                 ->route('conversations.show', $conversation)
-                ->with('error', "Could not place call: {$e->getMessage()}");
+                ->with('error', 'Could not place call. Please try again or contact support.');
         }
 
         return redirect()
@@ -141,49 +164,40 @@ class ContactController extends Controller
 
     /**
      * Resolve which WhatsApp instance to use for a contact-initiated action.
+     * Returns either the picked instance, or null + an error message — caller
+     * uses the message in a flash redirect.
      *
-     * - 1 instance → auto-pick it.
-     * - 2+ instances → require `instance_id` in the request body
-     *   (sent by the picker modal in contacts/index.blade.php).
-     * - 0 instances → return null; caller flashes a setup error.
-     *
-     * Returns null on any unresolved case so the caller can return a flash
-     * error rather than throwing.
+     * @return array{instance: ?\App\Models\WhatsAppInstance, error: ?string}
      */
-    private function resolveInstance(Request $request): ?WhatsAppInstance
+    private function resolveInstanceOrError(Request $request): array
     {
-        // Only CONNECTED instances are usable for outbound API calls; a
-        // DISCONNECTED or PENDING instance would fail at Meta's edge anyway.
-        // ('status' is the actual schema column on whatsapp_instances —
-        // there is no `is_active` column.)
         $instances = WhatsAppInstance::where('user_id', $request->user()->id)
-            ->where('status', 'CONNECTED')
+            ->where('status', WhatsAppInstance::STATUS_CONNECTED)
             ->get();
 
         if ($instances->count() === 0) {
-            return null;
+            return [
+                'instance' => null,
+                'error' => 'Set up a WhatsApp instance before starting conversations.',
+            ];
         }
 
         if ($instances->count() === 1) {
-            return $instances->first();
+            return ['instance' => $instances->first(), 'error' => null];
         }
 
+        // 2+ instances: require explicit pick from the request body.
         $picked = (int) $request->input('instance_id', 0);
-        return $instances->firstWhere('id', $picked);
-    }
+        $instance = $instances->firstWhere('id', $picked);
 
-    /**
-     * Human-readable error message when {@see resolveInstance()} returns null.
-     */
-    private function instancePickError(Request $request): string
-    {
-        $count = WhatsAppInstance::where('user_id', $request->user()->id)
-            ->where('status', 'CONNECTED')
-            ->count();
+        if ($instance === null) {
+            return [
+                'instance' => null,
+                'error' => 'Pick which WhatsApp number to use from the picker.',
+            ];
+        }
 
-        return $count === 0
-            ? 'Set up a WhatsApp instance before starting conversations.'
-            : 'Pick which WhatsApp number to use from the picker.';
+        return ['instance' => $instance, 'error' => null];
     }
 
     public function importForm(): View

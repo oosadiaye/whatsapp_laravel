@@ -204,6 +204,41 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(0, \App\Models\CallLog::count());
     }
 
+    public function test_startCall_allowed_at_exactly_29_days_engagement_boundary(): void
+    {
+        $admin = $this->makeUser('admin');
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create(['user_id' => $admin->id]);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'contact_id' => $contact->id,
+            'whatsapp_instance_id' => $instance->id,
+        ]);
+        \App\Models\ConversationMessage::create([
+            'conversation_id' => $conv->id,
+            'direction' => 'inbound',
+            'whatsapp_message_id' => 'wamid.boundary_29',
+            'type' => 'text',
+            'body' => 'just inside the boundary',
+            'received_at' => now()->subDays(29),
+        ]);
+
+        \Illuminate\Support\Facades\Http::fake([
+            'graph.facebook.com/*' => \Illuminate\Support\Facades\Http::response([
+                'calls' => [['id' => 'wacid.boundary']],
+            ], 200),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('contacts.startCall', $contact))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(1, \App\Models\CallLog::count(),
+            '29-day-old inbound message MUST keep contact within engagement window'
+        );
+    }
+
     public function test_startCall_requires_conversations_call_permission(): void
     {
         $agent = $this->makeUser('agent');

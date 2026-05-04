@@ -176,9 +176,18 @@ class ConversationController extends Controller
         try {
             $this->outboundCalls->initiate($conversation, $request->user());
         } catch (WhatsAppApiException $e) {
+            // Log the full exception (including Meta's HTTP response body) but
+            // surface a generic message to the user. Meta's response can include
+            // tokens, internal IDs, and customer-specific data we don't want
+            // bleeding into a session flash.
+            \Illuminate\Support\Facades\Log::error('Outbound call failed', [
+                'conversation_id' => $conversation->id,
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
             return redirect()
                 ->route('conversations.show', $conversation)
-                ->with('error', "Could not place call: {$e->getMessage()}");
+                ->with('error', 'Could not place call. Please try again or contact support.');
         }
 
         return redirect()

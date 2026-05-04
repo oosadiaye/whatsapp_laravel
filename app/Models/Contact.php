@@ -116,7 +116,7 @@ class Contact extends Model
         $threshold = now()->subDays(self::ENGAGEMENT_WINDOW_DAYS);
 
         $hasRecentInbound = $this->conversationMessages()
-            ->where('direction', 'inbound')
+            ->where('direction', ConversationMessage::DIRECTION_INBOUND)
             ->where('received_at', '>=', $threshold)
             ->exists();
 

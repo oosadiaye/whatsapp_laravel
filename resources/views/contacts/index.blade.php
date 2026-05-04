@@ -1,11 +1,3 @@
-@php
-    $activeInstances = \App\Models\WhatsAppInstance::where('user_id', auth()->id())
-        ->where('status', 'CONNECTED')
-        ->orderBy('display_name')
-        ->get(['id', 'display_name', 'instance_name', 'business_phone_number']);
-    $needsInstancePicker = $activeInstances->count() > 1;
-@endphp
-
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between">

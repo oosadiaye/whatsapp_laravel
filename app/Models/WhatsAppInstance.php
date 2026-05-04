@@ -22,6 +22,10 @@ class WhatsAppInstance extends Model
 {
     use HasFactory, SoftDeletes;
 
+    public const STATUS_CONNECTED = 'CONNECTED';
+    public const STATUS_DISCONNECTED = 'DISCONNECTED';
+    public const STATUS_PENDING = 'PENDING';
+
     protected $table = 'whatsapp_instances';
 
     protected $fillable = [
