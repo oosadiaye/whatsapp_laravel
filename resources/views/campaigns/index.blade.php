@@ -52,9 +52,11 @@
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{{ $campaign->scheduled_at?->format('M d, Y H:i') ?? '-' }}</td>
                             <td class="whitespace-nowrap px-6 py-4 text-right text-sm">
                                 <a href="{{ route('campaigns.show', $campaign) }}" class="text-[#25D366] hover:underline">View</a>
-                                @if($campaign->status === 'DRAFT')
-                                    <a href="{{ route('campaigns.edit', $campaign) }}" class="ml-3 text-blue-600 hover:underline">Edit</a>
-                                @endif
+                                @can('campaigns.edit')
+                                    @if(in_array($campaign->status, ['DRAFT', 'QUEUED', 'PAUSED'], true))
+                                        <a href="{{ route('campaigns.edit', $campaign) }}" class="ml-3 text-blue-600 hover:underline">Edit</a>
+                                    @endif
+                                @endcan
                             </td>
                         </tr>
                         @empty

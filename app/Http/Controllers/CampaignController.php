@@ -103,12 +103,29 @@ class CampaignController extends Controller
         return view('campaigns.show', ['campaign' => $campaign]);
     }
 
+    /**
+     * Editable statuses. RUNNING is excluded because workers are actively
+     * reading the campaign config to send messages — mid-flight edits would
+     * race with sends and could ship inconsistent state to half the recipients.
+     * COMPLETED / FAILED / CANCELLED are terminal — use Clone to make a new
+     * campaign instead of mutating one that's already done.
+     */
+    private const EDITABLE_STATUSES = ['DRAFT', 'QUEUED', 'PAUSED'];
+
     public function edit(string $id): View
     {
         $userId = auth()->id();
         $campaign = Campaign::where('user_id', $userId)
             ->with('contactGroups')
             ->findOrFail($id);
+
+        // Defense in depth: views hide the Edit button for non-editable statuses,
+        // but a direct URL navigation must also be rejected.
+        abort_unless(
+            in_array($campaign->status, self::EDITABLE_STATUSES, true),
+            403,
+            "Cannot edit a campaign with status \"{$campaign->status}\". Clone it to make a new editable copy.",
+        );
 
         return view('campaigns.edit', [
             'campaign' => $campaign,
@@ -121,6 +138,15 @@ class CampaignController extends Controller
     public function update(StoreCampaignRequest $request, string $id): RedirectResponse
     {
         $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
+
+        // Mirror the edit() guard — accept updates only for editable statuses.
+        // A user could otherwise POST directly to this endpoint while bypassing
+        // the edit form (curl, scripted, replayed-after-launch).
+        abort_unless(
+            in_array($campaign->status, self::EDITABLE_STATUSES, true),
+            403,
+            "Cannot update a campaign with status \"{$campaign->status}\".",
+        );
 
         // Keep existing header URL if no new file was uploaded — users editing
         // unrelated fields (e.g. groups, schedule) shouldn't lose their image.

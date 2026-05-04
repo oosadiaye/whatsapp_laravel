@@ -11,8 +11,22 @@
                         @csrf
                         <button type="submit" class="rounded-lg bg-[#25D366] px-4 py-2 text-sm font-medium text-white hover:bg-[#1da851]">Launch Campaign</button>
                     </form>
-                    <a href="{{ route('campaigns.edit', $campaign) }}" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Edit</a>
                 @endif
+
+                {{-- Edit available pre-launch (DRAFT, QUEUED) and when paused mid-flight.
+                     Hidden during RUNNING because workers are actively reading the campaign
+                     config to send messages — mid-flight edits would race with sends. Hidden
+                     in terminal states (COMPLETED / FAILED / CANCELLED) — use Clone instead.
+                     Permission-gated so users without campaigns.edit don't see a 403 trap. --}}
+                @can('campaigns.edit')
+                    @if(in_array($campaign->status, ['DRAFT', 'QUEUED', 'PAUSED'], true))
+                        <a href="{{ route('campaigns.edit', $campaign) }}"
+                           class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                           title="{{ $campaign->status === 'PAUSED' ? __('Edit paused campaign — resume after saving') : __('Edit campaign') }}">
+                            {{ __('Edit') }}
+                        </a>
+                    @endif
+                @endcan
                 @if($campaign->status === 'RUNNING')
                     <form action="{{ route('campaigns.pause', $campaign) }}" method="POST" class="inline">
                         @csrf
