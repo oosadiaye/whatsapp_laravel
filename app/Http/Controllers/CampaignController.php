@@ -249,9 +249,39 @@ class CampaignController extends Controller
     public function cancel(string $id): RedirectResponse
     {
         $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
-        $this->campaignService->cancel($campaign);
+        $cancelledLogs = $this->campaignService->cancel($campaign);
 
-        return redirect()->back()->with('success', 'Campaign cancelled.');
+        $message = $cancelledLogs > 0
+            ? "Campaign cancelled. {$cancelledLogs} pending sends aborted."
+            : 'Campaign cancelled.';
+
+        return redirect()->back()->with('success', $message);
+    }
+
+    /**
+     * Bulk-cancel every QUEUED or RUNNING campaign owned by the current user.
+     * Useful as a "panic button" when the queue worker has been down and a
+     * backlog has accumulated. Each campaign goes through the same cancel()
+     * service flow (status → CANCELLED, pending logs aborted, queue jobs
+     * best-effort cleaned up) so the cleanup is consistent.
+     */
+    public function clearQueue(): RedirectResponse
+    {
+        $stuck = Campaign::where('user_id', auth()->id())
+            ->whereIn('status', ['QUEUED', 'RUNNING'])
+            ->get();
+
+        $totalLogs = 0;
+        foreach ($stuck as $campaign) {
+            $totalLogs += $this->campaignService->cancel($campaign);
+        }
+
+        $count = $stuck->count();
+        $message = $count === 0
+            ? 'No queued or running campaigns to clear.'
+            : "Cleared {$count} campaign(s). {$totalLogs} pending sends aborted.";
+
+        return redirect()->route('campaigns.index')->with('success', $message);
     }
 
     public function clone(string $id): RedirectResponse

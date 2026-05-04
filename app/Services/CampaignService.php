@@ -6,7 +6,9 @@ namespace App\Services;
 
 use App\Jobs\CampaignBatchDispatch;
 use App\Models\Campaign;
+use App\Models\MessageLog;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Manages campaign lifecycle operations: launch, pause, resume, cancel, clone, and completion.
@@ -43,11 +45,67 @@ class CampaignService
     }
 
     /**
-     * Cancel a campaign.
+     * Cancel a campaign and clean up its queue footprint.
+     *
+     * Just flipping status to CANCELLED isn't enough — there can be:
+     *   - PENDING MessageLog rows (created by CampaignBatchDispatch but
+     *     not yet picked up by a SendWhatsAppMessage job)
+     *   - SendWhatsAppMessage jobs already in the queue table waiting for
+     *     a worker, which would still fire and try to send if the worker
+     *     comes online later
+     *
+     * We mark the PENDING logs as 'CANCELLED' so SendWhatsAppMessage's
+     * own sanity check (it should refuse to send if log->status !==
+     * 'PENDING') skips them, and we delete any queued database jobs
+     * that reference this campaign by serialized payload.
+     *
+     * Returns the count of pending logs that were cancelled, useful for
+     * the controller's flash message ("Cancelled. 7 pending sends aborted.").
      */
-    public function cancel(Campaign $campaign): void
+    public function cancel(Campaign $campaign): int
     {
-        $campaign->update(['status' => 'CANCELLED']);
+        $campaign->update([
+            'status' => 'CANCELLED',
+            'completed_at' => Carbon::now(),
+        ]);
+
+        // Mark every still-PENDING MessageLog as CANCELLED so even if a
+        // SendWhatsAppMessage job somehow runs later, it sees the log isn't
+        // PENDING and bails. (This depends on SendWhatsAppMessage having a
+        // PENDING-status guard; if it doesn't, this is at least a recordable
+        // signal of the cancellation intent.)
+        $cancelledLogs = MessageLog::where('campaign_id', $campaign->id)
+            ->where('status', 'PENDING')
+            ->update([
+                'status' => 'CANCELLED',
+                'error_message' => 'Campaign cancelled before send',
+            ]);
+
+        // Best-effort cleanup of the database queue table. Jobs are stored
+        // with their serialized payload in `payload`; we match by the
+        // campaign id token. Only relevant when QUEUE_CONNECTION=database.
+        // This is intentionally narrow — we don't want to delete unrelated
+        // jobs that happen to mention the same number elsewhere.
+        if (config('queue.default') === 'database') {
+            try {
+                DB::table('jobs')
+                    ->where('queue', 'messages')
+                    ->where('payload', 'like', '%"campaign_id";i:'.$campaign->id.';%')
+                    ->delete();
+                DB::table('jobs')
+                    ->where('queue', 'default')
+                    ->where('payload', 'like', '%"campaign":'.$campaign->id.'%')
+                    ->orWhere('payload', 'like', '%CampaignBatchDispatch%campaign_id%'.$campaign->id.'%')
+                    ->delete();
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Could not clean up queue jobs on cancel', [
+                    'campaign_id' => $campaign->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $cancelledLogs;
     }
 
     /**

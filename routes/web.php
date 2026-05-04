@@ -135,6 +135,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::middleware('permission:campaigns.cancel')->group(function () {
         Route::post('/campaigns/{campaign}/cancel', [CampaignController::class, 'cancel'])->name('campaigns.cancel');
+        // Bulk-cancel all QUEUED + RUNNING campaigns owned by the current user.
+        // Useful when the queue worker has been down and a backlog of campaigns
+        // is stuck — one click clears the lot.
+        Route::post('/campaigns/clear-queue', [CampaignController::class, 'clearQueue'])->name('campaigns.clearQueue');
     });
     Route::middleware('permission:campaigns.delete')->group(function () {
         Route::delete('/campaigns/{campaign}', [CampaignController::class, 'destroy'])->name('campaigns.destroy');

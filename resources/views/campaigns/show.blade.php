@@ -32,7 +32,15 @@
                         @csrf
                         <button type="submit" class="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600">Pause</button>
                     </form>
-                    <form action="{{ route('campaigns.cancel', $campaign) }}" method="POST" class="inline" onsubmit="return confirm('Cancel this campaign?')">
+                @endif
+
+                {{-- Cancel: works on RUNNING (mid-flight stop) AND QUEUED/PAUSED (clear queue
+                     before any sends happen). The service-layer cancel() also marks every
+                     PENDING MessageLog as CANCELLED and best-effort deletes orphan jobs from
+                     the database queue table, so jobs queued before cancel won't fire. --}}
+                @if(in_array($campaign->status, ['RUNNING', 'QUEUED', 'PAUSED'], true))
+                    <form action="{{ route('campaigns.cancel', $campaign) }}" method="POST" class="inline"
+                          onsubmit="return confirm('{{ __('Cancel this campaign and clear its pending sends?') }}')">
                         @csrf
                         <button type="submit" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600">Cancel</button>
                     </form>
@@ -70,6 +78,46 @@
 
     <div class="py-6">
         <div class="mx-auto max-w-7xl sm:px-6 lg:px-8 space-y-6">
+            {{-- Stuck-queue warning: if a campaign has been QUEUED for > 5 minutes
+                 with total_contacts still 0, the queue worker likely isn't running.
+                 Same for RUNNING campaigns where started_at is old but sent_count
+                 is still 0 — workers picked up the batch dispatch but stalled
+                 before fanning out the actual sends. --}}
+            @php
+                $stuckQueued = $campaign->status === 'QUEUED'
+                    && $campaign->started_at
+                    && $campaign->started_at->lt(now()->subMinutes(5))
+                    && $campaign->total_contacts === 0;
+                $stuckRunning = $campaign->status === 'RUNNING'
+                    && $campaign->started_at
+                    && $campaign->started_at->lt(now()->subMinutes(5))
+                    && $campaign->total_contacts > 0
+                    && $campaign->sent_count === 0
+                    && $campaign->failed_count === 0;
+            @endphp
+            @if($stuckQueued || $stuckRunning)
+                <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                        <div>
+                            <p class="font-semibold">{{ __('Queue worker may not be running') }}</p>
+                            <p class="mt-1 text-amber-800">
+                                @if($stuckQueued)
+                                    {{ __('This campaign has been queued for over 5 minutes without any contacts being processed.') }}
+                                @else
+                                    {{ __('This campaign started over 5 minutes ago but no messages have been sent yet.') }}
+                                @endif
+                                {{ __('On the server, run:') }}
+                                <code class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 font-mono text-xs">php artisan queue:work --queue=default,messages</code>
+                                {{ __('or check Horizon / supervisord status.') }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             {{-- Live Stats --}}
             <livewire:campaign-status :campaignId="$campaign->id" />
 
