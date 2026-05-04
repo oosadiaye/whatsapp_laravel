@@ -114,55 +114,49 @@ class CampaignController extends Controller
         // Meta requires an absolute URL it can fetch publicly, so wrap with url().
         $absoluteUrl = url(Storage::disk('public')->url($path));
 
-        // Pre-flight: verify the URL is reachable from THIS server. If we can't
-        // HEAD it ourselves, Meta certainly can't either, and we'd silently
-        // create a campaign whose every send fails with code 131053 "Media
-        // upload error" hours later in the queue worker.
-        //
-        // Most common reason for an unreachable URL: the public/storage
-        // symlink is missing (artisan storage:link was never run on this
-        // server). Skip this check in unit tests where Storage is faked
-        // and the URL is in-memory.
+        // Best-effort reachability probe: log a WARNING if the URL doesn't
+        // resolve from this server, but DON'T block the save. Save-time and
+        // send-time have different reachability requirements:
+        //  - Save-time: persisting a file. Should work even if outbound HTTP
+        //    is firewalled, DNS doesn't resolve our own hostname internally,
+        //    or the storage symlink is temporarily missing.
+        //  - Send-time: Meta fetches the URL. THAT's where reachability is
+        //    enforced (CampaignService::launch / CampaignBatchDispatch).
+        // The previous strict-throw version 500'd on prod because the server
+        // couldn't HEAD its own public hostname (split-horizon DNS); drafts
+        // became un-savable until the symlink was fixed.
         if (! app()->runningUnitTests()) {
-            $this->assertHeaderMediaReachable($absoluteUrl);
+            $this->probeHeaderMediaReachable($absoluteUrl);
         }
 
         return $absoluteUrl;
     }
 
     /**
-     * HEAD-test a header-media URL to confirm it returns 2xx. Throws on
-     * failure with a remediation hint pointing at storage:link, which is
-     * the cause ~99% of the time when this assertion fires.
+     * Soft probe: log a warning if the just-uploaded header URL isn't
+     * reachable from this server. Never throws — saving a draft must
+     * not depend on outbound HTTP. The strict check happens at launch.
      */
-    private function assertHeaderMediaReachable(string $url): void
+    private function probeHeaderMediaReachable(string $url): void
     {
         try {
-            $response = Http::timeout(5)
-                ->withOptions(['verify' => false])  // self-signed certs in dev
+            $response = Http::timeout(3)
+                ->withOptions(['verify' => false])
                 ->head($url);
+
+            if ($response->failed()) {
+                Log::warning('Header media URL probe failed (non-fatal)', [
+                    'url' => $url,
+                    'status' => $response->status(),
+                    'note' => 'Save proceeded. Strict check will run at launch.',
+                ]);
+            }
         } catch (\Throwable $e) {
-            Log::error('Header media reachability check threw', [
+            Log::warning('Header media URL probe threw (non-fatal)', [
                 'url' => $url,
                 'error' => $e->getMessage(),
+                'note' => 'Could not probe (firewall / DNS / cert). Save proceeded.',
             ]);
-            throw new \RuntimeException(
-                "Saved the header media file but couldn't verify the resulting URL is reachable: "
-                ."{$e->getMessage()}. Meta will reject campaign sends if this URL doesn't work."
-            );
-        }
-
-        if ($response->failed()) {
-            Log::error('Header media URL not reachable from app server', [
-                'url' => $url,
-                'status' => $response->status(),
-            ]);
-            throw new \RuntimeException(
-                "Saved the header media file, but the URL '{$url}' returns HTTP {$response->status()}. "
-                ."Meta will reject every send with this URL (error 131053 'Media upload error'). "
-                ."The most common cause is the 'public/storage' symlink missing on the server. "
-                ."Fix: run 'php artisan storage:link' on the server, then try again."
-            );
         }
     }
 
@@ -286,6 +280,40 @@ class CampaignController extends Controller
     public function launch(string $id): RedirectResponse
     {
         $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
+
+        // Strict reachability check at launch time only. Unlike save-time, the
+        // URL MUST be reachable now — Meta's edge will fetch it within seconds
+        // of accepting the send request, and a 404 returns code 131053 "Media
+        // upload error" against every recipient.
+        if ($campaign->header_media_url && ! app()->runningUnitTests()) {
+            try {
+                $response = Http::timeout(5)
+                    ->withOptions(['verify' => false])
+                    ->head($campaign->header_media_url);
+
+                if ($response->failed()) {
+                    return redirect()
+                        ->route('campaigns.show', $campaign)
+                        ->with('error',
+                            "Cannot launch — the header media URL returns HTTP {$response->status()}. "
+                            ."Meta will reject every send (error 131053). "
+                            ."Most common cause: 'public/storage' symlink missing on the server. "
+                            ."Fix: SSH and run 'php artisan storage:link', then try Launch again."
+                        );
+                }
+            } catch (\Throwable $e) {
+                // Could not probe — network/DNS/firewall issue from this server,
+                // but Meta might still reach the URL externally. Log + warn but
+                // proceed: we'd rather the user see a Meta-side failure with
+                // its real error code than block on our own connectivity.
+                Log::warning('Pre-launch reachability probe threw — proceeding anyway', [
+                    'campaign_id' => $campaign->id,
+                    'url' => $campaign->header_media_url,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         $this->campaignService->launch($campaign);
 
         return redirect()
