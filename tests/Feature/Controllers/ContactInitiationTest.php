@@ -87,6 +87,146 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(0, Conversation::count());
     }
 
+    public function test_startCall_blocked_when_contact_has_no_engagement(): void
+    {
+        $admin = $this->makeUser('admin');
+        WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create(['user_id' => $admin->id]);
+
+        \Illuminate\Support\Facades\Http::fake();
+
+        $this->actingAs($admin)
+            ->from(route('contacts.index'))
+            ->post(route('contacts.startCall', $contact))
+            ->assertRedirect(route('contacts.index'))
+            ->assertSessionHas('error');
+
+        \Illuminate\Support\Facades\Http::assertNothingSent();
+        $this->assertSame(0, \App\Models\CallLog::count());
+    }
+
+    public function test_startCall_allowed_when_contact_messaged_within_30_days(): void
+    {
+        $admin = $this->makeUser('admin');
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create(['user_id' => $admin->id]);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'contact_id' => $contact->id,
+            'whatsapp_instance_id' => $instance->id,
+        ]);
+        \App\Models\ConversationMessage::create([
+            'conversation_id' => $conv->id,
+            'direction' => 'inbound',
+            'whatsapp_message_id' => 'wamid.engagement',
+            'type' => 'text',
+            'body' => 'hi',
+            'received_at' => now()->subDays(5),
+        ]);
+
+        \Illuminate\Support\Facades\Http::fake([
+            'graph.facebook.com/*' => \Illuminate\Support\Facades\Http::response([
+                'calls' => [['id' => 'wacid.contact_initiated']],
+            ], 200),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('contacts.startCall', $contact))
+            ->assertRedirect(route('conversations.show', $conv))
+            ->assertSessionHas('success');
+
+        $this->assertSame(1, \App\Models\CallLog::count());
+        $call = \App\Models\CallLog::first();
+        $this->assertSame('outbound', $call->direction);
+        $this->assertSame($admin->id, $call->placed_by_user_id);
+        $this->assertSame('wacid.contact_initiated', $call->meta_call_id);
+    }
+
+    public function test_startCall_allowed_when_contact_called_within_30_days(): void
+    {
+        $admin = $this->makeUser('admin');
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create(['user_id' => $admin->id]);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'contact_id' => $contact->id,
+            'whatsapp_instance_id' => $instance->id,
+        ]);
+        \App\Models\CallLog::factory()->create([
+            'conversation_id' => $conv->id,
+            'contact_id' => $contact->id,
+            'whatsapp_instance_id' => $instance->id,
+            'direction' => 'inbound',
+            'created_at' => now()->subDays(10),
+        ]);
+
+        \Illuminate\Support\Facades\Http::fake([
+            'graph.facebook.com/*' => \Illuminate\Support\Facades\Http::response([
+                'calls' => [['id' => 'wacid.from_call']],
+            ], 200),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('contacts.startCall', $contact))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(2, \App\Models\CallLog::count(), 'inbound + new outbound');
+    }
+
+    public function test_startCall_engagement_threshold_is_30_days(): void
+    {
+        $admin = $this->makeUser('admin');
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create(['user_id' => $admin->id]);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'contact_id' => $contact->id,
+            'whatsapp_instance_id' => $instance->id,
+        ]);
+        \App\Models\ConversationMessage::create([
+            'conversation_id' => $conv->id,
+            'direction' => 'inbound',
+            'whatsapp_message_id' => 'wamid.too_old',
+            'type' => 'text',
+            'body' => 'old',
+            'received_at' => now()->subDays(31),
+        ]);
+
+        \Illuminate\Support\Facades\Http::fake();
+
+        $this->actingAs($admin)
+            ->from(route('contacts.index'))
+            ->post(route('contacts.startCall', $contact))
+            ->assertRedirect(route('contacts.index'))
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, \App\Models\CallLog::count());
+    }
+
+    public function test_startCall_requires_conversations_call_permission(): void
+    {
+        $agent = $this->makeUser('agent');
+        WhatsAppInstance::factory()->create(['user_id' => $agent->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create(['user_id' => $agent->id]);
+
+        $this->actingAs($agent)
+            ->post(route('contacts.startCall', $contact))
+            ->assertForbidden();
+    }
+
+    public function test_startCall_blocks_cross_account_contact(): void
+    {
+        $userA = $this->makeUser('admin');
+        $userB = $this->makeUser('admin', 'b@example.com');
+        WhatsAppInstance::factory()->create(['user_id' => $userA->id, 'status' => 'CONNECTED']);
+        $contactOfB = Contact::factory()->create(['user_id' => $userB->id]);
+
+        $this->actingAs($userA)
+            ->post(route('contacts.startCall', $contactOfB))
+            ->assertForbidden();
+    }
+
     private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\WhatsAppApiException;
 use App\Http\Requests\ImportContactsRequest;
 use App\Jobs\ProcessContactImport;
 use App\Models\Contact;
@@ -11,6 +12,7 @@ use App\Models\ContactGroup;
 use App\Models\Conversation;
 use App\Models\WhatsAppInstance;
 use App\Services\ContactImportService;
+use App\Services\OutboundCallService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -48,6 +50,55 @@ class ContactController extends Controller
         );
 
         return redirect()->route('conversations.show', $conversation);
+    }
+
+    /**
+     * Place an outbound call to this contact.
+     *
+     * Defense in depth: the contact-list view already disables this button
+     * for non-engaged contacts (Meta opt-in policy proxy), but the server
+     * MUST re-check engagement so a misclick or bypassed UI cannot bypass
+     * the policy gate. Calls cost real money and have quality-rating risk.
+     *
+     * Reuses the Voice Phase A {@see OutboundCallService::initiate} flow
+     * after find-or-create on the conversation.
+     */
+    public function startCall(
+        Request $request,
+        Contact $contact,
+        OutboundCallService $outboundCallService,
+    ): RedirectResponse {
+        $this->authorizeContactAccess($request, $contact);
+
+        if (! $contact->isEngaged()) {
+            return back()->with(
+                'error',
+                'Cannot call this contact yet — they must message you first '
+                .'(Meta opt-in policy). Wait for an inbound message or call.',
+            );
+        }
+
+        $instance = $this->resolveInstance($request);
+        if ($instance === null) {
+            return back()->with('error', $this->instancePickError($request));
+        }
+
+        $conversation = Conversation::firstOrCreate(
+            ['contact_id' => $contact->id, 'whatsapp_instance_id' => $instance->id],
+            ['user_id' => $contact->user_id, 'unread_count' => 0],
+        );
+
+        try {
+            $outboundCallService->initiate($conversation, $request->user());
+        } catch (WhatsAppApiException $e) {
+            return redirect()
+                ->route('conversations.show', $conversation)
+                ->with('error', "Could not place call: {$e->getMessage()}");
+        }
+
+        return redirect()
+            ->route('conversations.show', $conversation)
+            ->with('success', "Calling {$contact->name}...");
     }
 
     /**

@@ -166,6 +166,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/conversations/{conversation}/call', [ConversationController::class, 'initiateCall'])->name('conversations.initiateCall');
         Route::post('/conversations/{conversation}/calls/{call}/end', [ConversationController::class, 'endCall'])->name('conversations.endCall');
     });
+    Route::middleware('permission:conversations.call')->group(function () {
+        Route::post('/contacts/{contact}/call', [ContactController::class, 'startCall'])
+            ->name('contacts.startCall');
+    });
 
     // ─── Settings ──────────────────────────────────────────────────────────
     Route::middleware('permission:settings.view')->group(function () {
