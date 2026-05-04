@@ -31,18 +31,23 @@ echo "[4/11] Installing JS deps + building assets..."
 npm ci --omit=dev || npm install --omit=dev
 npm run build
 
-echo "[5/11] Ensuring storage symlink exists..."
+echo "[5/11] Ensuring storage symlink + permissions..."
 # Phase 13.0+ writes campaign-header uploads to storage/app/public/campaign-headers/
 # and references them via /storage/campaign-headers/... — that URL only works if
 # the public/storage symlink exists. Idempotent: artisan recreates if broken.
 php artisan storage:link
-# Make sure the upload target dir exists with correct permissions even on first deploy.
 mkdir -p storage/app/public/campaign-headers
-# Fix common "Failed to store campaign header media" 500: storage/ owned by deploy
-# user but written-to by web user. Adjust www-data if your web user differs.
+
+# Permission fix is the trickiest part of any Laravel deploy because:
+#  - PHP-FPM might run as a per-user pool (e.g. cPanel/Plesk style: user 'oosadiaye')
+#  - OR as a generic web user (www-data, nginx, apache)
+# Don't guess — detect it from the EXISTING file ownership inside storage/, which
+# is whatever user has been writing there. Falls back to the deploy user.
+STORAGE_OWNER=$(stat -c '%U' storage 2>/dev/null || stat -f '%Su' storage 2>/dev/null || echo "$(whoami)")
+STORAGE_GROUP=$(stat -c '%G' storage 2>/dev/null || stat -f '%Sg' storage 2>/dev/null || echo "$(whoami)")
+chown -R "$STORAGE_OWNER":"$STORAGE_GROUP" storage bootstrap/cache 2>/dev/null || true
+chown -h "$STORAGE_OWNER":"$STORAGE_GROUP" public/storage 2>/dev/null || true
 chmod -R 775 storage bootstrap/cache 2>/dev/null || true
-chown -R "$(whoami):www-data" storage bootstrap/cache 2>/dev/null || \
-  chown -R "$(whoami):nginx" storage bootstrap/cache 2>/dev/null || true
 
 echo "[6/11] Running migrations..."
 php artisan migrate --force
