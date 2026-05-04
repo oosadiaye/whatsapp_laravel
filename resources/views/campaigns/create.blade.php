@@ -5,19 +5,82 @@
 
     <div class="py-6">
         <div class="mx-auto max-w-4xl sm:px-6 lg:px-8">
+            @php
+                // Auto-jump to the first tab containing a validation error so the user
+                // sees what's wrong instead of landing on Basic with nothing visible.
+                $tabFieldMap = [
+                    'basic' => ['name', 'instance_id'],
+                    'recipients' => ['groups', 'groups.*'],
+                    'message' => ['message', 'message_template_id', 'template_language', 'header_media'],
+                    'schedule' => ['scheduled_at', 'rate_per_minute', 'delay_min', 'delay_max'],
+                ];
+                $initialTab = 'basic';
+                foreach ($tabFieldMap as $tabKey => $fields) {
+                    foreach ($fields as $field) {
+                        if ($errors->has($field)) {
+                            $initialTab = $tabKey;
+                            break 2;
+                        }
+                    }
+                }
+            @endphp
+
             <form action="{{ route('campaigns.store') }}" method="POST" enctype="multipart/form-data"
-                  x-data="{ tab: 'basic', message: '', previewMessage: '' }"
+                  x-data="{
+                      tabs: ['basic', 'recipients', 'message', 'schedule'],
+                      tab: '{{ $initialTab }}',
+                      message: @js(old('message', '')),
+                      previewMessage: '',
+                      currentIndex() { return this.tabs.indexOf(this.tab); },
+                      isFirst() { return this.currentIndex() === 0; },
+                      isLast() { return this.currentIndex() === this.tabs.length - 1; },
+                      next() {
+                          // Per-tab client-side validation: prevent advancing past required fields.
+                          // Server validates again, this just helps the user fix mistakes early.
+                          if (this.tab === 'basic') {
+                              const name = this.$el.querySelector('[name=name]');
+                              if (!name.value.trim()) { name.focus(); name.reportValidity(); return; }
+                          }
+                          if (this.tab === 'recipients') {
+                              const checked = this.$el.querySelectorAll('[name=\'groups[]\']:checked');
+                              if (checked.length === 0) {
+                                  alert('Pick at least one contact group before continuing.');
+                                  return;
+                              }
+                          }
+                          if (this.tab === 'message') {
+                              const msg = this.$el.querySelector('[name=message]');
+                              if (!msg.value.trim()) { msg.focus(); msg.reportValidity(); return; }
+                          }
+                          this.tab = this.tabs[this.currentIndex() + 1];
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                      },
+                      prev() {
+                          this.tab = this.tabs[this.currentIndex() - 1];
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                      },
+                  }"
                   class="space-y-6">
                 @csrf
 
-                {{-- Tab Navigation --}}
+                {{-- Tab Navigation. A red dot beside the label flags any tab that
+                     has a server-side validation error so the user can jump to fix it. --}}
                 <div class="border-b border-gray-200">
                     <nav class="-mb-px flex space-x-8">
                         @foreach(['basic' => 'Basic Info', 'recipients' => 'Recipients', 'message' => 'Message', 'schedule' => 'Schedule'] as $key => $label)
+                        @php
+                            $tabHasError = false;
+                            foreach ($tabFieldMap[$key] as $field) {
+                                if ($errors->has($field)) { $tabHasError = true; break; }
+                            }
+                        @endphp
                         <button type="button" @click="tab = '{{ $key }}'"
                                 :class="tab === '{{ $key }}' ? 'border-[#25D366] text-[#25D366]' : 'border-transparent text-gray-500 hover:text-gray-700'"
-                                class="whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
+                                class="whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium inline-flex items-center gap-1.5">
                             {{ $label }}
+                            @if($tabHasError)
+                                <span class="inline-block w-2 h-2 rounded-full bg-red-500" title="This tab has errors that need fixing"></span>
+                            @endif
                         </button>
                         @endforeach
                     </nav>
@@ -311,11 +374,37 @@
                     </div>
                 </div>
 
-                {{-- Submit --}}
-                <div class="flex justify-end gap-3">
-                    <a href="{{ route('campaigns.index') }}" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</a>
-                    <button type="submit" name="status" value="DRAFT" class="rounded-lg bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700">Save as Draft</button>
-                    <button type="submit" name="status" value="QUEUED" class="rounded-lg bg-[#25D366] px-4 py-2 text-sm font-medium text-white hover:bg-[#1da851]">Save & Launch</button>
+                {{-- Wizard footer — buttons adapt to current tab.
+                     Always: [Cancel] (left) + [Save as Draft] (any tab, persists progress)
+                     Not last tab: [Back if not first] [Save as Draft] [Next →]
+                     Last tab: [Back] [Save as Draft] [Save & Launch] --}}
+                <div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-6">
+                    <div class="flex items-center gap-3">
+                        <a href="{{ route('campaigns.index') }}"
+                           class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</a>
+                        <button type="button" x-show="!isFirst()" @click="prev()"
+                                class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                            ← Back
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        {{-- Save as Draft — always available; lets the user persist work without finishing every tab. --}}
+                        <button type="submit" name="status" value="DRAFT"
+                                class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                            Save as Draft
+                        </button>
+                        {{-- Next: advances to next tab; client-side validates the current tab first. --}}
+                        <button type="button" x-show="!isLast()" @click="next()"
+                                class="rounded-lg bg-[#25D366] px-5 py-2 text-sm font-medium text-white hover:bg-[#1da851]">
+                            Next →
+                        </button>
+                        {{-- Save & Launch: only on the last tab; this is the "I'm done, send it" submit. --}}
+                        <button type="submit" name="status" value="QUEUED" x-show="isLast()" x-cloak
+                                class="rounded-lg bg-[#25D366] px-5 py-2 text-sm font-medium text-white hover:bg-[#1da851]">
+                            Save & Launch
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>

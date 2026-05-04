@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\Campaign;
 use App\Models\MessageTemplate;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -87,7 +88,18 @@ class StoreCampaignRequest extends FormRequest
             // re-upload the same file just to change unrelated fields.
             $headerFormat = $this->extractHeaderMediaFormat($template);
             $hasFile = $this->hasFile('header_media');
-            $existingUrl = $this->route('campaign')?->header_media_url;
+
+            // $this->route('campaign') returns the Campaign MODEL when implicit
+            // route-model binding resolves successfully, but returns the raw URL
+            // segment STRING when route caching strips the binding metadata
+            // (Laravel < some-version with `route:cache` produces this in prod).
+            // The PHP null-safe `?->` operator does NOT protect against "value
+            // is a string, you're trying to read a property" — that throws an
+            // ErrorException. instanceof guard is the correct defense.
+            $campaignRoute = $this->route('campaign');
+            $existingUrl = $campaignRoute instanceof Campaign
+                ? $campaignRoute->header_media_url
+                : null;
 
             if ($headerFormat !== null && ! $hasFile && empty($existingUrl)) {
                 $v->errors()->add(
