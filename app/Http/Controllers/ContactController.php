@@ -8,6 +8,8 @@ use App\Http\Requests\ImportContactsRequest;
 use App\Jobs\ProcessContactImport;
 use App\Models\Contact;
 use App\Models\ContactGroup;
+use App\Models\Conversation;
+use App\Models\WhatsAppInstance;
 use App\Services\ContactImportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +25,79 @@ class ContactController extends Controller
             ->paginate(20);
 
         return view('contacts.index', ['contacts' => $contacts]);
+    }
+
+    /**
+     * Open a chat thread with this contact. If no Conversation exists yet for
+     * the picked WhatsApp instance, create one (find-or-create — clicking
+     * Chat twice never creates duplicate rows). Pure navigation: no message
+     * is sent. The thread view enforces the 24h freeform/template policy.
+     */
+    public function startChat(Request $request, Contact $contact): RedirectResponse
+    {
+        $this->authorizeContactAccess($request, $contact);
+
+        $instance = $this->resolveInstance($request);
+        if ($instance === null) {
+            return back()->with('error', $this->instancePickError($request));
+        }
+
+        $conversation = Conversation::firstOrCreate(
+            ['contact_id' => $contact->id, 'whatsapp_instance_id' => $instance->id],
+            ['user_id' => $contact->user_id, 'unread_count' => 0],
+        );
+
+        return redirect()->route('conversations.show', $conversation);
+    }
+
+    /**
+     * Same-account ownership guard. Mirrors the pattern from
+     * ConversationController::authorizeConversationAccess.
+     */
+    private function authorizeContactAccess(Request $request, Contact $contact): void
+    {
+        abort_unless($contact->user_id === $request->user()->id, 403);
+    }
+
+    /**
+     * Resolve which WhatsApp instance to use for a contact-initiated action.
+     *
+     * - 1 instance → auto-pick it.
+     * - 2+ instances → require `instance_id` in the request body
+     *   (sent by the picker modal in contacts/index.blade.php).
+     * - 0 instances → return null; caller flashes a setup error.
+     *
+     * Returns null on any unresolved case so the caller can return a flash
+     * error rather than throwing.
+     */
+    private function resolveInstance(Request $request): ?WhatsAppInstance
+    {
+        $instances = WhatsAppInstance::where('user_id', $request->user()->id)
+            ->get();
+
+        if ($instances->count() === 0) {
+            return null;
+        }
+
+        if ($instances->count() === 1) {
+            return $instances->first();
+        }
+
+        $picked = (int) $request->input('instance_id', 0);
+        return $instances->firstWhere('id', $picked);
+    }
+
+    /**
+     * Human-readable error message when {@see resolveInstance()} returns null.
+     */
+    private function instancePickError(Request $request): string
+    {
+        $count = WhatsAppInstance::where('user_id', $request->user()->id)
+            ->count();
+
+        return $count === 0
+            ? 'Set up a WhatsApp instance before starting conversations.'
+            : 'Pick which WhatsApp number to use from the picker.';
     }
 
     public function importForm(): View
