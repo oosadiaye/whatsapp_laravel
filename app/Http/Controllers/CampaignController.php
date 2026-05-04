@@ -116,7 +116,17 @@ class CampaignController extends Controller
     public function show(string $id): View
     {
         $campaign = Campaign::where('user_id', auth()->id())
-            ->with(['contactGroups', 'whatsAppInstance'])
+            ->with([
+                'whatsAppInstance',
+                // Eager-load each group with two counts: total contacts in that
+                // group, and active contacts (the ones CampaignBatchDispatch
+                // actually fans out to). The active count is what the user
+                // really cares about because inactive contacts get filtered.
+                'contactGroups' => fn ($q) => $q->withCount([
+                    'contacts as total_contacts_count',
+                    'contacts as active_contacts_count' => fn ($cq) => $cq->where('is_active', true),
+                ]),
+            ])
             ->findOrFail($id);
 
         return view('campaigns.show', ['campaign' => $campaign]);

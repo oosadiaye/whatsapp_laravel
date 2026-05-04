@@ -136,6 +136,72 @@
                 </div>
             </div>
 
+            {{-- Recipients — confirms which contact groups are attached and their active-
+                 contact counts. This was the missing piece causing the 'contacts aren't
+                 adding' confusion: data WAS attached correctly via campaign_group pivot,
+                 but the show page never displayed it. Sum of active_contacts_count across
+                 groups is the BEFORE-LAUNCH estimate of how many sends will fan out.
+                 After launch, CampaignBatchDispatch deduplicates across groups (same
+                 contact in two groups counts once) and writes the de-duped count to
+                 campaign.total_contacts. --}}
+            <div class="rounded-xl bg-white p-6 shadow-sm">
+                <h3 class="text-lg font-medium text-gray-900">{{ __('Recipients') }}</h3>
+                @if($campaign->contactGroups->isEmpty())
+                    <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                        <p class="font-medium">{{ __('No recipients attached to this campaign.') }}</p>
+                        <p class="mt-1 text-amber-800">
+                            {{ __('Edit the campaign and pick at least one contact group on the Recipients tab — without recipients, no messages will be sent.') }}
+                        </p>
+                    </div>
+                @else
+                    @php
+                        // Sum the active-contact counts for the pre-launch estimate.
+                        // Note: this counts duplicates if the same contact is in two
+                        // groups; the actual launch de-duplicates, so total_contacts
+                        // after launch may be smaller. We surface that in the label.
+                        $estimatedReach = $campaign->contactGroups->sum('active_contacts_count');
+                    @endphp
+                    <div class="mt-4 grid grid-cols-3 gap-4 text-sm">
+                        <div><span class="text-gray-500">{{ __('Groups attached') }}:</span> <span class="font-medium">{{ $campaign->contactGroups->count() }}</span></div>
+                        <div>
+                            <span class="text-gray-500">{{ __('Estimated reach') }}:</span>
+                            <span class="font-medium">{{ $estimatedReach }} {{ __('contacts') }}</span>
+                            @if($campaign->contactGroups->count() > 1)
+                                <span class="ml-1 text-xs text-gray-400" title="{{ __('Sum across groups; de-duplicated at launch') }}">·</span>
+                            @endif
+                        </div>
+                        @if($campaign->total_contacts > 0)
+                            <div><span class="text-gray-500">{{ __('Actual (de-duped)') }}:</span> <span class="font-medium">{{ $campaign->total_contacts }}</span></div>
+                        @else
+                            <div><span class="text-gray-500">{{ __('Actual reach') }}:</span> <span class="text-gray-400 italic">{{ __('determined at launch') }}</span></div>
+                        @endif
+                    </div>
+
+                    <ul class="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-200">
+                        @foreach($campaign->contactGroups as $group)
+                            <li class="flex items-center justify-between px-4 py-3 text-sm">
+                                <div class="flex items-center gap-3">
+                                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    </svg>
+                                    <span class="font-medium text-gray-900">{{ $group->name }}</span>
+                                </div>
+                                <div class="flex items-center gap-3 text-xs">
+                                    <span class="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800">
+                                        {{ $group->active_contacts_count }} {{ __('active') }}
+                                    </span>
+                                    @if($group->total_contacts_count > $group->active_contacts_count)
+                                        <span class="text-gray-400" title="{{ $group->total_contacts_count - $group->active_contacts_count }} {{ __('inactive contacts excluded from sends') }}">
+                                            ({{ $group->total_contacts_count }} {{ __('total') }})
+                                        </span>
+                                    @endif
+                                </div>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </div>
+
             {{-- Message Logs --}}
             <div class="rounded-xl bg-white p-6 shadow-sm">
                 <h3 class="mb-4 text-lg font-medium text-gray-900">Message Logs</h3>
