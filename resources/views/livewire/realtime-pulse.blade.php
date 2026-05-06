@@ -1,0 +1,44 @@
+<div wire:poll.3s>
+    {{-- RealtimePulse: real-time UX layer for inbound calls + chat notifications.
+         Mounted on the layout via @auth in app.blade.php. The Alpine factory
+         (window.realtimePulse) lives in resources/js/app.js and consumes the
+         data attributes set below. --}}
+
+    {{-- Banner stack: up to 3 in-flight inbound calls, sticky top of viewport --}}
+    @forelse($inflightCalls as $call)
+        <div class="sticky top-0 z-40 bg-emerald-600 text-white px-4 py-3 shadow-md flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="text-xl animate-pulse" aria-hidden="true">📞</span>
+                <div>
+                    <div class="font-semibold">
+                        Incoming call from {{ $call['contact_name'] ?? 'Unknown' }}
+                    </div>
+                    <div class="text-xs text-emerald-100 font-mono">
+                        {{ $call['phone'] }} · ringing on {{ $call['instance_name'] }}
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="{{ route('conversations.show', $call['conversation_id']) }}"
+                   class="bg-white text-emerald-700 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-emerald-50">
+                    Open conversation →
+                </a>
+            </div>
+        </div>
+    @empty
+        {{-- nothing ringing right now --}}
+    @endforelse
+
+    {{-- Hidden audio element, played from JS on incoming-call event --}}
+    <audio id="bq-ringtone" preload="auto" loop>
+        <source src="{{ asset('audio/incoming-call.mp3') }}" type="audio/mpeg">
+    </audio>
+
+    {{-- Data carrier for the Alpine factory in resources/js/app.js.
+         The factory reads these attributes after each poll to detect
+         changes (new calls, message-count delta) and dispatch side-effects. --}}
+    <span id="bq-realtime-data"
+          data-calls="{{ json_encode($inflightCalls) }}"
+          data-unread="{{ $unreadMessages }}"
+          aria-hidden="true"></span>
+</div>
