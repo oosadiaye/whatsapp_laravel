@@ -15,6 +15,10 @@
         @livewireStyles
     </head>
     <body class="font-sans antialiased bg-gray-50">
+        @auth
+            <livewire:realtime-pulse />
+        @endauth
+
         {{--
             Layout structure:
               <body>
