@@ -88,6 +88,85 @@ class RealtimePulseTest extends TestCase
             ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 0);
     }
 
+    public function test_agent_sees_inflight_call_on_assigned_conversation(): void
+    {
+        $admin = $this->makeUser('admin');
+        $agent = $this->makeUser('agent');
+        $instance = WhatsAppInstance::factory()->create([
+            'user_id' => $admin->id,
+            'status' => 'CONNECTED',
+        ]);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'whatsapp_instance_id' => $instance->id,
+            'assigned_to_user_id' => $agent->id,
+        ]);
+        CallLog::factory()->create([
+            'conversation_id' => $conv->id,
+            'contact_id' => $conv->contact_id,
+            'whatsapp_instance_id' => $instance->id,
+            'direction' => 'inbound',
+            'status' => 'ringing',
+        ]);
+
+        Livewire::actingAs($agent)
+            ->test(RealtimePulse::class)
+            ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 1);
+    }
+
+    public function test_agent_sees_inflight_call_on_unassigned_conversation(): void
+    {
+        $admin = $this->makeUser('admin');
+        $agent = $this->makeUser('agent');
+        $instance = WhatsAppInstance::factory()->create([
+            'user_id' => $admin->id,
+            'status' => 'CONNECTED',
+        ]);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'whatsapp_instance_id' => $instance->id,
+            'assigned_to_user_id' => null,
+        ]);
+        CallLog::factory()->create([
+            'conversation_id' => $conv->id,
+            'contact_id' => $conv->contact_id,
+            'whatsapp_instance_id' => $instance->id,
+            'direction' => 'inbound',
+            'status' => 'ringing',
+        ]);
+
+        Livewire::actingAs($agent)
+            ->test(RealtimePulse::class)
+            ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 1);
+    }
+
+    public function test_agent_does_not_see_call_assigned_to_someone_else(): void
+    {
+        $admin = $this->makeUser('admin');
+        $agent = $this->makeUser('agent');
+        $otherAgent = $this->makeUser('agent', 'other@example.com');
+        $instance = WhatsAppInstance::factory()->create([
+            'user_id' => $admin->id,
+            'status' => 'CONNECTED',
+        ]);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'whatsapp_instance_id' => $instance->id,
+            'assigned_to_user_id' => $otherAgent->id,
+        ]);
+        CallLog::factory()->create([
+            'conversation_id' => $conv->id,
+            'contact_id' => $conv->contact_id,
+            'whatsapp_instance_id' => $instance->id,
+            'direction' => 'inbound',
+            'status' => 'ringing',
+        ]);
+
+        Livewire::actingAs($agent)
+            ->test(RealtimePulse::class)
+            ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 0);
+    }
+
     private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([
