@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire;
 
+use App\Models\CallLog;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -34,9 +35,46 @@ class RealtimePulse extends Component
             ]);
         }
 
+        $callQuery = CallLog::query()
+            ->where('direction', CallLog::DIRECTION_INBOUND)
+            ->whereIn('status', CallLog::STATUSES_IN_FLIGHT)
+            ->where('created_at', '>=', now()->subMinutes(30))
+            ->with(['contact', 'whatsappInstance']);
+
+        if ($user->can('conversations.view_all')) {
+            // Admin / manager / super_admin: every call on a conversation
+            // owned by this user (account scope).
+            $callQuery->whereHas('conversation', fn ($q) => $q->where('user_id', $user->id));
+        } else {
+            // Agent (view_assigned only): assigned to me OR unassigned pool.
+            $callQuery->whereHas('conversation', fn ($q) =>
+                $q->where(fn ($qq) =>
+                    $qq->where('assigned_to_user_id', $user->id)
+                       ->orWhereNull('assigned_to_user_id')
+                )
+            );
+        }
+
+        $inflightCalls = $callQuery
+            ->latest()
+            ->limit(3)
+            ->get()
+            ->map(fn ($call) => [
+                'id' => $call->id,
+                'conversation_id' => $call->conversation_id,
+                'contact_name' => $call->contact->name ?? null,
+                'phone' => $call->from_phone,
+                'instance_name' => $call->whatsappInstance->display_name
+                    ?? $call->whatsappInstance->instance_name,
+                'status' => $call->status,
+                'started_at' => $call->started_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+
         return view('livewire.realtime-pulse', [
-            'inflightCalls' => [],
-            'unreadMessages' => 0,
+            'inflightCalls' => $inflightCalls,
+            'unreadMessages' => 0,  // wired up in Task 6
         ]);
     }
 }
