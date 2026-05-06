@@ -39,15 +39,20 @@ window.realtimePulse = () => ({
     audioUnlocked: false,
 
     init() {
-        // Read initial state from data attributes
+        // Read initial state from data attributes.
+        //
+        // NB: seenCallIds is intentionally NOT pre-seeded from the initial
+        // payload — we want the first handleUpdate() call (line 86) to treat
+        // any already-ringing calls as NEW, so the ringtone + notification
+        // fire for an agent who loaded the page mid-call. lastUnread IS
+        // pre-seeded so the first poll doesn't notify about already-counted
+        // unread messages.
         const data = document.getElementById('bq-realtime-data');
         if (data) {
             try {
-                const calls = JSON.parse(data.dataset.calls || '[]');
-                this.seenCallIds = calls.map(c => c.id);
                 this.lastUnread = parseInt(data.dataset.unread || '0', 10);
             } catch (e) {
-                // Malformed payload — treat as empty
+                // Malformed payload — treat lastUnread as 0
             }
         }
 
@@ -62,8 +67,10 @@ window.realtimePulse = () => ({
                 audio.currentTime = 0;
                 this.audioUnlocked = true;
             }).catch(() => {});
-            window.removeEventListener('click', unlock);
-            window.removeEventListener('keydown', unlock);
+            // No manual removeEventListener — { once: true } auto-removes after
+            // first fire. Note: addEventListener({ once: true }) cleanup happens
+            // automatically per the EventListenerOptions spec; both listeners
+            // below remove themselves once whichever fires first.
         };
         window.addEventListener('click', unlock, { once: true });
         window.addEventListener('keydown', unlock, { once: true });
@@ -74,13 +81,19 @@ window.realtimePulse = () => ({
             && localStorage.getItem('bq:notification-asked') !== '1') {
             setTimeout(() => {
                 Notification.requestPermission().finally(() => {
-                    localStorage.setItem('bq:notification-asked', '1');
+                    // Guarded against private-mode / quota-exceeded throws.
+                    try { localStorage.setItem('bq:notification-asked', '1'); } catch (_) {}
                 });
             }, 2000);
         }
 
-        // After every Livewire DOM update, re-read data attrs and dispatch
-        document.addEventListener('livewire:morph.updated', () => this.handleUpdate());
+        // After every Livewire DOM update, re-read data attrs and dispatch.
+        // Livewire 4 dispatches morph.updated through its internal pub/sub system,
+        // NOT as a DOM CustomEvent. Use Livewire.hook(...) — addEventListener on
+        // document silently never fires (verified by reviewer reading livewire.js
+        // internals: trigger2('morph.updated') routes through the hooks `listeners`
+        // map, not document.dispatchEvent).
+        window.Livewire.hook('morph.updated', () => this.handleUpdate());
 
         // Run once on mount in case the initial payload already has a call
         this.handleUpdate();

@@ -36,7 +36,15 @@
 
     {{-- Data carrier for the Alpine factory in resources/js/app.js.
          The factory reads these attributes after each poll to detect
-         changes (new calls, message-count delta) and dispatch side-effects. --}}
+         changes (new calls, message-count delta) and dispatch side-effects.
+
+         WHY {{ }} (not {!! !!}) IS CORRECT HERE despite emitting JSON:
+         Blade {{ }} calls e() which HTML-encodes \" -> &quot;, then the
+         browser HTML attribute parser decodes &quot; -> \" when reading
+         dataset.calls, yielding valid JSON for JSON.parse. Switching to
+         {!! !!} would emit raw \" inside a \"-delimited attribute, breaking
+         the HTML and creating an XSS surface for a contact name like
+         <script>...</script>. Verified by reviewer round-trip test. --}}
     <span id="bq-realtime-data"
           data-calls="{{ json_encode($inflightCalls) }}"
           data-unread="{{ $unreadMessages }}"

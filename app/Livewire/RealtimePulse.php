@@ -48,6 +48,20 @@ class RealtimePulse extends Component
             $callQuery->whereHas('conversation', fn ($q) => $q->where('user_id', $user->id));
         } else {
             // Agent (view_assigned only): assigned to me OR unassigned pool.
+            //
+            // INTENTIONAL ASYMMETRY: this scope is BROADER than
+            // ConversationController::index() — that controller scopes the
+            // inbox view to ONLY conversations assigned to the agent (no
+            // unassigned pool). For real-time call alerts we want every
+            // available agent to see incoming calls so someone can grab
+            // unassigned ones. Spec source: realtime-ux-bundle-design.md
+            // section "Permission scoping". DO NOT "fix" by tightening
+            // this match the inbox — that would silently drop unassigned
+            // calls from every agent's banner.
+            //
+            // Future Phase 14.2 (round-robin auto-assignment) is expected
+            // to reduce the unassigned pool to near-zero, at which point
+            // the asymmetry becomes a non-issue.
             $callQuery->whereHas('conversation', fn ($q) =>
                 $q->where(fn ($qq) =>
                     $qq->where('assigned_to_user_id', $user->id)
@@ -79,6 +93,10 @@ class RealtimePulse extends Component
         if ($user->can('conversations.view_all')) {
             $messageQuery->where('user_id', $user->id);
         } else {
+            // See the matching comment above on the call-payload view_assigned
+            // branch — same intentional broader-than-inbox scoping for the
+            // unread message count. Symmetric with the call payload so an
+            // agent's banner activity matches their notification badge count.
             $messageQuery->where(fn ($q) =>
                 $q->where('assigned_to_user_id', $user->id)
                   ->orWhereNull('assigned_to_user_id')

@@ -287,6 +287,34 @@ class RealtimePulseTest extends TestCase
             ->assertViewHas('unreadMessages', 10);
     }
 
+    public function test_caps_payload_to_three_calls_when_more_in_flight(): void
+    {
+        $admin = $this->makeUser('admin');
+        $instance = WhatsAppInstance::factory()->create([
+            'user_id' => $admin->id,
+            'status' => 'CONNECTED',
+        ]);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'whatsapp_instance_id' => $instance->id,
+        ]);
+
+        // Five concurrent in-flight inbound calls — payload must cap at 3.
+        for ($i = 0; $i < 5; $i++) {
+            CallLog::factory()->create([
+                'conversation_id' => $conv->id,
+                'contact_id' => $conv->contact_id,
+                'whatsapp_instance_id' => $instance->id,
+                'direction' => 'inbound',
+                'status' => 'ringing',
+            ]);
+        }
+
+        Livewire::actingAs($admin)
+            ->test(RealtimePulse::class)
+            ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 3);
+    }
+
     private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([
