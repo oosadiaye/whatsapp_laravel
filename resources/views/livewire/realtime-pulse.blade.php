@@ -1,4 +1,4 @@
-<div wire:poll.3s>
+<div wire:poll.3s x-data="realtimePulse()" x-init="init()">
     {{-- RealtimePulse: real-time UX layer for inbound calls + chat notifications.
          Mounted on the layout via @auth in app.blade.php. The Alpine factory
          (window.realtimePulse) lives in resources/js/app.js and consumes the
