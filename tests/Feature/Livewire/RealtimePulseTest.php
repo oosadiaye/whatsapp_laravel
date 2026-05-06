@@ -167,6 +167,84 @@ class RealtimePulseTest extends TestCase
             ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 0);
     }
 
+    public function test_excludes_calls_with_terminal_status(): void
+    {
+        $admin = $this->makeUser('admin');
+        $instance = WhatsAppInstance::factory()->create([
+            'user_id' => $admin->id,
+            'status' => 'CONNECTED',
+        ]);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'whatsapp_instance_id' => $instance->id,
+        ]);
+
+        // Create one CallLog per terminal status — none should appear.
+        foreach (['ended', 'missed', 'declined', 'failed'] as $terminal) {
+            CallLog::factory()->create([
+                'conversation_id' => $conv->id,
+                'contact_id' => $conv->contact_id,
+                'whatsapp_instance_id' => $instance->id,
+                'direction' => 'inbound',
+                'status' => $terminal,
+            ]);
+        }
+
+        Livewire::actingAs($admin)
+            ->test(RealtimePulse::class)
+            ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 0);
+    }
+
+    public function test_excludes_calls_older_than_30_minutes(): void
+    {
+        $admin = $this->makeUser('admin');
+        $instance = WhatsAppInstance::factory()->create([
+            'user_id' => $admin->id,
+            'status' => 'CONNECTED',
+        ]);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'whatsapp_instance_id' => $instance->id,
+        ]);
+        CallLog::factory()->create([
+            'conversation_id' => $conv->id,
+            'contact_id' => $conv->contact_id,
+            'whatsapp_instance_id' => $instance->id,
+            'direction' => 'inbound',
+            'status' => 'ringing',
+            'created_at' => now()->subMinutes(31),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(RealtimePulse::class)
+            ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 0);
+    }
+
+    public function test_excludes_outbound_calls(): void
+    {
+        $admin = $this->makeUser('admin');
+        $instance = WhatsAppInstance::factory()->create([
+            'user_id' => $admin->id,
+            'status' => 'CONNECTED',
+        ]);
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'whatsapp_instance_id' => $instance->id,
+        ]);
+        CallLog::factory()->create([
+            'conversation_id' => $conv->id,
+            'contact_id' => $conv->contact_id,
+            'whatsapp_instance_id' => $instance->id,
+            'direction' => 'outbound',
+            'status' => 'ringing',
+            'placed_by_user_id' => $admin->id,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(RealtimePulse::class)
+            ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 0);
+    }
+
     private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([
