@@ -245,6 +245,48 @@ class RealtimePulseTest extends TestCase
             ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 0);
     }
 
+    public function test_unread_message_count_sums_visible_conversations(): void
+    {
+        $admin = $this->makeUser('admin');
+        $instance = WhatsAppInstance::factory()->create([
+            'user_id' => $admin->id,
+            'status' => 'CONNECTED',
+        ]);
+
+        // Three conversations owned by admin — should sum to 10
+        Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'whatsapp_instance_id' => $instance->id,
+            'unread_count' => 3,
+        ]);
+        Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'whatsapp_instance_id' => $instance->id,
+            'unread_count' => 5,
+        ]);
+        Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'whatsapp_instance_id' => $instance->id,
+            'unread_count' => 2,
+        ]);
+
+        // One conversation owned by ANOTHER admin — must NOT contribute
+        $other = $this->makeUser('admin', 'other@example.com');
+        $otherInstance = WhatsAppInstance::factory()->create([
+            'user_id' => $other->id,
+            'status' => 'CONNECTED',
+        ]);
+        Conversation::factory()->create([
+            'user_id' => $other->id,
+            'whatsapp_instance_id' => $otherInstance->id,
+            'unread_count' => 100,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(RealtimePulse::class)
+            ->assertViewHas('unreadMessages', 10);
+    }
+
     private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([

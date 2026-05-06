@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire;
 
 use App\Models\CallLog;
+use App\Models\Conversation;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -72,9 +73,22 @@ class RealtimePulse extends Component
             ->values()
             ->all();
 
+        // Unread message count across visible conversations — same scoping
+        // rules as the call payload (see comment above on view_all vs view_assigned).
+        $messageQuery = Conversation::query();
+        if ($user->can('conversations.view_all')) {
+            $messageQuery->where('user_id', $user->id);
+        } else {
+            $messageQuery->where(fn ($q) =>
+                $q->where('assigned_to_user_id', $user->id)
+                  ->orWhereNull('assigned_to_user_id')
+            );
+        }
+        $unreadMessages = (int) $messageQuery->sum('unread_count');
+
         return view('livewire.realtime-pulse', [
             'inflightCalls' => $inflightCalls,
-            'unreadMessages' => 0,  // wired up in Task 6
+            'unreadMessages' => $unreadMessages,
         ]);
     }
 }
