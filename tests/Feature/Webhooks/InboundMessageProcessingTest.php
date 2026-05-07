@@ -7,6 +7,7 @@ namespace Tests\Feature\Webhooks;
 use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
+use App\Models\User;
 use App\Models\WhatsAppInstance;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -223,5 +224,44 @@ class InboundMessageProcessingTest extends TestCase
                 ]],
             ]],
         ];
+    }
+
+    public function test_inbound_message_auto_assigns_to_available_agent(): void
+    {
+        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'is_active' => true,
+        ]);
+        $admin->assignRole(User::ROLE_ADMIN);
+
+        $agent = User::factory()->create([
+            'role' => User::ROLE_AGENT,
+            'is_active' => true,
+            'last_seen_at' => now(),  // online
+        ]);
+        $agent->assignRole(User::ROLE_AGENT);
+
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+        $processor = $this->app->make(\App\Services\InboundMessageProcessor::class);
+
+        $processor->processMessages($instance, [
+            [
+                'id' => 'wamid.assign_test',
+                'from' => '2348011111111',
+                'type' => 'text',
+                'text' => ['body' => 'Hello'],
+                'timestamp' => '1714500000',
+            ],
+        ]);
+
+        $conversation = \App\Models\Conversation::first();
+        $this->assertNotNull($conversation);
+        $this->assertSame(
+            $agent->id,
+            $conversation->assigned_to_user_id,
+            'Inbound message must auto-assign to the only available agent'
+        );
     }
 }

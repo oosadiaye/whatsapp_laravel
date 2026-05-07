@@ -8,6 +8,7 @@ use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\WhatsAppInstance;
+use App\Services\RoundRobinAssigner;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -35,6 +36,7 @@ class InboundMessageProcessor
 {
     public function __construct(
         private readonly WhatsAppCloudApiService $cloudApi,
+        private readonly RoundRobinAssigner $roundRobinAssigner,
     ) {
     }
 
@@ -142,10 +144,23 @@ class InboundMessageProcessor
 
     private function findOrCreateConversation(WhatsAppInstance $instance, Contact $contact): Conversation
     {
-        return Conversation::firstOrCreate(
+        $conversation = Conversation::firstOrCreate(
             ['contact_id' => $contact->id, 'whatsapp_instance_id' => $instance->id],
             ['user_id' => $instance->user_id, 'unread_count' => 0],
         );
+
+        // Auto-assign to next available agent IF currently unassigned.
+        // Sticky-to-existing-assignment is implicit: already-assigned conversations
+        // skip this branch entirely. New conversations and ones unassigned because
+        // no agents were online earlier both go through the same rotation.
+        if ($conversation->assigned_to_user_id === null) {
+            $agent = $this->roundRobinAssigner->next();
+            if ($agent !== null) {
+                $conversation->update(['assigned_to_user_id' => $agent->id]);
+            }
+        }
+
+        return $conversation;
     }
 
     /**
