@@ -168,6 +168,64 @@ class RoundRobinAssignerTest extends TestCase
         $this->assertNotNull($first->last_assigned_at);
     }
 
+    public function test_excludes_agents_with_presence_status_away(): void
+    {
+        $away = $this->makeAgent(lastSeenAt: now());
+        $away->forceFill(['presence_status' => User::PRESENCE_AWAY])->save();
+
+        $assigner = new RoundRobinAssigner();
+
+        $this->assertNull(
+            $assigner->next(),
+            'Away agents must be excluded from the rotation entirely'
+        );
+    }
+
+    public function test_includes_agents_with_presence_status_busy(): void
+    {
+        $busy = $this->makeAgent(lastSeenAt: now());
+        $busy->forceFill(['presence_status' => User::PRESENCE_BUSY])->save();
+
+        $assigner = new RoundRobinAssigner();
+
+        $picked = $assigner->next();
+
+        $this->assertNotNull($picked);
+        $this->assertSame(
+            $busy->id,
+            $picked->id,
+            'Busy agents stay in rotation — busy is a social signal, not a routing rule'
+        );
+    }
+
+    public function test_treats_busy_and_available_identically_in_rotation(): void
+    {
+        // Two online agents with NULL last_assigned_at, one busy and one available.
+        // Both must be picked across two consecutive next() calls (not one preferred
+        // over the other). The first call stamps last_assigned_at on whichever it
+        // picks; the second call must therefore pick the OTHER agent — proving the
+        // first-call pick was driven by the round-robin pointer, NOT by status.
+        $available = $this->makeAgent(email: 'a@example.com', lastSeenAt: now());
+        // available defaults to 'available' from migration default — no override needed.
+
+        $busy = $this->makeAgent(email: 'b@example.com', lastSeenAt: now());
+        $busy->forceFill(['presence_status' => User::PRESENCE_BUSY])->save();
+
+        $assigner = new RoundRobinAssigner();
+
+        $first = $assigner->next();
+        $second = $assigner->next();
+
+        $this->assertNotNull($first);
+        $this->assertNotNull($second);
+        $this->assertNotSame(
+            $first->id,
+            $second->id,
+            'Two consecutive next() calls must return different agents — '
+            .'busy and available are equivalent in routing'
+        );
+    }
+
     private function makeAgent(
         ?string $email = null,
         ?\Illuminate\Support\Carbon $lastSeenAt = null,

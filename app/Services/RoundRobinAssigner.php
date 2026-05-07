@@ -12,9 +12,11 @@ use Illuminate\Support\Facades\DB;
  * incoming conversations. Used by InboundMessageProcessor and
  * InboundCallProcessor on the firstOrCreate-of-Conversation branch.
  *
- * "Available" means: role=agent, is_active=true, last_seen_at within
- * the last AVAILABILITY_WINDOW_MINUTES. The poll-driven heartbeat in
- * App\Livewire\RealtimePulse keeps last_seen_at fresh while the agent
+ * "Available" means: role=agent, is_active=true, presence_status != 'away',
+ * and last_seen_at within the last AVAILABILITY_WINDOW_MINUTES. The
+ * 'busy' presence_status remains in rotation — busy is a social signal
+ * broadcast to teammates, not a routing rule. The poll-driven heartbeat
+ * in App\Livewire\RealtimePulse keeps last_seen_at fresh while the agent
  * has the app open.
  *
  * Fairness: rotation orders by last_assigned_at ASC NULLS FIRST. New
@@ -39,6 +41,7 @@ class RoundRobinAssigner
             $agent = User::query()
                 ->where('role', User::ROLE_AGENT)
                 ->where('is_active', true)
+                ->where('presence_status', '!=', User::PRESENCE_AWAY)
                 ->where('last_seen_at', '>=', now()->subMinutes(self::AVAILABILITY_WINDOW_MINUTES))
                 ->orderByRaw('last_assigned_at IS NULL DESC, last_assigned_at ASC')
                 ->lockForUpdate()
