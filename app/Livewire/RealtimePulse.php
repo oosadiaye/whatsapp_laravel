@@ -36,6 +36,16 @@ class RealtimePulse extends Component
             ]);
         }
 
+        // Implicit-heartbeat presence: touch last_seen_at every 30 seconds.
+        // The 3-second wire:poll cycle would otherwise produce ~20 writes/min
+        // per agent. The 30s dedup window is well below the 2-min availability
+        // threshold (RoundRobinAssigner::AVAILABILITY_WINDOW_MINUTES), so
+        // freshness is preserved while write load drops by ~90%.
+        if ($user->last_seen_at === null
+            || $user->last_seen_at->lt(now()->subSeconds(30))) {
+            $user->forceFill(['last_seen_at' => now()])->save();
+        }
+
         $callQuery = CallLog::query()
             ->where('direction', CallLog::DIRECTION_INBOUND)
             ->whereIn('status', CallLog::STATUSES_IN_FLIGHT)
