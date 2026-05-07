@@ -15,15 +15,14 @@
         @livewireStyles
     </head>
     <body class="font-sans antialiased bg-gray-50">
-        @auth
-            <livewire:realtime-pulse />
-        @endauth
-
         {{--
             Layout structure:
               <body>
                 <aside> — sidebar (always visible on lg, drawer on mobile)
                 <div class="lg:pl-64"> — content wrapper offset by sidebar width on desktop
+                  <livewire:realtime-pulse /> — sticky call banner, lives INSIDE the
+                                                content column so its full-width banner
+                                                is offset by the sidebar on desktop
                   <header> — topbar with hamburger + page heading
                   <main> — page content
             The lg:pl-64 leaves room for the 256px-wide fixed sidebar on desktop;
@@ -33,6 +32,14 @@
         @include('layouts.navigation')
 
         <div class="lg:pl-64 min-h-screen flex flex-col">
+
+            {{-- Real-time UX layer (call banner + ringtone + notifications).
+                 Mounted INSIDE the lg:pl-64 wrapper — earlier we had it at <body>
+                 root, which made the sticky top banner extend full-viewport-width
+                 with its left half disappearing under the sidebar on desktop. --}}
+            @auth
+                <livewire:realtime-pulse />
+            @endauth
 
             {{-- Topbar — sticky, holds mobile hamburger + page heading slot --}}
             <header class="sticky top-0 z-20 bg-white border-b border-gray-200 h-16 flex items-center px-4 sm:px-6 lg:px-8 gap-3">

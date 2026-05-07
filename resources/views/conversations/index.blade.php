@@ -23,16 +23,16 @@
                 @forelse($conversations as $conversation)
                     <a href="{{ route('conversations.show', $conversation) }}"
                        class="flex items-center gap-4 px-6 py-4 border-b border-gray-100 hover:bg-gray-50 transition">
-                        {{-- Avatar --}}
+                        {{-- Avatar — display_name accessor falls through empty-string names to phone (see Contact model) --}}
                         <div class="flex-shrink-0 w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-semibold uppercase">
-                            {{ Str::substr($conversation->contact->name ?? $conversation->contact->phone, 0, 2) }}
+                            {{ Str::substr($conversation->contact->display_name, 0, 2) }}
                         </div>
 
                         {{-- Body --}}
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center justify-between gap-2">
                                 <h3 class="text-sm font-semibold text-gray-900 truncate">
-                                    {{ $conversation->contact->name ?? $conversation->contact->phone }}
+                                    {{ $conversation->contact->display_name }}
                                 </h3>
                                 <span class="text-xs text-gray-400 flex-shrink-0">
                                     {{ $conversation->last_message_at?->diffForHumans(short: true) ?? '—' }}

@@ -79,7 +79,7 @@
                                 @endif
                             </td>
                             <td class="px-6 py-3 text-sm">
-                                <div class="font-medium text-gray-900">{{ $call->contact->name ?? $call->from_phone }}</div>
+                                <div class="font-medium text-gray-900">{{ $call->contact ? $call->contact->display_name : $call->from_phone }}</div>
                                 <div class="text-xs text-gray-500 font-mono">{{ $call->isInbound() ? $call->from_phone : $call->to_phone }}</div>
                             </td>
                             <td class="px-6 py-3 text-sm">

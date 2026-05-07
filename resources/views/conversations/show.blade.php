@@ -7,7 +7,7 @@
                 </a>
                 <div>
                     <h2 class="font-semibold text-lg text-gray-800 leading-tight">
-                        {{ $conversation->contact->name ?? $conversation->contact->phone }}
+                        {{ $conversation->contact->display_name }}
                     </h2>
                     <p class="text-xs text-gray-500 flex items-center gap-2">
                         <span>{{ $conversation->contact->phone }} · via {{ $conversation->whatsappInstance->instance_name }}</span>

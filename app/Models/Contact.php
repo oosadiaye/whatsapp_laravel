@@ -45,6 +45,26 @@ class Contact extends Model
         ];
     }
 
+    /**
+     * Display name fallback chain: explicit name → phone number.
+     *
+     * Why this isn't just `$contact->name ?? $contact->phone` everywhere:
+     *   The `??` operator only falls through on null, but WhatsApp Cloud API
+     *   returns displayName as an EMPTY STRING when the sender has no
+     *   profile name set. Empty strings pass `??` and propagate, leaving
+     *   the inbox showing blank conversation cards above "via Quot ·
+     *   Unassigned". Centralizing the logic in one accessor avoids the
+     *   bug recurring every time someone writes a new view.
+     *
+     * Use as: $contact->display_name (Eloquent accessor magic).
+     */
+    public function getDisplayNameAttribute(): string
+    {
+        $name = trim((string) $this->name);
+
+        return $name !== '' ? $name : (string) $this->phone;
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
