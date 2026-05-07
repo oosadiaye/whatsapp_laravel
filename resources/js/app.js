@@ -56,17 +56,26 @@ window.realtimePulse = () => ({
             }
         }
 
-        // Audio autoplay unlock: latch onto the FIRST user gesture
+        // Audio autoplay unlock: latch onto the FIRST user gesture.
+        // Browsers block .play() until a user gesture; the muted-play-then-pause
+        // dance "unlocks" the element so subsequent .play() calls work freely.
+        // We unlock BOTH audio elements (ringtone for calls, ping for messages)
+        // in one pass — Promise.all so a failure on one doesn't block the other.
         const unlock = () => {
-            const audio = document.getElementById('bq-ringtone');
-            if (!audio) return;
-            audio.muted = true;
-            audio.play().then(() => {
-                audio.pause();
-                audio.muted = false;
-                audio.currentTime = 0;
+            const elements = ['bq-ringtone', 'bq-message-ping']
+                .map(id => document.getElementById(id))
+                .filter(el => el !== null);
+            if (elements.length === 0) return;
+            Promise.all(elements.map(el => {
+                el.muted = true;
+                return el.play().then(() => {
+                    el.pause();
+                    el.muted = false;
+                    el.currentTime = 0;
+                }).catch(() => {});
+            })).then(() => {
                 this.audioUnlocked = true;
-            }).catch(() => {});
+            });
             // No manual removeEventListener — { once: true } auto-removes after
             // first fire. Note: addEventListener({ once: true }) cleanup happens
             // automatically per the EventListenerOptions spec; both listeners
@@ -146,18 +155,36 @@ window.realtimePulse = () => ({
 
         this.seenCallIds = currentIds;
 
-        // Unread message delta → notification IF tab unfocused
+        // Unread message delta → audible ping (always) + desktop notification (only when tab hidden).
+        //
+        // Why play sound regardless of focus: original Phase 14.1 assumption was
+        // "user is looking, badge update is enough." Real usage showed agents miss
+        // the badge because they're attending to other panes/windows. A short
+        // audible ping pulls attention to the inbox without requiring the tab
+        // to be backgrounded.
+        //
+        // Why notification stays gated on document.hidden: when the tab IS
+        // focused, the audible ping is sufficient. Stacking a desktop notification
+        // on top creates double-alerting that users find annoying.
         const currentUnread = parseInt(data.dataset.unread || '0', 10);
-        if (currentUnread > this.lastUnread
-            && document.hidden
-            && 'Notification' in window
-            && Notification.permission === 'granted') {
+        if (currentUnread > this.lastUnread) {
             const delta = currentUnread - this.lastUnread;
-            new Notification('New message', {
-                body: `${delta} new message${delta === 1 ? '' : 's'} — total ${currentUnread} unread`,
-                icon: '/favicon.ico',
-                tag: 'bq-message-pulse',
-            });
+
+            const ping = document.getElementById('bq-message-ping');
+            if (ping && this.audioUnlocked) {
+                ping.currentTime = 0;
+                ping.play().catch(() => {});
+            }
+
+            if (document.hidden
+                && 'Notification' in window
+                && Notification.permission === 'granted') {
+                new Notification('New message', {
+                    body: `${delta} new message${delta === 1 ? '' : 's'} — total ${currentUnread} unread`,
+                    icon: '/favicon.ico',
+                    tag: 'bq-message-pulse',
+                });
+            }
         }
         this.lastUnread = currentUnread;
     },

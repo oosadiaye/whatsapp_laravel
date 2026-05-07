@@ -29,8 +29,15 @@
         {{-- nothing ringing right now --}}
     @endforelse
 
-    {{-- Hidden audio element, played from JS on incoming-call event --}}
+    {{-- Hidden audio elements, played from JS on incoming-call / new-message events.
+         Two separate elements so the call ringtone (loops until call ends) and the
+         message ping (one-shot per unread delta) can play independently without
+         colliding. Both point at the same MP3 — browser cache serves the second
+         request, so no extra network cost. --}}
     <audio id="bq-ringtone" preload="auto" loop>
+        <source src="{{ asset('audio/incoming-call.mp3') }}" type="audio/mpeg">
+    </audio>
+    <audio id="bq-message-ping" preload="auto">
         <source src="{{ asset('audio/incoming-call.mp3') }}" type="audio/mpeg">
     </audio>
 
