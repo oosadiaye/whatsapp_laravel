@@ -97,6 +97,16 @@ class User extends Authenticatable
         return $this->hasMany(WhatsAppInstance::class);
     }
 
+    /**
+     * Conversations where this user is the assigned agent. Used by the
+     * Phase 15 team-load dashboard's withCount query and by future
+     * features that need to enumerate an agent's threads.
+     */
+    public function assignedConversations(): HasMany
+    {
+        return $this->hasMany(\App\Models\Conversation::class, 'assigned_to_user_id');
+    }
+
     public function messageTemplates(): HasMany
     {
         return $this->hasMany(MessageTemplate::class);
