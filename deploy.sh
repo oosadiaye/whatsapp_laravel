@@ -74,13 +74,33 @@ php artisan route:cache
 php artisan view:cache
 
 echo "[10/11] Restarting queue worker..."
-# Try Horizon first; fall back to plain queue:restart if Horizon isn't installed.
-if php artisan list 2>/dev/null | grep -q "horizon:terminate"; then
+# Three layers, most-specific first:
+#
+# 1. If a supervisor program 'blastiq-worker' is registered, restart it.
+#    First-time setup: bootstrap with `sudo bash deploy/install-supervisor.sh`.
+#
+# 2. Else if Horizon is installed AND Predis is loadable, terminate Horizon.
+#    The Predis check avoids the "Class Predis\Client not found" hard error
+#    on hosts where Horizon was half-configured but Predis was never installed.
+#
+# 3. Else broadcast `queue:restart`. Note: stale workers started manually
+#    long ago will NOT pick up code changes from queue:restart in some edge
+#    cases (the master is supposed to gracefully exit and a wrapper restart
+#    it — without supervisor, nothing restarts it). The install-supervisor.sh
+#    script handles this transition cleanly.
+if sudo supervisorctl status blastiq-worker:* >/dev/null 2>&1; then
+  echo "  Supervisor program found — restarting blastiq-worker:*"
+  sudo supervisorctl restart blastiq-worker:*
+elif php artisan list 2>/dev/null | grep -q "horizon:terminate" \
+     && php -r "exit(class_exists('Predis\\Client') ? 0 : 1);" 2>/dev/null; then
+  echo "  Horizon (with Predis) detected — terminating master"
   php artisan horizon:terminate
   sudo supervisorctl restart blastiq-horizon 2>/dev/null || true
 else
+  echo "  No supervisor program / no Horizon — broadcasting queue:restart"
+  echo "  TIP: Run 'sudo bash deploy/install-supervisor.sh' once to make"
+  echo "       worker restarts automatic and reboot-survivable."
   php artisan queue:restart
-  sudo supervisorctl restart blastiq-worker:* 2>/dev/null || true
 fi
 
 echo "[11/11] Final verification..."
