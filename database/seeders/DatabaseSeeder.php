@@ -33,6 +33,7 @@ class DatabaseSeeder extends Seeder
             'default_country_code' => '234',
             'app_name' => 'BlastIQ',
             'timezone' => 'Africa/Lagos',
+            'round_robin_cap_per_agent' => '5',
         ];
 
         foreach ($settings as $key => $value) {

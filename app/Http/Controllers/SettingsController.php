@@ -24,6 +24,7 @@ class SettingsController extends Controller
             'default_rate_per_minute' => ['nullable', 'integer', 'min:1', 'max:60'],
             'default_delay_min' => ['nullable', 'integer', 'min:1', 'max:30'],
             'default_delay_max' => ['nullable', 'integer', 'min:1', 'max:60'],
+            'round_robin_cap_per_agent' => ['nullable', 'integer', 'min:0', 'max:1000'],
         ]);
 
         foreach ($validated as $key => $value) {

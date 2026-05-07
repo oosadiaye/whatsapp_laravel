@@ -45,6 +45,34 @@
                     </div>
                 </div>
 
+                {{-- Routing & Assignment --}}
+                <div class="rounded-xl bg-white p-6 shadow-sm">
+                    <h3 class="text-lg font-medium text-gray-900">Routing & Assignment</h3>
+                    <p class="mt-1 text-sm text-gray-500">Controls how inbound conversations are auto-assigned to agents.</p>
+                    <div class="mt-4 grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="round_robin_cap_per_agent" class="block text-sm font-medium text-gray-700">
+                                Round-robin cap per agent
+                            </label>
+                            <input type="number"
+                                   name="round_robin_cap_per_agent"
+                                   id="round_robin_cap_per_agent"
+                                   min="0"
+                                   max="1000"
+                                   value="{{ old('round_robin_cap_per_agent', $settings['round_robin_cap_per_agent'] ?? 5) }}"
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                            <p class="mt-1 text-xs text-gray-500">
+                                Maximum active conversations auto-assigned to each agent. "Active" = inbound message
+                                within the last 24 hours. Set to 0 to disable auto-assignment entirely (conversations
+                                stay unassigned for managers to assign manually). Default 5.
+                            </p>
+                            @error('round_robin_cap_per_agent')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+                </div>
+
                 {{-- App Settings --}}
                 <div class="rounded-xl bg-white p-6 shadow-sm">
                     <h3 class="text-lg font-medium text-gray-900">Application</h3>
