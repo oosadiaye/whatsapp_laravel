@@ -43,6 +43,16 @@ class User extends Authenticatable
         self::PRESENCE_AWAY,
     ];
 
+    public const MIC_PENDING = 'pending';
+    public const MIC_GRANTED = 'granted';
+    public const MIC_DENIED  = 'denied';
+
+    public const MIC_PERMISSION_STATES = [
+        self::MIC_PENDING,
+        self::MIC_GRANTED,
+        self::MIC_DENIED,
+    ];
+
     /**
      * @var list<string>
      */
