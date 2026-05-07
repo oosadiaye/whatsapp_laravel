@@ -190,6 +190,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::middleware('permission:users.view')->group(function () {
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
+
+        Route::get('/team', [\App\Http\Controllers\TeamLoadController::class, 'index'])
+            ->name('team.index');
     });
     Route::middleware('permission:users.edit')->group(function () {
         Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
