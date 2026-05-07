@@ -35,6 +35,7 @@ class InboundCallProcessor
 {
     public function __construct(
         private readonly WhatsAppCloudApiService $cloudApi,
+        private readonly RoundRobinAssigner $roundRobinAssigner,
     ) {
     }
 
@@ -201,9 +202,23 @@ class InboundCallProcessor
 
     private function findOrCreateConversation(WhatsAppInstance $instance, Contact $contact): Conversation
     {
-        return Conversation::firstOrCreate(
+        $conversation = Conversation::firstOrCreate(
             ['contact_id' => $contact->id, 'whatsapp_instance_id' => $instance->id],
             ['user_id' => $instance->user_id, 'unread_count' => 0],
         );
+
+        // Auto-assign to next available agent IF currently unassigned.
+        // Sticky-to-existing-assignment is implicit: already-assigned conversations
+        // skip this branch entirely. Mirrors InboundMessageProcessor — the same
+        // RoundRobinAssigner serves both processors so call+message rotations
+        // share the same fairness pointer (last_assigned_at on User).
+        if ($conversation->assigned_to_user_id === null) {
+            $agent = $this->roundRobinAssigner->next();
+            if ($agent !== null) {
+                $conversation->update(['assigned_to_user_id' => $agent->id]);
+            }
+        }
+
+        return $conversation;
     }
 }

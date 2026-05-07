@@ -7,9 +7,9 @@ namespace Tests\Feature\Webhooks;
 use App\Models\CallLog;
 use App\Models\Contact;
 use App\Models\Conversation;
+use App\Models\User;
 use App\Models\WhatsAppInstance;
 use App\Services\InboundCallProcessor;
-use App\Services\WhatsAppCloudApiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -22,9 +22,7 @@ class InboundCallProcessingTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->processor = new InboundCallProcessor(
-            $this->app->make(WhatsAppCloudApiService::class),
-        );
+        $this->processor = $this->app->make(InboundCallProcessor::class);
     }
 
     public function test_first_inbound_call_creates_contact_conversation_and_log(): void
@@ -246,5 +244,44 @@ class InboundCallProcessingTest extends TestCase
         // raw_event_log size should not grow with duplicate connects
         $this->assertSameSize($afterFirst, $afterReplays,
             'Duplicate connect events must not append to raw_event_log on every retry');
+    }
+
+    public function test_inbound_call_auto_assigns_to_available_agent(): void
+    {
+        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'is_active' => true,
+        ]);
+        $admin->assignRole(User::ROLE_ADMIN);
+
+        $agent = User::factory()->create([
+            'role' => User::ROLE_AGENT,
+            'is_active' => true,
+            'last_seen_at' => now(),  // online
+        ]);
+        $agent->assignRole(User::ROLE_AGENT);
+
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+        $processor = $this->app->make(\App\Services\InboundCallProcessor::class);
+
+        $processor->processCalls($instance, [
+            [
+                'id' => 'wacid.assign_test',
+                'from' => '2348011111111',
+                'to' => $instance->business_phone_number,
+                'event' => 'connect',
+                'timestamp' => '1714500000',
+            ],
+        ]);
+
+        $conversation = \App\Models\Conversation::first();
+        $this->assertNotNull($conversation);
+        $this->assertSame(
+            $agent->id,
+            $conversation->assigned_to_user_id,
+            'Inbound call must auto-assign to the only available agent'
+        );
     }
 }
