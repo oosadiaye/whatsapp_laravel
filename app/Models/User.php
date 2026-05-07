@@ -33,6 +33,16 @@ class User extends Authenticatable
     public const ROLE_MANAGER = 'manager';
     public const ROLE_AGENT = 'agent';
 
+    public const PRESENCE_AVAILABLE = 'available';
+    public const PRESENCE_BUSY = 'busy';
+    public const PRESENCE_AWAY = 'away';
+
+    public const PRESENCE_STATUSES = [
+        self::PRESENCE_AVAILABLE,
+        self::PRESENCE_BUSY,
+        self::PRESENCE_AWAY,
+    ];
+
     /**
      * @var list<string>
      */
@@ -63,6 +73,7 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'last_seen_at' => 'datetime',
             'last_assigned_at' => 'datetime',
+            'presence_status_set_at' => 'datetime',
         ];
     }
 
