@@ -226,6 +226,135 @@ class RoundRobinAssignerTest extends TestCase
         );
     }
 
+    public function test_excludes_agent_at_cap(): void
+    {
+        \App\Models\Setting::set('round_robin_cap_per_agent', '3');
+
+        $agent = $this->makeAgent(lastSeenAt: now());
+
+        // 3 active conversations (last_inbound_at within 24h) — at cap
+        for ($i = 0; $i < 3; $i++) {
+            $this->makeAssignedConversation($agent, lastInboundAt: now());
+        }
+
+        $assigner = new RoundRobinAssigner();
+
+        $this->assertNull(
+            $assigner->next(),
+            'Agent at cap (3 active conversations) must be excluded from rotation'
+        );
+    }
+
+    public function test_includes_agent_one_below_cap(): void
+    {
+        \App\Models\Setting::set('round_robin_cap_per_agent', '3');
+
+        $agent = $this->makeAgent(lastSeenAt: now());
+        // Only 2 active conversations — below cap
+        for ($i = 0; $i < 2; $i++) {
+            $this->makeAssignedConversation($agent, lastInboundAt: now());
+        }
+
+        $assigner = new RoundRobinAssigner();
+
+        $picked = $assigner->next();
+
+        $this->assertNotNull($picked);
+        $this->assertSame($agent->id, $picked->id);
+    }
+
+    public function test_does_not_count_conversations_with_old_inbound(): void
+    {
+        \App\Models\Setting::set('round_robin_cap_per_agent', '3');
+
+        $agent = $this->makeAgent(lastSeenAt: now());
+        // 5 conversations, all with last_inbound_at OUTSIDE the 24h window
+        for ($i = 0; $i < 5; $i++) {
+            $this->makeAssignedConversation($agent, lastInboundAt: now()->subHours(25));
+        }
+
+        $assigner = new RoundRobinAssigner();
+
+        $picked = $assigner->next();
+
+        $this->assertNotNull(
+            $picked,
+            'Conversations with last_inbound_at >24h ago must NOT count toward cap '
+            .'(those are dormant — agent is effectively free)'
+        );
+        $this->assertSame($agent->id, $picked->id);
+    }
+
+    public function test_uses_settings_value_for_cap(): void
+    {
+        \App\Models\Setting::set('round_robin_cap_per_agent', '2');
+
+        $a = $this->makeAgent(email: 'a@example.com', lastSeenAt: now());
+        $b = $this->makeAgent(email: 'b@example.com', lastSeenAt: now());
+
+        // Agent A: 2 active conversations — AT cap (excluded)
+        $this->makeAssignedConversation($a, lastInboundAt: now());
+        $this->makeAssignedConversation($a, lastInboundAt: now());
+
+        // Agent B: 1 active conversation — below cap (eligible)
+        $this->makeAssignedConversation($b, lastInboundAt: now());
+
+        $assigner = new RoundRobinAssigner();
+
+        $picked = $assigner->next();
+
+        $this->assertNotNull($picked);
+        $this->assertSame(
+            $b->id,
+            $picked->id,
+            'Cap of 2 from settings must filter A (count=2) and pick B (count=1)'
+        );
+    }
+
+    public function test_cap_of_zero_returns_null_for_all_online_agents(): void
+    {
+        // cap=0 means manual-only mode: no agent is ever auto-picked.
+        // (count) < 0 is always false, so all agents filtered out.
+        \App\Models\Setting::set('round_robin_cap_per_agent', '0');
+
+        $this->makeAgent(email: 'a@example.com', lastSeenAt: now());
+        $this->makeAgent(email: 'b@example.com', lastSeenAt: now());
+
+        $assigner = new RoundRobinAssigner();
+
+        $this->assertNull(
+            $assigner->next(),
+            'Cap=0 disables auto-assignment entirely (manual-only mode)'
+        );
+    }
+
+    private function makeAssignedConversation(
+        \App\Models\User $agent,
+        \Illuminate\Support\Carbon $lastInboundAt,
+    ): \App\Models\Conversation {
+        $owner = \App\Models\User::factory()->create([
+            'role' => \App\Models\User::ROLE_ADMIN,
+            'is_active' => true,
+        ]);
+        $instance = \App\Models\WhatsAppInstance::factory()->create([
+            'user_id' => $owner->id,
+        ]);
+        $contact = \App\Models\Contact::factory()->create([
+            'user_id' => $owner->id,
+            'phone' => '23480'.fake()->unique()->numerify('########'),
+        ]);
+
+        return \App\Models\Conversation::create([
+            'user_id' => $owner->id,
+            'contact_id' => $contact->id,
+            'whatsapp_instance_id' => $instance->id,
+            'assigned_to_user_id' => $agent->id,
+            'last_inbound_at' => $lastInboundAt,
+            'last_message_at' => $lastInboundAt,
+            'unread_count' => 0,
+        ]);
+    }
+
     private function makeAgent(
         ?string $email = null,
         ?\Illuminate\Support\Carbon $lastSeenAt = null,
