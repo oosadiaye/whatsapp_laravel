@@ -88,6 +88,15 @@ class RolesAndPermissionsSeeder extends Seeder
             // Settings
             'settings.view',
             'settings.edit',
+
+            // Team-load dashboard (Phase 15) — separate from users.* so
+            // managers can see team load without gaining user-CRUD access.
+            // Granted to super_admin (via "all"), admin (via diff-allow),
+            // and manager (via diff-allow — manager exclusion list does
+            // NOT contain 'team.view', so it's included by default).
+            // Explicitly NOT granted to agent (their syncPermissions is
+            // an allowlist; we don't add team.view there).
+            'team.view',
         ];
 
         foreach ($perms as $perm) {

@@ -190,7 +190,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::middleware('permission:users.view')->group(function () {
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    });
 
+    // Team-load dashboard (Phase 15) — separate permission from users.*
+    // so managers get team visibility without user-CRUD rights.
+    // See RolesAndPermissionsSeeder for the team.view → role grants.
+    Route::middleware('permission:team.view')->group(function () {
         Route::get('/team', [\App\Http\Controllers\TeamLoadController::class, 'index'])
             ->name('team.index');
     });
