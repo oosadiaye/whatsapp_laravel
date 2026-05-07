@@ -171,6 +171,15 @@
 
         </nav>
 
+        {{-- Presence toggle: agent-only --}}
+        @auth
+            @if(auth()->user()->role === \App\Models\User::ROLE_AGENT)
+                <div class="border-t border-gray-200 px-3 pt-3 flex-shrink-0">
+                    <livewire:presence-toggle />
+                </div>
+            @endif
+        @endauth
+
         {{-- User block at bottom --}}
         <div class="border-t border-gray-200 p-3 flex-shrink-0" x-data="{ menuOpen: false }">
             <button @click="menuOpen = !menuOpen"
