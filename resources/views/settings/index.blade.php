@@ -73,6 +73,45 @@
                     </div>
                 </div>
 
+                {{-- Voice Provider (Africa's Talking) --}}
+                <div class="rounded-xl bg-white p-6 shadow-sm">
+                    <h3 class="text-lg font-medium text-gray-900">Voice Provider (Africa's Talking)</h3>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Credentials for outbound + inbound voice calls. The virtual number is your
+                        outbound caller ID and also accepts inbound calls.
+                    </p>
+                    <div class="mt-4 grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Username</label>
+                            <input type="text" name="africastalking_username"
+                                   value="{{ old('africastalking_username', $settings['africastalking_username'] ?? '') }}"
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">API Key</label>
+                            <input type="password" name="africastalking_api_key"
+                                   placeholder="{{ ($settings['africastalking_api_key'] ?? null) ? '••••••••' : '' }}"
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                            <p class="mt-1 text-xs text-gray-500">Leave blank to keep existing key. New value will be encrypted at rest.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Virtual Number (E.164)</label>
+                            <input type="text" name="africastalking_virtual_number"
+                                   value="{{ old('africastalking_virtual_number', $settings['africastalking_virtual_number'] ?? '') }}"
+                                   placeholder="+234..."
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Rate per Minute (kobo)</label>
+                            <input type="number" name="africastalking_rate_per_minute_kobo"
+                                   value="{{ old('africastalking_rate_per_minute_kobo', $settings['africastalking_rate_per_minute_kobo'] ?? 600) }}"
+                                   min="0" max="100000"
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                            <p class="mt-1 text-xs text-gray-500">Per-minute cost estimate. Default ₦6 = 600 kobo. Used for cost tracking on /calls.</p>
+                        </div>
+                    </div>
+                </div>
+
                 {{-- App Settings --}}
                 <div class="rounded-xl bg-white p-6 shadow-sm">
                     <h3 class="text-lg font-medium text-gray-900">Application</h3>
