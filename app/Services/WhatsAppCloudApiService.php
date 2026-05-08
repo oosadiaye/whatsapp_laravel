@@ -214,6 +214,79 @@ class WhatsAppCloudApiService
     }
 
     /**
+     * Tell Meta we're engaging with an inbound call before the agent
+     * actually clicks Accept. Holds the call open and avoids the
+     * "audio clipping" Meta documents for back-to-back pre_accept+accept.
+     *
+     * Endpoint: POST /v20.0/{phone_number_id}/calls action=pre_accept
+     *
+     * Pre-accept is OPTIONAL — 4xx is logged as a warning but NOT thrown.
+     * The call still rings on the agent's dashboard and Accept still works
+     * without the no-clipping benefit.
+     *
+     * @param  string|null  $sdpAnswer  When non-null, included in the session.
+     *                                  Some Meta API versions require SDP at
+     *                                  pre_accept time; if so, callers will
+     *                                  pass the agent's SDP answer here.
+     */
+    public function preAcceptCall(WhatsAppInstance $instance, string $metaCallId, ?string $sdpAnswer = null): void
+    {
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'call_id' => $metaCallId,
+            'action' => 'pre_accept',
+        ];
+        if ($sdpAnswer !== null) {
+            $payload['session'] = ['sdp_type' => 'answer', 'sdp' => $sdpAnswer];
+        }
+
+        $response = $this->client($instance)->post(
+            $this->url("{$instance->phone_number_id}/calls"),
+            $payload,
+        );
+
+        if ($response->failed()) {
+            $this->logHttp('preAcceptCall', $instance, $response->status(), $response->body());
+            Log::warning('preAcceptCall failed; continuing without pre-accept benefit', [
+                'meta_call_id' => $metaCallId,
+                'status' => $response->status(),
+            ]);
+        }
+    }
+
+    /**
+     * Accept an inbound call, sending the agent's SDP answer to Meta.
+     * Meta then drives ICE/DTLS handshake; audio peer establishes
+     * browser↔Meta over WebRTC.
+     *
+     * Endpoint: POST /v20.0/{phone_number_id}/calls action=accept
+     *
+     * @throws WhatsAppApiException  on 4xx — without accept, no audio path.
+     */
+    public function acceptCall(WhatsAppInstance $instance, string $metaCallId, string $sdpAnswer): void
+    {
+        $response = $this->client($instance)->post(
+            $this->url("{$instance->phone_number_id}/calls"),
+            [
+                'messaging_product' => 'whatsapp',
+                'call_id' => $metaCallId,
+                'action' => 'accept',
+                'session' => [
+                    'sdp_type' => 'answer',
+                    'sdp' => $sdpAnswer,
+                ],
+            ],
+        );
+
+        if ($response->failed()) {
+            $this->logHttp('acceptCall', $instance, $response->status(), $response->body());
+            throw new WhatsAppApiException(
+                "acceptCall failed: {$response->status()} - {$response->body()}"
+            );
+        }
+    }
+
+    /**
      * Mark an inbound message as read so the user sees the blue ticks.
      */
     public function markAsRead(WhatsAppInstance $instance, string $messageId): array
