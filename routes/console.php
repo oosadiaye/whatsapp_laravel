@@ -14,3 +14,9 @@ Schedule::command('campaigns:dispatch-scheduled')->everyMinute();
 // surface in the UI without manual re-syncing. Cheap call, well below
 // Meta's 200/hour rate limit per WABA.
 Schedule::command('templates:sync-status')->everyFifteenMinutes()->withoutOverlapping();
+
+// Phase 17: Cleanup stale calls stuck in ringing/connected (webhook never arrived).
+// Threshold 30 minutes. Fires everyMinute so stuck banners clear within ~1 min.
+Schedule::command('calls:cleanup-stale')
+    ->everyMinute()
+    ->withoutOverlapping();
