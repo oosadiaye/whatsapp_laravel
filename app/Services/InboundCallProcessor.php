@@ -107,6 +107,27 @@ class InboundCallProcessor
                 'to_phone' => $toPhone,
                 'started_at' => $this->eventTime($event),
             ]);
+
+            // Phase 17: persist SDP offer + tell Meta we're engaging + push to agent's browser.
+            $sdpOffer = $event['session']['sdp'] ?? null;
+            if ($sdpOffer !== null) {
+                $callLog->update(['sdp_offer' => $sdpOffer]);
+            }
+
+            // Pre-accept is fire-and-forget — failure does NOT abort the call.
+            // preAcceptCall handles its own 4xx logging.
+            try {
+                $this->cloudApi->preAcceptCall($instance, $callLog->meta_call_id);
+            } catch (Throwable $e) {
+                Log::warning('preAcceptCall threw unexpectedly; continuing', ['error' => $e->getMessage()]);
+            }
+
+            // Push the SDP offer + call metadata to the assigned agent's browser
+            // over Reverb. Only fire if there's an assignee — unassigned calls
+            // (round-robin returned null) have no target channel.
+            if ($conversation->assigned_to_user_id !== null) {
+                \App\Events\Calling\CallRinging::dispatch($callLog);
+            }
         }
 
         // Apply the state transition for the new event

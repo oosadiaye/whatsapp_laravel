@@ -53,6 +53,7 @@ class CallLog extends Model
         'failure_reason',
         'placed_by_user_id',
         'raw_event_log',
+        'sdp_offer',
     ];
 
     protected function casts(): array

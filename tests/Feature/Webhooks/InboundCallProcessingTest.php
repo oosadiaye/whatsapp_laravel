@@ -284,4 +284,112 @@ class InboundCallProcessingTest extends TestCase
             'Inbound call must auto-assign to the only available agent'
         );
     }
+
+    public function test_inbound_call_persists_sdp_offer_from_webhook(): void
+    {
+        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'is_active' => true,
+        ]);
+        $admin->assignRole(User::ROLE_ADMIN);
+        $agent = User::factory()->create([
+            'role' => User::ROLE_AGENT,
+            'is_active' => true,
+            'last_seen_at' => now(),
+        ]);
+        $agent->assignRole(User::ROLE_AGENT);
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([], 200)]);
+
+        $processor = $this->app->make(\App\Services\InboundCallProcessor::class);
+        $processor->processCalls($instance, [
+            [
+                'id' => 'wacid.sdp_test',
+                'from' => '2348011111111',
+                'to' => $instance->business_phone_number,
+                'event' => 'connect',
+                'timestamp' => '1714500000',
+                'session' => [
+                    'sdp' => "v=0\r\no=- 123 IN IP4 0.0.0.0\r\n",
+                    'sdp_type' => 'offer',
+                ],
+            ],
+        ]);
+
+        $call = CallLog::where('meta_call_id', 'wacid.sdp_test')->first();
+        $this->assertNotNull($call);
+        $this->assertSame("v=0\r\no=- 123 IN IP4 0.0.0.0\r\n", $call->sdp_offer);
+    }
+
+    public function test_inbound_call_invokes_pre_accept_call(): void
+    {
+        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
+        $admin->assignRole(User::ROLE_ADMIN);
+        $agent = User::factory()->create(['role' => User::ROLE_AGENT, 'is_active' => true, 'last_seen_at' => now()]);
+        $agent->assignRole(User::ROLE_AGENT);
+        $instance = WhatsAppInstance::factory()->create([
+            'user_id' => $admin->id,
+            'phone_number_id' => '777',
+        ]);
+
+        \Illuminate\Support\Facades\Http::fake([
+            '*/777/calls' => \Illuminate\Support\Facades\Http::response([], 200),
+        ]);
+
+        $processor = $this->app->make(\App\Services\InboundCallProcessor::class);
+        $processor->processCalls($instance, [
+            [
+                'id' => 'wacid.preaccept',
+                'from' => '2348011111111',
+                'to' => $instance->business_phone_number,
+                'event' => 'connect',
+                'timestamp' => '1714500000',
+                'session' => ['sdp' => 'sdp-blob', 'sdp_type' => 'offer'],
+            ],
+        ]);
+
+        \Illuminate\Support\Facades\Http::assertSent(function ($request) {
+            $body = $request->data();
+            return str_contains($request->url(), '777/calls')
+                && ($body['action'] ?? null) === 'pre_accept'
+                && ($body['call_id'] ?? null) === 'wacid.preaccept';
+        });
+    }
+
+    public function test_inbound_call_dispatches_call_ringing_event(): void
+    {
+        \Illuminate\Support\Facades\Event::fake([\App\Events\Calling\CallRinging::class]);
+
+        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
+        $admin->assignRole(User::ROLE_ADMIN);
+        $agent = User::factory()->create(['role' => User::ROLE_AGENT, 'is_active' => true, 'last_seen_at' => now()]);
+        $agent->assignRole(User::ROLE_AGENT);
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([], 200)]);
+
+        $processor = $this->app->make(\App\Services\InboundCallProcessor::class);
+        $processor->processCalls($instance, [
+            [
+                'id' => 'wacid.event_test',
+                'from' => '2348011111111',
+                'to' => $instance->business_phone_number,
+                'event' => 'connect',
+                'timestamp' => '1714500000',
+                'session' => ['sdp' => 'sdp', 'sdp_type' => 'offer'],
+            ],
+        ]);
+
+        \Illuminate\Support\Facades\Event::assertDispatched(\App\Events\Calling\CallRinging::class, function ($event) use ($agent) {
+            return $event->call->meta_call_id === 'wacid.event_test'
+                && $event->call->conversation->assigned_to_user_id === $agent->id;
+        });
+    }
 }
