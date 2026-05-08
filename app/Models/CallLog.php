@@ -61,6 +61,7 @@ class CallLog extends Model
         'ended_at',
         'duration_seconds',
         'cost_estimate_kobo',
+        'quality_metrics',
         'failure_reason',
         'placed_by_user_id',
         'raw_event_log',
@@ -77,6 +78,7 @@ class CallLog extends Model
             'ended_at' => 'datetime',
             'duration_seconds' => 'integer',
             'raw_event_log' => 'array',
+            'quality_metrics' => 'array',
         ];
     }
 
