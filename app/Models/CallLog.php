@@ -37,12 +37,22 @@ class CallLog extends Model
         self::STATUS_FAILED,
     ];
 
+    public const PROVIDER_META_WHATSAPP = 'meta_whatsapp';
+    public const PROVIDER_AFRICAS_TALKING = 'africas_talking';
+
+    public const PROVIDERS = [
+        self::PROVIDER_META_WHATSAPP,
+        self::PROVIDER_AFRICAS_TALKING,
+    ];
+
     protected $fillable = [
         'conversation_id',
         'contact_id',
         'whatsapp_instance_id',
         'direction',
+        'provider',
         'meta_call_id',
+        'provider_session_id',
         'status',
         'from_phone',
         'to_phone',
@@ -50,6 +60,7 @@ class CallLog extends Model
         'connected_at',
         'ended_at',
         'duration_seconds',
+        'cost_estimate_kobo',
         'failure_reason',
         'placed_by_user_id',
         'raw_event_log',
