@@ -12,6 +12,7 @@
 // unmute/disconnect) so swapping is local to this file.
 
 import AfricasTalking from 'africastalking-client';
+import { startStatsCollection, postQuality } from './call-stats-collector';
 
 // ─── Outbound (agent dialing customer) ─────────────────────────────────
 window.outgoingCall = (data) => ({
@@ -21,6 +22,7 @@ window.outgoingCall = (data) => ({
     durationTimer: null,
     muted: false,
     atClient: null,
+    _statsHandle: null,
 
     async init() {
         try {
@@ -28,6 +30,12 @@ window.outgoingCall = (data) => ({
             this.atClient.on('connected', () => {
                 this.state = 'connected';
                 this.startDurationTimer();
+                // Phase 19a: try to start stats collection. AT SDK peer access is
+                // version-specific; if undefined, telemetry stays null for AT calls.
+                const peer = this.atClient?.peer ?? this.atClient?.getPeerConnection?.();
+                if (peer) {
+                    this._statsHandle = startStatsCollection(peer);
+                }
             });
             this.atClient.on('disconnected', () => this.teardown('remote'));
             this.atClient.on('error', (err) => {
@@ -76,6 +84,9 @@ window.outgoingCall = (data) => ({
         clearInterval(this.durationTimer);
         try { this.atClient?.disconnect(); } catch (_) {}
         this.atClient = null;
+        const aggregate = this._statsHandle?.stop();
+        postQuality(this.callId, this.csrf, aggregate);
+        this._statsHandle = null;
         this.state = reason === 'error' ? 'failed' : 'ended';
     },
 
@@ -100,6 +111,7 @@ window.incomingAtCall = (data) => ({
     muted: false,
     atClient: null,
     echoChannel: null,
+    _statsHandle: null,
 
     init() {
         if (window.userId && window.Echo) {
@@ -128,6 +140,12 @@ window.incomingAtCall = (data) => ({
             this.atClient.on('connected', () => {
                 this.state = 'connected';
                 this.startDurationTimer();
+                // Phase 19a: try to start stats collection. AT SDK peer access is
+                // version-specific; if undefined, telemetry stays null for AT calls.
+                const peer = this.atClient?.peer ?? this.atClient?.getPeerConnection?.();
+                if (peer) {
+                    this._statsHandle = startStatsCollection(peer);
+                }
             });
             this.atClient.on('disconnected', () => this.teardown('remote'));
             this.atClient.on('error', () => this.teardown('error'));
@@ -159,6 +177,9 @@ window.incomingAtCall = (data) => ({
     teardown(reason) {
         clearInterval(this.durationTimer);
         try { this.atClient?.disconnect(); } catch (_) {}
+        const aggregate = this._statsHandle?.stop();
+        postQuality(this.callId, this.csrf, aggregate);
+        this._statsHandle = null;
         this.state = 'terminated';
     },
 

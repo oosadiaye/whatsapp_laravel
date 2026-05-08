@@ -15,6 +15,8 @@
  * On Decline / Hangup / claimed_elsewhere / customer disconnect (via
  * CallTerminated Echo event): teardown — peer.close(), stop mic tracks.
  */
+import { startStatsCollection, postQuality } from './call-stats-collector';
+
 window.incomingCall = (data) => ({
     ...data,
     state: 'ringing',
@@ -24,6 +26,7 @@ window.incomingCall = (data) => ({
     durationSeconds: 0,
     durationTimer: null,
     echoChannel: null,
+    _statsHandle: null,
 
     init() {
         if (window.userId && window.Echo) {
@@ -93,6 +96,7 @@ window.incomingCall = (data) => ({
 
             this.state = 'connected';
             this.startDurationTimer();
+            this._statsHandle = startStatsCollection(this.peer);
         } catch (error) {
             if (error && error.name === 'NotAllowedError') {
                 this.state = 'mic_denied';
@@ -131,6 +135,9 @@ window.incomingCall = (data) => ({
         this.micStream = null;
         clearInterval(this.durationTimer);
         this.durationTimer = null;
+        const aggregate = this._statsHandle?.stop();
+        postQuality(this.callId, this.csrf, aggregate);
+        this._statsHandle = null;
     },
 
     teardown(reason) {
