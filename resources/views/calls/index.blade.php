@@ -55,6 +55,7 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Contact') }}</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Status') }}</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Duration') }}</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Quality') }}</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Instance') }}</th>
                         <th></th>
                     </tr>
@@ -98,6 +99,39 @@
                             <td class="px-6 py-3 text-sm text-gray-700 whitespace-nowrap">
                                 {{ $call->duration_seconds ? gmdate('i:s', $call->duration_seconds) : '—' }}
                             </td>
+                            <td class="px-6 py-3 text-sm">
+                                @if($call->quality_metrics)
+                                    @php
+                                        $mos = $call->quality_metrics['mos'] ?? null;
+                                        $colorClasses = match (true) {
+                                            $mos === null => 'bg-gray-100 text-gray-600',
+                                            $mos >= 4.0 => 'bg-emerald-100 text-emerald-800',
+                                            $mos >= 3.0 => 'bg-amber-100 text-amber-800',
+                                            default => 'bg-red-100 text-red-800',
+                                        };
+                                        $label = match (true) {
+                                            $mos === null => '—',
+                                            $mos >= 4.0 => 'Excellent',
+                                            $mos >= 3.0 => 'Fair',
+                                            default => 'Poor',
+                                        };
+                                        $tooltip = sprintf(
+                                            'MOS %s · jitter %sms · loss %s%% · RTT %sms · ICE %s',
+                                            $mos ?? '?',
+                                            $call->quality_metrics['avg_jitter_ms'] ?? '?',
+                                            $call->quality_metrics['avg_packet_loss_pct'] ?? '?',
+                                            $call->quality_metrics['avg_rtt_ms'] ?? '?',
+                                            $call->quality_metrics['ice_candidate_type'] ?? '?',
+                                        );
+                                    @endphp
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {{ $colorClasses }}"
+                                          title="{{ $tooltip }}">
+                                        {{ $label }} {{ $mos !== null ? number_format($mos, 1) : '' }}
+                                    </span>
+                                @else
+                                    <span class="text-xs text-gray-400">—</span>
+                                @endif
+                            </td>
                             <td class="px-6 py-3 text-sm text-gray-600">
                                 {{ $call->whatsappInstance->display_name ?? $call->whatsappInstance->instance_name }}
                             </td>
@@ -110,7 +144,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="text-center py-12 text-gray-400">
+                            <td colspan="8" class="text-center py-12 text-gray-400">
                                 <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
                                 </svg>
