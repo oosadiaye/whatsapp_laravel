@@ -24,6 +24,27 @@ rm -f public/hot
 echo "[3/11] Installing PHP deps..."
 composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
+# Smoke-test that Reverb's runtime deps are present. If a previous deploy
+# pulled a composer.lock referencing laravel/reverb but composer install was
+# skipped (manual git pull outside this script), the app cannot boot once
+# BROADCAST_CONNECTION=reverb is set in .env — every page 500s with
+# "Class Pusher\Pusher not found" because routes/channels.php resolves the
+# broadcaster during BootProviders, before any HTTP handling.
+#
+# Fail fast here with an actionable message, instead of letting the deploy
+# "succeed" and then having every page return 500.
+if grep -q "^BROADCAST_CONNECTION=reverb" .env 2>/dev/null; then
+  if ! php -r "require 'vendor/autoload.php'; exit(class_exists('Pusher\\Pusher') ? 0 : 1);" 2>/dev/null; then
+    echo "  ✗ FATAL: BROADCAST_CONNECTION=reverb but Pusher\\Pusher class missing."
+    echo "    composer install above should have pulled pusher/pusher-php-server"
+    echo "    (transitive dep of laravel/reverb). Try:"
+    echo "      composer install --no-interaction --prefer-dist --no-dev"
+    echo "    If that still fails, re-resolve the lockfile:"
+    echo "      composer update laravel/reverb pusher/pusher-php-server"
+    exit 1
+  fi
+fi
+
 echo "[4/11] Installing JS deps + building assets..."
 # `npm ci` is faster + reproducible (uses package-lock.json verbatim).
 # `--omit=dev` flag only skips devDependencies; build itself works fine because
