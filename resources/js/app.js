@@ -1,6 +1,31 @@
 import './bootstrap';
+import Echo from 'laravel-echo';
+import Pusher from 'pusher-js';
 
 import Alpine from 'alpinejs';
+
+// Reverb / Echo bootstrap.
+//
+// Why Pusher.js even though we run Reverb: laravel-echo speaks the Pusher
+// wire protocol, and Reverb is wire-compatible with Pusher. The library
+// expects 'pusher' as the broadcaster name; the actual server is Reverb
+// listening on our own host. Same protocol, different server.
+window.Pusher = Pusher;
+window.Echo = new Echo({
+    broadcaster: 'reverb',
+    key: import.meta.env.VITE_REVERB_APP_KEY,
+    wsHost: import.meta.env.VITE_REVERB_HOST,
+    wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
+    wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
+    forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
+    enabledTransports: ['ws', 'wss'],
+});
+
+// userId is read from a meta tag in app.blade.php for channel-naming
+// convenience. Naturally absent for guests, so guest pages never try
+// to subscribe to a private channel.
+const userIdMeta = document.querySelector('meta[name="user-id"]');
+window.userId = userIdMeta ? parseInt(userIdMeta.getAttribute('content'), 10) : null;
 
 // Idempotent Alpine bootstrap.
 //
