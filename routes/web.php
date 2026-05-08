@@ -158,6 +158,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::middleware('permission:conversations.reply')->group(function () {
         Route::post('/conversations/{conversation}/reply', [ConversationController::class, 'reply'])->name('conversations.reply');
+
+        // Phase 17 — inbound call browser answer
+        Route::post('/calls/{call}/claim', [\App\Http\Controllers\CallController::class, 'claim'])->name('calls.claim');
+        Route::post('/calls/{call}/answer', [\App\Http\Controllers\CallController::class, 'answer'])->name('calls.answer');
+        Route::post('/calls/{call}/decline', [\App\Http\Controllers\CallController::class, 'decline'])->name('calls.decline');
+        Route::post('/calls/{call}/hangup', [\App\Http\Controllers\CallController::class, 'hangup'])->name('calls.hangup');
     });
     Route::middleware('permission:conversations.reply')->group(function () {
         Route::post('/contacts/{contact}/chat', [ContactController::class, 'startChat'])

@@ -54,6 +54,8 @@ class CallLog extends Model
         'placed_by_user_id',
         'raw_event_log',
         'sdp_offer',
+        'sdp_answer',
+        'answered_by_session_id',
     ];
 
     protected function casts(): array
