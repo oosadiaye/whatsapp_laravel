@@ -42,15 +42,19 @@ class OutboundCallTest extends TestCase
         $this->assertSame($admin->id, $call->placed_by_user_id);
     }
 
-    public function test_agent_without_call_permission_gets_403(): void
+    public function test_user_without_call_permission_gets_403(): void
     {
-        $agent = $this->makeUser('agent');
+        // Phase 19a deploy update: the agent/manager/admin/super_admin roles
+        // ALL grant conversations.call by default. To validate the policy gate
+        // works when the permission is absent, use a user with NO role at all.
+        $user = User::factory()->create(['is_active' => true]);
+
         $admin = $this->makeUser('admin', 'admin@example.com');
-        $conv = Conversation::factory()->assignedTo($agent)->create(['user_id' => $admin->id]);
+        $conv = Conversation::factory()->assignedTo($user)->create(['user_id' => $admin->id]);
 
         Http::fake();
 
-        $this->actingAs($agent)
+        $this->actingAs($user)
             ->post(route('conversations.initiateCall', $conv))
             ->assertForbidden();
 

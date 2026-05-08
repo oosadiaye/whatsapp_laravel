@@ -104,14 +104,67 @@ else
 fi
 
 # Reverb daemon (Phase 17 — inbound call browser answer).
-# First-time setup requires running:
-#   sudo bash deploy/install-reverb.sh
-# Subsequent deploys: supervisor auto-restarts the daemon if config
-# changes. No action needed in this script for steady-state deploys.
+# Active validation: check that .env has the required keys, and that
+# the supervisor program is registered + running. Each missing piece
+# emits an actionable WARNING (not an error — the deploy still completes,
+# but the operator knows what's broken).
 echo ""
-echo "[10.5/11] Reverb daemon — first-time setup: 'sudo bash deploy/install-reverb.sh'"
-echo "          Steady-state: supervisor manages auto-restart."
+echo "[10.5/11] Reverb daemon validation..."
 
+REVERB_FAILURES=0
+
+if ! grep -q "^BROADCAST_CONNECTION=reverb" .env 2>/dev/null; then
+  echo "  ⚠ WARNING: .env BROADCAST_CONNECTION is not 'reverb'."
+  echo "    All CallRinging/CallTerminated/CallClaimed events will go to"
+  echo "    the log file instead of pushing to browsers. Phase 17/18 UI"
+  echo "    will be partially broken (in-flight banners won't appear)."
+  echo "    Fix: edit .env, set BROADCAST_CONNECTION=reverb, add the"
+  echo "    REVERB_* + VITE_REVERB_* keys (see .env.example), then re-run."
+  REVERB_FAILURES=$((REVERB_FAILURES + 1))
+fi
+
+if ! grep -q "^REVERB_APP_KEY=" .env 2>/dev/null || \
+   ! grep -qE "^REVERB_APP_KEY=.+" .env 2>/dev/null; then
+  echo "  ⚠ WARNING: REVERB_APP_KEY missing or empty in .env."
+  echo "    Generate with: php -r \"echo bin2hex(random_bytes(16));\""
+  REVERB_FAILURES=$((REVERB_FAILURES + 1))
+fi
+
+# Check if supervisorctl knows about blastiq-reverb
+if command -v supervisorctl >/dev/null 2>&1; then
+  if sudo supervisorctl status blastiq-reverb >/dev/null 2>&1; then
+    REVERB_STATE=$(sudo supervisorctl status blastiq-reverb 2>/dev/null | awk '{print $2}')
+    if [ "$REVERB_STATE" = "RUNNING" ]; then
+      echo "  ✓ blastiq-reverb supervisor program: RUNNING"
+    else
+      echo "  ⚠ WARNING: blastiq-reverb registered but state is '$REVERB_STATE'."
+      echo "    Try: sudo supervisorctl restart blastiq-reverb"
+      REVERB_FAILURES=$((REVERB_FAILURES + 1))
+    fi
+  else
+    echo "  ⚠ WARNING: blastiq-reverb supervisor program NOT installed."
+    echo "    First-time setup: sudo bash deploy/install-reverb.sh"
+    REVERB_FAILURES=$((REVERB_FAILURES + 1))
+  fi
+fi
+
+# Check that nginx has the WebSocket /app proxy block (heuristic — looks
+# for proxy_pass to 127.0.0.1:8080 across enabled site configs).
+if [ -d /etc/nginx/sites-enabled ]; then
+  if ! grep -rq "proxy_pass http://127.0.0.1:8080" /etc/nginx/sites-enabled 2>/dev/null; then
+    echo "  ⚠ WARNING: nginx /app WebSocket proxy block not detected."
+    echo "    Browser Echo will fail to connect to wss://\$HOST/app."
+    echo "    Add the block from deploy/nginx.conf to your active config,"
+    echo "    then: sudo nginx -t && sudo systemctl reload nginx"
+    REVERB_FAILURES=$((REVERB_FAILURES + 1))
+  fi
+fi
+
+if [ "$REVERB_FAILURES" -eq 0 ]; then
+  echo "  All Reverb checks passed."
+fi
+
+echo ""
 echo "[11/11] Final verification..."
 echo "  - Manifest exists?           $([ -f public/build/manifest.json ] && echo YES || echo NO)"
 echo "  - public/hot gone?           $([ ! -f public/hot ] && echo YES || echo NO)"
@@ -120,5 +173,21 @@ echo "  - Roles seeded?              ${ROLES:-0} roles in DB (expect 4)"
 ADMIN_ROLE=$(php artisan tinker --execute="echo App\\Models\\User::where('email','admin@blastiq.com')->first()?->roles->pluck('name')->implode(',');" 2>/dev/null | tail -1)
 echo "  - admin@blastiq.com role:    ${ADMIN_ROLE:-MISSING}"
 
+# Phase 18 — Africa's Talking voice provider config presence
+AT_USER=$(php artisan tinker --execute="echo App\\Models\\Setting::get('africastalking_username') ?: 'MISSING';" 2>/dev/null | tail -1)
+AT_VIRT=$(php artisan tinker --execute="echo App\\Models\\Setting::get('africastalking_virtual_number') ?: 'MISSING';" 2>/dev/null | tail -1)
+AT_KEY=$(php artisan tinker --execute="echo App\\Models\\Setting::getEncrypted('africastalking_api_key') ? 'SET' : 'MISSING';" 2>/dev/null | tail -1)
+echo "  - AT username:               ${AT_USER}"
+echo "  - AT virtual number:         ${AT_VIRT}"
+echo "  - AT API key:                ${AT_KEY}"
+if [ "$AT_USER" = "MISSING" ] || [ "$AT_VIRT" = "MISSING" ] || [ "$AT_KEY" = "MISSING" ]; then
+  echo "  ⚠ Configure missing AT credentials at: https://blast.dpluxtech.com/settings"
+fi
+
 echo ""
 echo "=== Deploy complete ==="
+if [ "$REVERB_FAILURES" -gt 0 ]; then
+  echo ""
+  echo "⚠ NOTE: Reverb validation found $REVERB_FAILURES issue(s) above."
+  echo "  Phase 17/18 real-time call UI will be degraded until resolved."
+fi

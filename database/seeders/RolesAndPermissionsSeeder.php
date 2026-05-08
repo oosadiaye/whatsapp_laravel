@@ -149,6 +149,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'campaigns.view',
             'conversations.view_assigned',
             'conversations.reply',
+            // Phase 18 — agents need this to use the Call button on the
+            // conversation page (server-side gate on the /calls/outbound
+            // route). Without it agents see the button but POSTing returns 403.
+            'conversations.call',
         ]);
     }
 

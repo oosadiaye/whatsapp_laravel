@@ -241,11 +241,15 @@ class ContactInitiationTest extends TestCase
 
     public function test_startCall_requires_conversations_call_permission(): void
     {
-        $agent = $this->makeUser('agent');
-        WhatsAppInstance::factory()->create(['user_id' => $agent->id, 'status' => 'CONNECTED']);
-        $contact = Contact::factory()->create(['user_id' => $agent->id]);
+        // Phase 19a deploy update: agent/manager/admin/super_admin roles ALL
+        // grant conversations.call by default. Use a role-less user so the
+        // policy gate test is independent of role default permissions.
+        $user = User::factory()->create(['is_active' => true]);
 
-        $this->actingAs($agent)
+        WhatsAppInstance::factory()->create(['user_id' => $user->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAs($user)
             ->post(route('contacts.startCall', $contact))
             ->assertForbidden();
     }
