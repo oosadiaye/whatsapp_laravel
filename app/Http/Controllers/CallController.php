@@ -5,12 +5,19 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Events\Calling\CallClaimed;
+use App\Events\Calling\CallRinging;
 use App\Events\Calling\CallTerminated;
+use App\Exceptions\ConfigurationException;
+use App\Exceptions\VoiceProviderException;
 use App\Models\CallLog;
+use App\Models\Conversation;
+use App\Models\Setting;
+use App\Services\AfricasTalkingVoiceService;
 use App\Services\WhatsAppCloudApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 /**
@@ -59,6 +66,76 @@ class CallController extends Controller
             'currentDirection' => $request->query('direction'),
             'currentStatus' => $request->query('status'),
         ]);
+    }
+
+    /**
+     * Place an outbound PSTN call via Africa's Talking.
+     */
+    public function placeOutbound(Request $request, AfricasTalkingVoiceService $service): JsonResponse
+    {
+        $request->validate([
+            'conversation_id' => 'required|exists:conversations,id',
+        ]);
+
+        $conversation = Conversation::findOrFail($request->input('conversation_id'));
+
+        // Authorize: must have conversations.call AND own/be-assigned-to the conversation.
+        $user = $request->user();
+        if (!$user->can('conversations.call')) {
+            return response()->json(['error' => 'forbidden'], 403);
+        }
+        $hasAccess = ($user->can('conversations.view_all') && $conversation->user_id === $user->id)
+            || ($user->can('conversations.view_assigned') && $conversation->assigned_to_user_id === $user->id);
+        if (!$hasAccess) {
+            return response()->json(['error' => 'forbidden'], 403);
+        }
+
+        try {
+            $sessionId = $service->placeCall($conversation->contact->phone);
+
+            $call = CallLog::create([
+                'conversation_id' => $conversation->id,
+                'contact_id' => $conversation->contact_id,
+                'whatsapp_instance_id' => $conversation->whatsapp_instance_id,
+                'direction' => 'outbound',
+                'provider' => CallLog::PROVIDER_AFRICAS_TALKING,
+                'provider_session_id' => $sessionId,
+                'status' => CallLog::STATUS_INITIATED,
+                'started_at' => now(),
+                'placed_by_user_id' => auth()->id(),
+                'from_phone' => Setting::get('africastalking_virtual_number'),
+                'to_phone' => $conversation->contact->phone,
+            ]);
+
+            CallRinging::dispatch($call);
+
+            return response()->json([
+                'call_id' => $call->id,
+                'session_id' => $sessionId,
+            ]);
+        } catch (VoiceProviderException | ConfigurationException $e) {
+            // Audit row for the failure.
+            CallLog::create([
+                'conversation_id' => $conversation->id,
+                'contact_id' => $conversation->contact_id,
+                'whatsapp_instance_id' => $conversation->whatsapp_instance_id,
+                'direction' => 'outbound',
+                'provider' => CallLog::PROVIDER_AFRICAS_TALKING,
+                'status' => CallLog::STATUS_FAILED,
+                'failure_reason' => $e->getMessage(),
+                'placed_by_user_id' => auth()->id(),
+                'from_phone' => Setting::get('africastalking_virtual_number') ?? '',
+                'to_phone' => $conversation->contact->phone,
+            ]);
+
+            return response()->json([
+                'error' => 'Voice service unavailable. Try again in a moment, or contact via WhatsApp message.',
+            ], 503);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'Invalid phone number for this contact.',
+            ], 422);
+        }
     }
 
     /**
@@ -116,11 +193,24 @@ class CallController extends Controller
     }
 
     /**
-     * Decline an inbound ringing call. Maps to Meta terminate.
+     * Decline an inbound ringing call. Routes to the right provider terminate endpoint.
      */
-    public function decline(CallLog $call, WhatsAppCloudApiService $service): JsonResponse
+    public function decline(CallLog $call): JsonResponse
     {
-        $service->endCall($call->whatsappInstance, $call->meta_call_id);
+        if ($call->provider === CallLog::PROVIDER_AFRICAS_TALKING) {
+            try {
+                app(AfricasTalkingVoiceService::class)->endCall($call->provider_session_id);
+            } catch (\Throwable $e) {
+                Log::warning('AT endCall failed during decline', [
+                    'call_id' => $call->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        } else {
+            app(WhatsAppCloudApiService::class)
+                ->endCall($call->whatsappInstance, $call->meta_call_id);
+        }
+
         $call->update([
             'status' => CallLog::STATUS_DECLINED,
             'ended_at' => now(),
@@ -131,11 +221,24 @@ class CallController extends Controller
     }
 
     /**
-     * Hang up an in-progress call from the agent side.
+     * Hang up an in-progress call from the agent side. Routes to the right provider terminate endpoint.
      */
-    public function hangup(CallLog $call, WhatsAppCloudApiService $service): JsonResponse
+    public function hangup(CallLog $call): JsonResponse
     {
-        $service->endCall($call->whatsappInstance, $call->meta_call_id);
+        if ($call->provider === CallLog::PROVIDER_AFRICAS_TALKING) {
+            try {
+                app(AfricasTalkingVoiceService::class)->endCall($call->provider_session_id);
+            } catch (\Throwable $e) {
+                Log::warning('AT endCall failed during hangup', [
+                    'call_id' => $call->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        } else {
+            app(WhatsAppCloudApiService::class)
+                ->endCall($call->whatsappInstance, $call->meta_call_id);
+        }
+
         $call->update([
             'status' => CallLog::STATUS_ENDED,
             'ended_at' => now(),

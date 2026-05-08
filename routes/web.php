@@ -179,6 +179,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:conversations.call')->group(function () {
         Route::post('/conversations/{conversation}/call', [ConversationController::class, 'initiateCall'])->name('conversations.initiateCall');
         Route::post('/conversations/{conversation}/calls/{call}/end', [ConversationController::class, 'endCall'])->name('conversations.endCall');
+
+        // Phase 18 — outbound PSTN dial via Africa's Talking
+        Route::post('/calls/outbound', [\App\Http\Controllers\CallController::class, 'placeOutbound'])
+            ->name('calls.outbound');
     });
     Route::middleware('permission:conversations.call')->group(function () {
         Route::post('/contacts/{contact}/call', [ContactController::class, 'startCall'])
