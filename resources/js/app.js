@@ -46,6 +46,8 @@ if (typeof window.Alpine === 'undefined') {
     Alpine.start();
 }
 
+import './calls';
+
 /**
  * RealtimePulse Alpine factory.
  *
