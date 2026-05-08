@@ -1,4 +1,12 @@
-<div x-data="incomingCall({
+@php($_isAt = $call->provider === \App\Models\CallLog::PROVIDER_AFRICAS_TALKING)
+<div @if($_isAt) x-data="incomingAtCall({
+    callId: {{ $call->id }},
+    sessionId: @js(session()->getId()),
+    contactName: @js($call->contact->display_name ?? 'Unknown'),
+    phone: @js($call->from_phone),
+    atToken: @js($atToken),
+    csrf: @js(csrf_token()),
+})" @else x-data="incomingCall({
     callId: {{ $call->id }},
     metaCallId: @js($call->meta_call_id),
     sdpOffer: @js($call->sdp_offer),
@@ -6,7 +14,12 @@
     contactName: @js($call->contact->display_name ?? 'Unknown'),
     phone: @js($call->from_phone),
     csrf: @js(csrf_token()),
-})" x-init="init()">
+})" @endif x-init="init()">
+    {{-- Phase 18: same template DOM serves both providers; the x-data
+         factory above differs (raw WebRTC vs AT SDK) but the state
+         names (ringing/connecting/connected/mic_denied/claimed_elsewhere)
+         and method names (acceptCall/declineCall/toggleMute/hangup) are
+         intentionally identical so the markup below works for both. --}}
     <template x-if="state === 'ringing'">
         <div class="flex items-center gap-3 bg-emerald-600 text-white px-4 py-3 shadow-md">
             <span class="text-xl animate-pulse" aria-hidden="true">📞</span>

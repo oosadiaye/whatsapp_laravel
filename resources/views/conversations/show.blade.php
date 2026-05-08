@@ -102,16 +102,17 @@
                                         <dd class="text-gray-900">{{ $conversation->whatsappInstance->display_name ?? $conversation->whatsappInstance->instance_name }}</dd>
                                     </div>
                                 </dl>
-                                <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-4">
-                                    This will count toward your daily Meta call quota. Audio will ring on the device where this WhatsApp Business number is registered.
+                                <p class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2 mb-4">
+                                    This will dial the customer's phone number directly via Africa's Talking. Standard per-minute rates apply. Audio plays in your browser.
                                 </p>
                                 <div class="flex justify-end gap-2">
                                     <button type="button" @click="open = false"
                                             class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
                                         Cancel
                                     </button>
-                                    <form method="POST" action="{{ route('conversations.initiateCall', $conversation) }}">
+                                    <form method="POST" action="{{ route('calls.outbound') }}">
                                         @csrf
+                                        <input type="hidden" name="conversation_id" value="{{ $conversation->id }}">
                                         <button type="submit"
                                                 class="inline-flex items-center px-5 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700">
                                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
