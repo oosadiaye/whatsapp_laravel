@@ -103,6 +103,15 @@ else
   php artisan queue:restart
 fi
 
+# Reverb daemon (Phase 17 — inbound call browser answer).
+# First-time setup requires running:
+#   sudo bash deploy/install-reverb.sh
+# Subsequent deploys: supervisor auto-restarts the daemon if config
+# changes. No action needed in this script for steady-state deploys.
+echo ""
+echo "[10.5/11] Reverb daemon — first-time setup: 'sudo bash deploy/install-reverb.sh'"
+echo "          Steady-state: supervisor manages auto-restart."
+
 echo "[11/11] Final verification..."
 echo "  - Manifest exists?           $([ -f public/build/manifest.json ] && echo YES || echo NO)"
 echo "  - public/hot gone?           $([ ! -f public/hot ] && echo YES || echo NO)"
