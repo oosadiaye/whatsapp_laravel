@@ -78,7 +78,7 @@ class CallLog extends Model
             'ended_at' => 'datetime',
             'duration_seconds' => 'integer',
             'raw_event_log' => 'array',
-            'quality_metrics' => 'array',
+            'quality_metrics' => \App\Casts\PreservedJsonArray::class,
         ];
     }
 

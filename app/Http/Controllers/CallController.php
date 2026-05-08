@@ -13,6 +13,7 @@ use App\Models\CallLog;
 use App\Models\Conversation;
 use App\Models\Setting;
 use App\Services\AfricasTalkingVoiceService;
+use App\Services\CallQualityCalculator;
 use App\Services\WhatsAppCloudApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -246,5 +247,50 @@ class CallController extends Controller
         CallTerminated::dispatch($call, 'agent_hung_up');
 
         return response()->json(['ended' => true]);
+    }
+
+    public function quality(
+        Request $request,
+        CallLog $call,
+        CallQualityCalculator $calculator,
+    ): JsonResponse {
+        // Ownership check: only the agent who placed/answered may post.
+        // Outbound: matches placed_by_user_id.
+        // Inbound: matches the parent conversation's assigned_to_user_id.
+        $userId = auth()->id();
+        $owns = $call->placed_by_user_id === $userId
+            || $call->conversation?->assigned_to_user_id === $userId;
+        if (! $owns) {
+            return response()->json(['error' => 'forbidden'], 403);
+        }
+
+        $validated = $request->validate([
+            'avg_jitter_ms' => ['required', 'numeric', 'min:0', 'max:10000'],
+            'avg_packet_loss_pct' => ['required', 'numeric', 'min:0', 'max:100'],
+            'avg_rtt_ms' => ['required', 'integer', 'min:0', 'max:60000'],
+            'samples_captured' => ['required', 'integer', 'min:0', 'max:1000'],
+            'ice_candidate_type' => ['required', 'string', 'in:host,srflx,relay,prflx,unknown'],
+            'codec' => ['required', 'string', 'max:32'],
+        ]);
+
+        $mos = $calculator->computeMos(
+            (float) $validated['avg_packet_loss_pct'],
+            (float) $validated['avg_jitter_ms'],
+            (int) $validated['avg_rtt_ms'],
+        );
+
+        $metrics = [
+            'avg_jitter_ms' => (float) $validated['avg_jitter_ms'],
+            'avg_packet_loss_pct' => (float) $validated['avg_packet_loss_pct'],
+            'avg_rtt_ms' => (int) $validated['avg_rtt_ms'],
+            'samples_captured' => (int) $validated['samples_captured'],
+            'ice_candidate_type' => $validated['ice_candidate_type'],
+            'codec' => $validated['codec'],
+            'mos' => $mos,
+        ];
+
+        $call->update(['quality_metrics' => $metrics]);
+
+        return response()->json(['mos' => $mos]);
     }
 }
