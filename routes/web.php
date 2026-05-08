@@ -24,6 +24,10 @@ Route::get('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'ver
 Route::post('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'handle'])
     ->name('webhook.cloud.handle');
 
+// Africa's Talking voice webhook (Phase 18). CSRF excluded in bootstrap/app.php.
+Route::post('/webhooks/africastalking/voice', [\App\Http\Controllers\AfricasTalkingWebhookController::class, 'handle'])
+    ->name('webhook.africastalking.voice');
+
 // Authenticated routes — role/permission gates per resource group
 Route::middleware(['auth', 'verified'])->group(function () {
 

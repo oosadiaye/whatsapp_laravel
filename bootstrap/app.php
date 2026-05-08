@@ -28,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // so route model binding still resolves {instance}.
         $middleware->validateCsrfTokens(except: [
             'webhooks/whatsapp/*',
+            'webhooks/africastalking/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
