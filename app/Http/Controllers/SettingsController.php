@@ -11,9 +11,29 @@ use Illuminate\View\View;
 
 class SettingsController extends Controller
 {
+    /**
+     * Keys whose database value is ciphertext (encrypted via Crypt::encryptString
+     * in {@see update()}). The form NEVER pre-fills these — it just shows a
+     * "•••" placeholder when one is present — so the view only needs a boolean
+     * "is set" signal, not the value. We replace the ciphertext with the literal
+     * string '1' here so $settings[$key] stays truthy in the blade without ever
+     * leaking ciphertext into the rendered HTML.
+     *
+     * If a future field reads $settings[<encrypted_key>] expecting plaintext,
+     * it will get '1' instead — failing loudly instead of silently echoing
+     * encrypted bytes into the page source.
+     */
+    private const ENCRYPTED_SETTING_KEYS = ['africastalking_api_key'];
+
     public function index(): View
     {
         $settings = Setting::all()->pluck('value', 'key');
+
+        foreach (self::ENCRYPTED_SETTING_KEYS as $encryptedKey) {
+            if ($settings->has($encryptedKey)) {
+                $settings[$encryptedKey] = '1';
+            }
+        }
 
         return view('settings.index', ['settings' => $settings]);
     }
