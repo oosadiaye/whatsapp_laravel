@@ -37,3 +37,4 @@ Thumbs.db
 # Local archive — never commit
 /laravel whatsapp_new.zip
 *.zip
+.claude/worktrees/
