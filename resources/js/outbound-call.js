@@ -114,12 +114,17 @@ window.incomingAtCall = (data) => ({
     _statsHandle: null,
 
     init() {
+        // Mirror calls.js incomingCall — start the looping ringtone while
+        // the banner is in 'ringing'. Centralized helper from app.js.
+        if (this.state === 'ringing') window.bqStartRingtone?.();
+
         if (window.userId && window.Echo) {
             this.echoChannel = window.Echo.private(`user.${window.userId}`);
             this.echoChannel.listen('.call.claimed', (event) => {
                 if (event.call_id === this.callId
                     && event.claimed_by_session_id !== this.sessionId) {
                     this.state = 'claimed_elsewhere';
+                    window.bqStopRingtone?.();
                 }
             });
             this.echoChannel.listen('.call.terminated', (event) => {
@@ -129,6 +134,7 @@ window.incomingAtCall = (data) => ({
     },
 
     async acceptCall() {
+        window.bqStopRingtone?.();
         try {
             const claimRes = await this.post(`/calls/${this.callId}/claim`, { session_id: this.sessionId });
             if (claimRes.status === 409) { this.state = 'claimed_elsewhere'; return; }
@@ -153,13 +159,25 @@ window.incomingAtCall = (data) => ({
             await this.atClient.accept(this.sessionId);
         } catch (error) {
             console.error('incomingAtCall accept failed', error);
-            this.state = 'mic_denied';
-            await this.post(`/calls/${this.callId}/decline`, {});
-            this.teardown('error');
+            // Same retryable-vs-fatal split as calls.js incomingCall.
+            // AT SDK throws DOMException with name 'NotAllowedError' for
+            // mic permission denial; anything else is treated as a
+            // transient connect failure that the user can retry.
+            this.state = (error && error.name === 'NotAllowedError')
+                ? 'mic_denied'
+                : 'connect_failed';
+            // Do NOT auto-decline — see calls.js comment for rationale.
         }
     },
 
+    /** Retry accept after mic_denied / connect_failed. */
+    async retryAccept() {
+        this.state = 'ringing';
+        await this.acceptCall();
+    },
+
     async declineCall() {
+        window.bqStopRingtone?.();
         await this.post(`/calls/${this.callId}/decline`, {});
         this.teardown('agent');
     },
@@ -175,6 +193,7 @@ window.incomingAtCall = (data) => ({
     },
 
     teardown(reason) {
+        window.bqStopRingtone?.();
         clearInterval(this.durationTimer);
         try { this.atClient?.disconnect(); } catch (_) {}
         const aggregate = this._statsHandle?.stop();

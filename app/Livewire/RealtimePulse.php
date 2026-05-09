@@ -33,6 +33,7 @@ class RealtimePulse extends Component
             return view('livewire.realtime-pulse', [
                 'inflightCalls' => [],
                 'unreadMessages' => 0,
+                'missedCallsCount' => 0,
             ]);
         }
 
@@ -114,9 +115,33 @@ class RealtimePulse extends Component
         }
         $unreadMessages = (int) $messageQuery->sum('unread_count');
 
+        // Missed-calls count for the sidebar "Calls" badge. Scoped identically
+        // to the in-flight banner data above (view_all → account; view_assigned
+        // → assigned-to-me + unassigned pool) so an agent's badge reflects calls
+        // they could/should have answered. Window: last 24h — the call history
+        // page is the source of truth for older missed calls; the badge is for
+        // "did I miss something today?"
+        $missedQuery = CallLog::query()
+            ->where('direction', CallLog::DIRECTION_INBOUND)
+            ->where('status', CallLog::STATUS_MISSED)
+            ->where('created_at', '>=', now()->subDay());
+
+        if ($user->can('conversations.view_all')) {
+            $missedQuery->whereHas('conversation', fn ($q) => $q->where('user_id', $user->id));
+        } else {
+            $missedQuery->whereHas('conversation', fn ($q) =>
+                $q->where(fn ($qq) =>
+                    $qq->where('assigned_to_user_id', $user->id)
+                       ->orWhereNull('assigned_to_user_id')
+                )
+            );
+        }
+        $missedCallsCount = (int) $missedQuery->count();
+
         return view('livewire.realtime-pulse', [
             'inflightCalls' => $inflightCalls,
             'unreadMessages' => $unreadMessages,
+            'missedCallsCount' => $missedCallsCount,
         ]);
     }
 }

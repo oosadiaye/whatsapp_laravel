@@ -64,9 +64,37 @@
     </template>
 
     <template x-if="state === 'mic_denied'">
-        <div class="bg-red-100 border-b border-red-300 text-red-900 px-4 py-3 text-sm">
-            Microphone access required to answer calls. Click the lock icon in your browser address bar
-            to grant permission, then reload the page.
+        <div class="flex items-center gap-3 bg-red-100 border-b border-red-300 text-red-900 px-4 py-3 text-sm">
+            <span class="flex-1">
+                Microphone access is required to answer.
+                Click <strong>Try again</strong> and choose
+                <strong>Allow</strong> in the browser prompt
+                (or click the camera/microphone icon in the address bar to unblock).
+            </span>
+            <button @click="retryAccept()"
+                    class="bg-emerald-600 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-emerald-700">
+                Try again
+            </button>
+            <button @click="declineCall()"
+                    class="bg-white text-red-700 border border-red-300 px-4 py-1.5 rounded text-sm font-medium hover:bg-red-50">
+                Decline
+            </button>
+        </div>
+    </template>
+
+    <template x-if="state === 'connect_failed'">
+        <div class="flex items-center gap-3 bg-amber-100 border-b border-amber-300 text-amber-900 px-4 py-3 text-sm">
+            <span class="flex-1">
+                Couldn't connect the call. The customer may still be ringing — try again, or decline to release.
+            </span>
+            <button @click="retryAccept()"
+                    class="bg-emerald-600 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-emerald-700">
+                Try again
+            </button>
+            <button @click="declineCall()"
+                    class="bg-white text-amber-700 border border-amber-300 px-4 py-1.5 rounded text-sm font-medium hover:bg-amber-50">
+                Decline
+            </button>
         </div>
     </template>
 

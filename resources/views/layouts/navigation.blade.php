@@ -60,7 +60,15 @@
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.068.157 2.148.279 3.238.364.466.037.893.281 1.153.671L12 21l2.652-3.978c.26-.39.687-.634 1.153-.67 1.09-.086 2.17-.208 3.238-.365 1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/>
                             </svg>
-                            {{ __('Inbox') }}
+                            <span class="flex-1">{{ __('Inbox') }}</span>
+                            {{-- Reads data-unread from #bq-realtime-data, refreshed every 3s
+                                 by the RealtimePulse Livewire component. window.bqBadgeWatcher
+                                 is defined in resources/js/app.js and rebinds after each
+                                 livewire morph so the count stays live without a page nav. --}}
+                            <span x-data="bqBadgeWatcher('unread')" x-show="count > 0"
+                                  x-text="count > 99 ? '99+' : count"
+                                  class="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-emerald-600 text-white text-xs font-semibold"
+                                  style="display:none"></span>
                         </x-sidebar-link>
                     @endcanany
 
@@ -69,7 +77,14 @@
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
                             </svg>
-                            {{ __('Calls') }}
+                            <span class="flex-1">{{ __('Calls') }}</span>
+                            {{-- Missed-calls badge, last 24h — red to distinguish from
+                                 the green inbox badge so a glance tells which kind of
+                                 attention is owed. --}}
+                            <span x-data="bqBadgeWatcher('missed-calls')" x-show="count > 0"
+                                  x-text="count > 99 ? '99+' : count"
+                                  class="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-xs font-semibold"
+                                  style="display:none"></span>
                         </x-sidebar-link>
                     @endcanany
                 </div>

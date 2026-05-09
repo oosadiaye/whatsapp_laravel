@@ -29,12 +29,18 @@ window.incomingCall = (data) => ({
     _statsHandle: null,
 
     init() {
+        // Start the looping ringtone for as long as the banner is in 'ringing'.
+        // bqStartRingtone is idempotent — safe to call again if the user
+        // navigates within the SPA-ish Livewire layer.
+        if (this.state === 'ringing') window.bqStartRingtone?.();
+
         if (window.userId && window.Echo) {
             this.echoChannel = window.Echo.private(`user.${window.userId}`);
             this.echoChannel.listen('.call.claimed', (event) => {
                 if (event.call_id === this.callId
                     && event.claimed_by_session_id !== this.sessionId) {
                     this.state = 'claimed_elsewhere';
+                    window.bqStopRingtone?.();
                 }
             });
             this.echoChannel.listen('.call.terminated', (event) => {
@@ -46,6 +52,9 @@ window.incomingCall = (data) => ({
     },
 
     async acceptCall() {
+        // Stop ringing the moment the user commits to answering — even if
+        // the claim fails, the customer is no longer waiting on us to ring.
+        window.bqStopRingtone?.();
         try {
             // 1. Atomic claim — first POST wins.
             const claimRes = await this.post(`/calls/${this.callId}/claim`, { session_id: this.sessionId });
@@ -60,6 +69,8 @@ window.incomingCall = (data) => ({
             this.state = 'connecting';
 
             // 2. Microphone permission (just-in-time per Q3).
+            //    NotAllowedError → mic_denied (retryable).
+            //    Anything else → connect_failed (also offers retry).
             this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
             // 3. Peer connection. STUN is enough for most networks; TURN is Phase 19.
@@ -98,18 +109,35 @@ window.incomingCall = (data) => ({
             this.startDurationTimer();
             this._statsHandle = startStatsCollection(this.peer);
         } catch (error) {
-            if (error && error.name === 'NotAllowedError') {
-                this.state = 'mic_denied';
-            } else {
-                this.state = 'mic_denied'; // generic failure surface
-            }
-            // Tell server to release the call so customer doesn't hear silence.
-            await this.post(`/calls/${this.callId}/decline`, {});
+            // Distinguish "user clicked Block in the permission prompt" from
+            // any other failure (network, claim 5xx, SDP error). The first is
+            // retryable via a fresh getUserMedia call (browsers re-prompt
+            // unless the user permanently blocked the origin in site
+            // settings). The second usually means the call is gone — surface
+            // a different message and let the user retry the whole flow.
+            this.state = (error && error.name === 'NotAllowedError')
+                ? 'mic_denied'
+                : 'connect_failed';
             this.cleanupMedia();
+            // IMPORTANT: do NOT auto-decline here — that releases the call on
+            // the server and a Retry click would 409. The customer keeps
+            // ringing for a few more seconds while the agent retries; if the
+            // retry also fails, the user can click Decline explicitly.
         }
     },
 
+    /**
+     * Retry the accept flow after a mic_denied / connect_failed error.
+     * Safe to call multiple times — acceptCall() is idempotent on the
+     * client side (the server's claim endpoint is the atomic guard).
+     */
+    async retryAccept() {
+        this.state = 'ringing';
+        await this.acceptCall();
+    },
+
     async declineCall() {
+        window.bqStopRingtone?.();
         await this.post(`/calls/${this.callId}/decline`, {});
         this.teardown('agent_declined');
     },
@@ -141,6 +169,7 @@ window.incomingCall = (data) => ({
     },
 
     teardown(reason) {
+        window.bqStopRingtone?.();
         this.cleanupMedia();
         this.state = 'terminated';
     },

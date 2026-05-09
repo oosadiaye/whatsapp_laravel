@@ -61,6 +61,65 @@ import './outbound-call';
  * State is per-tab — multiple tabs each track their own "what was last seen"
  * counter. (BroadcastChannel-based dedup is a future enhancement.)
  */
+/**
+ * Tiny Alpine factory consumed by the sidebar badges in
+ * resources/views/layouts/navigation.blade.php. Reads a single dataset attribute
+ * off `#bq-realtime-data` (rendered by the RealtimePulse Livewire component
+ * every 3s) and re-renders the badge count whenever Livewire morphs the DOM.
+ *
+ * Usage in blade: <span x-data="bqBadgeWatcher('unread')" x-text="count">
+ *
+ * The `kind` argument is the suffix of the data attribute, e.g. 'unread' →
+ * data-unread, 'missed-calls' → data-missed-calls.
+ */
+window.bqBadgeWatcher = (kind) => ({
+    count: 0,
+    init() {
+        this.refresh();
+        // Re-read the count after every Livewire DOM morph (every 3s when
+        // RealtimePulse polls). morph.updated fires AFTER the new attribute
+        // is in the DOM, so we always read fresh values.
+        if (window.Livewire) {
+            window.Livewire.hook('morph.updated', () => this.refresh());
+        }
+    },
+    refresh() {
+        const el = document.getElementById('bq-realtime-data');
+        if (!el) { this.count = 0; return; }
+        const raw = el.dataset[this.toCamel(kind)];
+        const n = parseInt(raw || '0', 10);
+        this.count = Number.isFinite(n) && n > 0 ? n : 0;
+    },
+    toCamel(s) { return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase()); },
+});
+
+/**
+ * Continuous-ringtone controller, owned by the Alpine factory of an active
+ * IncomingCall component (resources/views/livewire/incoming-call.blade.php).
+ * Plays #bq-ringtone (loop attribute set in the realtime-pulse blade) for as
+ * long as the call is in 'ringing' state, then silences it.
+ *
+ * Why this lives next to realtimePulse rather than inside calls.js: both
+ * incomingCall (Meta WebRTC) and incomingAtCall (Africa's Talking SDK)
+ * factories need identical ring/silence behavior. Centralizing here avoids
+ * forking the logic into each provider-specific file.
+ */
+window.bqStartRingtone = () => {
+    const el = document.getElementById('bq-ringtone');
+    if (!el) return;
+    // Reset to the start in case a previous call left the playhead mid-track.
+    try { el.currentTime = 0; } catch (_) {}
+    // Best-effort. If autoplay is blocked because no user gesture yet, the
+    // promise rejects and we silently fall back — the visual banner is the
+    // primary alert; ringtone is a bonus.
+    el.play().catch(() => {});
+};
+window.bqStopRingtone = () => {
+    const el = document.getElementById('bq-ringtone');
+    if (!el) return;
+    try { el.pause(); el.currentTime = 0; } catch (_) {}
+};
+
 window.realtimePulse = () => ({
     seenCallIds: [],
     lastUnread: 0,

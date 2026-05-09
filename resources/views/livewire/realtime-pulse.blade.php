@@ -43,5 +43,6 @@
     <span id="bq-realtime-data"
           data-calls="{{ json_encode($inflightCalls) }}"
           data-unread="{{ $unreadMessages }}"
+          data-missed-calls="{{ $missedCallsCount }}"
           aria-hidden="true"></span>
 </div>
