@@ -83,18 +83,27 @@
     </template>
 
     <template x-if="state === 'connect_failed'">
-        <div class="flex items-center gap-3 bg-amber-100 border-b border-amber-300 text-amber-900 px-4 py-3 text-sm">
-            <span class="flex-1">
-                Couldn't connect the call. The customer may still be ringing — try again, or decline to release.
-            </span>
-            <button @click="retryAccept()"
-                    class="bg-emerald-600 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-emerald-700">
-                Try again
-            </button>
-            <button @click="declineCall()"
-                    class="bg-white text-amber-700 border border-amber-300 px-4 py-1.5 rounded text-sm font-medium hover:bg-amber-50">
-                Decline
-            </button>
+        <div class="bg-amber-100 border-b border-amber-300 text-amber-900 px-4 py-3 text-sm">
+            <div class="flex items-center gap-3">
+                <span class="flex-1">
+                    Couldn't connect the call. The customer may still be ringing —
+                    try again, or decline to release.
+                </span>
+                <button @click="retryAccept()"
+                        class="bg-emerald-600 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-emerald-700">
+                    Try again
+                </button>
+                <button @click="declineCall()"
+                        class="bg-white text-amber-700 border border-amber-300 px-4 py-1.5 rounded text-sm font-medium hover:bg-amber-50">
+                    Decline
+                </button>
+            </div>
+            {{-- Diagnostic detail. Stays muted (small + monospace) so it
+                 doesn't dominate the UI, but is visible without DevTools.
+                 The acceptCall() catch tags every failure with a phase
+                 prefix like [claim] / [mic] / [peer] / [sdp] / [answer] —
+                 see resources/js/calls.js. --}}
+            <p class="mt-1.5 text-xs font-mono text-amber-800/70 break-all" x-show="errorMessage" x-text="errorMessage"></p>
         </div>
     </template>
 

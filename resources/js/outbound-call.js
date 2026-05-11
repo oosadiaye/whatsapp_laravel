@@ -112,6 +112,7 @@ window.incomingAtCall = (data) => ({
     atClient: null,
     echoChannel: null,
     _statsHandle: null,
+    errorMessage: '',
 
     init() {
         // Mirror calls.js incomingCall — start the looping ringtone while
@@ -135,13 +136,28 @@ window.incomingAtCall = (data) => ({
 
     async acceptCall() {
         window.bqStopRingtone?.();
+        this.errorMessage = '';
+        let phase = 'claim';
         try {
             const claimRes = await this.post(`/calls/${this.callId}/claim`, { session_id: this.sessionId });
             if (claimRes.status === 409) { this.state = 'claimed_elsewhere'; return; }
-            if (!claimRes.ok) throw new Error(`Claim failed: ${claimRes.status}`);
+            if (!claimRes.ok) {
+                let body = null;
+                try { body = await claimRes.json(); } catch (_) {}
+                throw new Error(`Claim ${claimRes.status}: ${body?.error ?? 'see server log'}`);
+            }
 
             this.state = 'connecting';
 
+            phase = 'at-sdk-init';
+            if (typeof AfricasTalking === 'undefined' || !AfricasTalking?.Voice) {
+                throw new Error('Africa\'s Talking JS SDK not loaded — check that the SDK script tag is present and that ad/script blockers are not blocking voice-sdk.africastalking.com.');
+            }
+            if (!this.atToken) {
+                throw new Error('Missing atToken — server did not generate a client token. Check storage/logs/laravel.log for ConfigurationException.');
+            }
+
+            phase = 'at-client-construct';
             this.atClient = new AfricasTalking.Voice({ token: this.atToken });
             this.atClient.on('connected', () => {
                 this.state = 'connected';
@@ -154,24 +170,34 @@ window.incomingAtCall = (data) => ({
                 }
             });
             this.atClient.on('disconnected', () => this.teardown('remote'));
-            this.atClient.on('error', () => this.teardown('error'));
+            // Surface SDK-emitted errors instead of silently teardowning —
+            // previously a network blip from AT would just end the call
+            // with no message visible to the operator.
+            this.atClient.on('error', (sdkError) => {
+                console.error('[BlastIQ AT SDK error event]', sdkError);
+                this.errorMessage = `AT SDK: ${sdkError?.message ?? sdkError ?? 'unknown'}`;
+                this.state = 'connect_failed';
+            });
 
+            phase = 'at-accept';
             await this.atClient.accept(this.sessionId);
         } catch (error) {
-            console.error('incomingAtCall accept failed', error);
-            // Same retryable-vs-fatal split as calls.js incomingCall.
-            // AT SDK throws DOMException with name 'NotAllowedError' for
-            // mic permission denial; anything else is treated as a
-            // transient connect failure that the user can retry.
-            this.state = (error && error.name === 'NotAllowedError')
-                ? 'mic_denied'
-                : 'connect_failed';
+            const msg = error?.message ?? String(error);
+            console.error(`[BlastIQ incomingAtCall] phase=${phase} failed:`, error);
+            if (error && error.name === 'NotAllowedError') {
+                this.state = 'mic_denied';
+                this.errorMessage = '';
+            } else {
+                this.state = 'connect_failed';
+                this.errorMessage = `[${phase}] ${msg}`;
+            }
             // Do NOT auto-decline — see calls.js comment for rationale.
         }
     },
 
     /** Retry accept after mic_denied / connect_failed. */
     async retryAccept() {
+        this.errorMessage = '';
         this.state = 'ringing';
         await this.acceptCall();
     },
