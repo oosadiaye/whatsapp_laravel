@@ -94,31 +94,181 @@ window.bqBadgeWatcher = (kind) => ({
 });
 
 /**
- * Continuous-ringtone controller, owned by the Alpine factory of an active
- * IncomingCall component (resources/views/livewire/incoming-call.blade.php).
- * Plays #bq-ringtone (loop attribute set in the realtime-pulse blade) for as
- * long as the call is in 'ringing' state, then silences it.
+ * Audio output for incoming calls (continuous ring) and new messages
+ * (one-shot ping). Owned by the Alpine factory of IncomingCall plus the
+ * RealtimePulse poll for messages.
+ *
+ * Defense-in-depth strategy:
+ *   1. Try the mp3 <audio> element first (real telephone-bell timbre if
+ *      it loads). Silent fail if the file 404s or autoplay is blocked.
+ *   2. Synthesize a two-tone telephone-ring pattern via Web Audio API.
+ *      This needs the AudioContext to be resumed by a user gesture
+ *      (handled below in bqAudioState), but doesn't depend on any asset
+ *      file or codec support.
+ *   3. Expose bqAudioState as a reactive object so a UI badge can show
+ *      when audio is locked and let the user enable it.
+ *
+ * Why both: mp3 gives a more natural ringtone WHEN it works; Web Audio
+ * is the floor — guaranteed audible feedback on any modern browser as
+ * long as the AudioContext has been resumed once.
  *
  * Why this lives next to realtimePulse rather than inside calls.js: both
  * incomingCall (Meta WebRTC) and incomingAtCall (Africa's Talking SDK)
  * factories need identical ring/silence behavior. Centralizing here avoids
  * forking the logic into each provider-specific file.
  */
+window.bqAudioState = {
+    audioCtx: null,
+    ready: false,           // true once a user gesture has resumed the AudioContext
+    ringInterval: null,     // setInterval handle for the looped tone pattern
+    ringingNow: false,
+};
+
+/**
+ * Lazily build / resume the AudioContext. Returns the context if it's
+ * in 'running' state, or null if the browser still requires a gesture.
+ * Safe to call any number of times — the resume promise is fire-and-forget.
+ */
+function bqAcquireAudioCtx() {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+    if (!window.bqAudioState.audioCtx) {
+        try { window.bqAudioState.audioCtx = new Ctor(); } catch (_) { return null; }
+    }
+    const ctx = window.bqAudioState.audioCtx;
+    if (ctx.state === 'suspended') {
+        // Resume is async; we still try to use the (likely-running-by-then) ctx.
+        ctx.resume().then(() => { window.bqAudioState.ready = true; }).catch(() => {});
+    } else if (ctx.state === 'running') {
+        window.bqAudioState.ready = true;
+    }
+    return ctx;
+}
+
+/**
+ * Synthesize one telephone-ring cadence: ~800Hz tone for 1s with a soft
+ * envelope, followed by silence (caller picks the cadence via setInterval).
+ * Returns silently if the context isn't running yet.
+ */
+function bqPlayRingPulse() {
+    const ctx = bqAcquireAudioCtx();
+    if (!ctx || ctx.state !== 'running') return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    // Two oscillators stacked at slightly offset frequencies produce a
+    // warmer, more bell-like timbre than a pure sine. 800Hz is the
+    // dominant ring frequency on most landline phones.
+    osc.type = 'sine';
+    osc.frequency.value = 800;
+    // Envelope: quick attack, hold, then decay — avoids the harsh "click"
+    // of an instant start/stop on a pure oscillator.
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.25, now + 0.05);
+    gain.gain.setValueAtTime(0.25, now + 0.85);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 1.05);
+}
+
+/**
+ * Synthesize a single short "ping" for new-message notifications.
+ * Higher pitch + shorter than the ring so the two are distinguishable.
+ */
+window.bqPlayMessagePing = () => {
+    const ctx = bqAcquireAudioCtx();
+    if (!ctx || ctx.state !== 'running') return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1200, now);
+    osc.frequency.exponentialRampToValueAtTime(1600, now + 0.15);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.3);
+};
+
 window.bqStartRingtone = () => {
+    if (window.bqAudioState.ringingNow) return;  // idempotent — no double-ring
+    window.bqAudioState.ringingNow = true;
+
+    // 1. mp3 element — best-case "real" ringtone
     const el = document.getElementById('bq-ringtone');
-    if (!el) return;
-    // Reset to the start in case a previous call left the playhead mid-track.
-    try { el.currentTime = 0; } catch (_) {}
-    // Best-effort. If autoplay is blocked because no user gesture yet, the
-    // promise rejects and we silently fall back — the visual banner is the
-    // primary alert; ringtone is a bonus.
-    el.play().catch(() => {});
+    if (el) {
+        try { el.currentTime = 0; } catch (_) {}
+        el.play().catch(() => {});
+    }
+
+    // 2. Web Audio cadence — fires every 2s (standard US: 2s ring, 4s pause
+    //    would be more authentic but feels too sparse for a notification).
+    //    Play the first pulse immediately so there's no 2s lag.
+    bqPlayRingPulse();
+    window.bqAudioState.ringInterval = setInterval(bqPlayRingPulse, 2000);
 };
+
 window.bqStopRingtone = () => {
+    window.bqAudioState.ringingNow = false;
     const el = document.getElementById('bq-ringtone');
-    if (!el) return;
-    try { el.pause(); el.currentTime = 0; } catch (_) {}
+    if (el) {
+        try { el.pause(); el.currentTime = 0; } catch (_) {}
+    }
+    if (window.bqAudioState.ringInterval) {
+        clearInterval(window.bqAudioState.ringInterval);
+        window.bqAudioState.ringInterval = null;
+    }
 };
+
+/**
+ * Latch onto the first user gesture (click anywhere, any keypress) to
+ * resume the AudioContext. From that point on, ringtone + ping work
+ * without intervention. We listen on the capture phase so the gesture
+ * counts even if the click target's own handler stops propagation.
+ */
+(() => {
+    const unlock = () => {
+        bqAcquireAudioCtx();
+        // Also unlock the mp3 element with the muted-play trick — gives
+        // the option-1 codepath a chance to succeed too.
+        ['bq-ringtone', 'bq-message-ping'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.muted = true;
+            el.play().then(() => { el.pause(); el.muted = false; el.currentTime = 0; }).catch(() => {});
+        });
+    };
+    window.addEventListener('click', unlock, { once: true, capture: true });
+    window.addEventListener('keydown', unlock, { once: true, capture: true });
+    window.addEventListener('touchstart', unlock, { once: true, capture: true });
+})();
+
+/**
+ * Alpine factory for the "Enable sound" pill in the layout header.
+ * Polls window.bqAudioState.ready every 1s; the pill stays visible
+ * until the user has produced any gesture that resumed the AudioContext.
+ * Clicking the pill is itself a gesture, so the pill self-dismisses.
+ */
+window.bqSoundIndicator = () => ({
+    locked: true,
+    init() {
+        this.refresh();
+        this._timer = setInterval(() => this.refresh(), 1000);
+    },
+    refresh() {
+        const ctx = window.bqAudioState?.audioCtx;
+        this.locked = !ctx || ctx.state !== 'running';
+    },
+    enable() {
+        // The click event itself counts as the gesture that resumes the
+        // AudioContext. Acquire-then-refresh once to flip locked=false.
+        bqAcquireAudioCtx();
+        setTimeout(() => this.refresh(), 100);
+    },
+});
 
 window.realtimePulse = () => ({
     seenCallIds: [],
@@ -257,11 +407,15 @@ window.realtimePulse = () => ({
         if (currentUnread > this.lastUnread) {
             const delta = currentUnread - this.lastUnread;
 
+            // Try the mp3 ping first (best timbre when it loads), then ALWAYS
+            // fire the synthesized ping as a fallback. window.bqPlayMessagePing
+            // self-guards on AudioContext readiness — silent no-op if locked.
             const ping = document.getElementById('bq-message-ping');
             if (ping && this.audioUnlocked) {
                 ping.currentTime = 0;
                 ping.play().catch(() => {});
             }
+            window.bqPlayMessagePing?.();
 
             if (document.hidden
                 && 'Notification' in window

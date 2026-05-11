@@ -64,6 +64,24 @@
                         <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ config('app.name') }}</h2>
                     @endisset
                 </div>
+
+                {{-- Sound-status pill. Visible only while the AudioContext is
+                     suspended (no user gesture yet OR explicit OS/browser
+                     restriction). Clicking it counts as the gesture. Once
+                     audio is unlocked the pill auto-hides — bqSoundIndicator
+                     polls the context state every 1s. --}}
+                @auth
+                    <button x-data="bqSoundIndicator()" x-show="locked" x-cloak
+                            @click="enable()"
+                            class="hidden md:inline-flex items-center gap-1.5 rounded-full bg-amber-100 border border-amber-300 px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-200"
+                            title="Click to enable call ringtone and message notification sounds">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+                            <line x1="3" y1="3" x2="21" y2="21" stroke-linecap="round"/>
+                        </svg>
+                        Enable sound
+                    </button>
+                @endauth
             </header>
 
             {{-- Flash messages — pinned just below topbar --}}
