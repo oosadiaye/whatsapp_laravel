@@ -111,7 +111,21 @@ window.incomingCall = (data) => ({
 
             // 6-7. SDP exchange (offer from Meta, answer from us).
             phase = 'sdp';
-            await this.peer.setRemoteDescription({ type: 'offer', sdp: this.sdpOffer });
+            // Defensive normalisation of line endings. RFC 4566 mandates CRLF
+            // between SDP lines, but the offer can reach us with bare LF (Meta
+            // webhook → JSON serialise → DB → @js() blade emit → browser) and
+            // Chrome's parser rejects bare-LF SDP with an error like
+            //   "Failed to parse SessionDescription. <last-seen line> Invalid SDP line."
+            // The fix is idempotent: replace any LF-not-preceded-by-CR with
+            // CRLF, leaves existing CRLF alone. Also strip a leading BOM if
+            // any (rare, but cheap to guard against).
+            let sdp = this.sdpOffer.replace(/﻿/g, '');
+            sdp = sdp.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+            // Surface to console so DevTools shows the EXACT bytes Chrome
+            // sees on the next failure — invaluable when normalising still
+            // isn't enough (e.g. the SDP is structurally missing an m= line).
+            console.debug('[BlastIQ incoming-call] setRemoteDescription with SDP:\n' + sdp);
+            await this.peer.setRemoteDescription({ type: 'offer', sdp });
             const answer = await this.peer.createAnswer();
             await this.peer.setLocalDescription(answer);
 
