@@ -151,6 +151,22 @@ if ! grep -q "^REVERB_APP_KEY=" .env 2>/dev/null || \
   REVERB_FAILURES=$((REVERB_FAILURES + 1))
 fi
 
+# Catch unreplaced placeholder values. These strings appear in setup docs
+# (docs/REVERB-SETUP.md) and the JS Echo client would receive them verbatim,
+# causing every page's browser console to spam:
+#   WebSocket connection to '.../app/GENERATE_RANDOM_32_CHARS_HERE' failed
+# (or similar with REPLACE_ME / changeme). Better to abort the deploy
+# before the broken bundle ships.
+if grep -qE "^REVERB_APP_KEY=(GENERATE_RANDOM_32_CHARS_HERE|REPLACE_ME|changeme|TODO|YOUR_KEY_HERE)" .env 2>/dev/null; then
+  echo "  ✗ FATAL: REVERB_APP_KEY is still the placeholder text from the setup docs."
+  echo "    Production .env contains the literal example value instead of a"
+  echo "    real key. Generate one and replace it:"
+  echo "      php -r \"echo bin2hex(random_bytes(16));\""
+  echo "    Then edit .env, set REVERB_APP_KEY=<that value> AND the matching"
+  echo "    REVERB_APP_SECRET, then re-run this script."
+  exit 1
+fi
+
 # Check if supervisorctl knows about blastiq-reverb
 if command -v supervisorctl >/dev/null 2>&1; then
   if sudo supervisorctl status blastiq-reverb >/dev/null 2>&1; then
