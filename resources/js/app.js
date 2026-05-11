@@ -146,51 +146,72 @@ function bqAcquireAudioCtx() {
 }
 
 /**
- * Synthesize one telephone-ring cadence: ~800Hz tone for 1s with a soft
- * envelope, followed by silence (caller picks the cadence via setInterval).
- * Returns silently if the context isn't running yet.
+ * Synthesize a bell-like tone — additive synthesis with inharmonic partials.
+ *
+ * A real bell isn't a single sine wave — it's a fundamental frequency plus
+ * several overtones at non-integer multiples (slight inharmonicity is what
+ * makes a bell sound like a bell, not a flute). Each partial decays at its
+ * own rate: the fundamental sustains, higher partials fade fast and create
+ * the "strike" transient.
+ *
+ * @param {number} fundamental  Base pitch in Hz (e.g. 660 for call bell)
+ * @param {number} duration     Total ring time including decay tail (sec)
+ * @param {number} peakGain     Peak amplitude 0..1 (0.25 ≈ comfortable level)
+ * @param {number} startOffset  When to start, relative to ctx.currentTime
  */
-function bqPlayRingPulse() {
+function bqPlayBellTone(fundamental, duration, peakGain, startOffset = 0) {
     const ctx = bqAcquireAudioCtx();
     if (!ctx || ctx.state !== 'running') return;
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    // Two oscillators stacked at slightly offset frequencies produce a
-    // warmer, more bell-like timbre than a pure sine. 800Hz is the
-    // dominant ring frequency on most landline phones.
-    osc.type = 'sine';
-    osc.frequency.value = 800;
-    // Envelope: quick attack, hold, then decay — avoids the harsh "click"
-    // of an instant start/stop on a pure oscillator.
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.25, now + 0.05);
-    gain.gain.setValueAtTime(0.25, now + 0.85);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 1.05);
+    const startAt = ctx.currentTime + startOffset;
+    // Partial ratios chosen for a classic struck-bell timbre. Slightly
+    // inharmonic (2.76, 5.4) to break the "organ pipe" feel of pure
+    // integer harmonics.
+    const partials = [
+        { ratio: 1.0,  level: 1.0,  decay: 1.0 },   // fundamental, longest decay
+        { ratio: 2.0,  level: 0.6,  decay: 0.5 },   // octave
+        { ratio: 2.76, level: 0.5,  decay: 0.35 },  // inharmonic — gives the "strike"
+        { ratio: 4.0,  level: 0.3,  decay: 0.25 },  // second octave
+        { ratio: 5.4,  level: 0.25, decay: 0.15 },  // inharmonic high partial
+    ];
+    partials.forEach(p => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = fundamental * p.ratio;
+        // Fast attack (5ms — bell strike), exponential decay to silence.
+        // Each partial's decay scales with its `decay` factor of duration.
+        const partialDuration = duration * p.decay;
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.exponentialRampToValueAtTime(peakGain * p.level, startAt + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + partialDuration);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(startAt);
+        osc.stop(startAt + partialDuration + 0.05);
+    });
 }
 
 /**
- * Synthesize a single short "ping" for new-message notifications.
- * Higher pitch + shorter than the ring so the two are distinguishable.
+ * One "ring-ring" — two bell strikes ~400ms apart. This is the
+ * recognisable telephone cadence: a single tone every 2s sounds like
+ * a microwave; two-strikes-then-pause sounds like a phone.
+ */
+function bqPlayRingPulse() {
+    bqPlayBellTone(660, 1.5, 0.30, 0);
+    bqPlayBellTone(660, 1.5, 0.30, 0.4);
+}
+
+/**
+ * Message ping — a single bell chime with longer decay (2s) for a "ringing
+ * out" feel. Played 3 times ~700ms apart by bqPlayMessagePing so it
+ * literally rings for a while, not just a single ding.
+ *
+ * Higher pitch than the call ring (880Hz vs 660Hz) so the two are
+ * acoustically distinguishable without needing visual context.
  */
 window.bqPlayMessagePing = () => {
-    const ctx = bqAcquireAudioCtx();
-    if (!ctx || ctx.state !== 'running') return;
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(1200, now);
-    osc.frequency.exponentialRampToValueAtTime(1600, now + 0.15);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.3);
+    bqPlayBellTone(880, 2.0, 0.25, 0);
+    bqPlayBellTone(880, 2.0, 0.22, 0.7);
+    bqPlayBellTone(880, 2.0, 0.20, 1.4);
 };
 
 window.bqStartRingtone = () => {
@@ -204,11 +225,11 @@ window.bqStartRingtone = () => {
         el.play().catch(() => {});
     }
 
-    // 2. Web Audio cadence — fires every 2s (standard US: 2s ring, 4s pause
-    //    would be more authentic but feels too sparse for a notification).
-    //    Play the first pulse immediately so there's no 2s lag.
+    // 2. Web Audio bell cadence — two strikes (the "RING-RING"), then 3.5s
+    //    pause, then repeat. Total cycle ~5s, which matches the perception
+    //    most users have of "a telephone ringing in another room."
     bqPlayRingPulse();
-    window.bqAudioState.ringInterval = setInterval(bqPlayRingPulse, 2000);
+    window.bqAudioState.ringInterval = setInterval(bqPlayRingPulse, 5000);
 };
 
 window.bqStopRingtone = () => {
