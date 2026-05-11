@@ -97,6 +97,37 @@ class ContactImportTest extends TestCase
         Queue::assertPushed(ProcessContactImport::class, fn ($job) => $job->columnMap === []);
     }
 
+    public function test_admin_can_download_csv_template(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $response = $this->actingAs($admin)->get(route('contacts.importTemplate'));
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+        $response->assertHeader('Content-Disposition', 'attachment; filename=blastiq-contacts-template.csv');
+
+        $body = $response->streamedContent();
+        // BOM so Excel opens UTF-8 cleanly.
+        $this->assertSame("\xEF\xBB\xBF", substr($body, 0, 3));
+        // The four columns the import service consumes.
+        $this->assertStringContainsString('phone,name,custom_field_1,custom_field_2', $body);
+        // At least one realistic sample row so operators have a visual pattern.
+        $this->assertStringContainsString('+2348012345678', $body);
+    }
+
+    public function test_user_without_import_permission_cannot_download_template(): void
+    {
+        // Same gate as importForm/importProcess. A user without the
+        // contacts.import permission should not be able to probe the
+        // column spec via the template route either.
+        $noRole = User::factory()->create(['is_active' => true]);
+
+        $this->actingAs($noRole)
+            ->get(route('contacts.importTemplate'))
+            ->assertForbidden();
+    }
+
     public function test_csv_upload_requires_authentication(): void
     {
         // Without auth, the controller can't read auth()->id() for userId,

@@ -92,6 +92,27 @@
 
                             {{-- File upload zone --}}
                             <div x-show="inputMode === 'file'" x-transition>
+                                {{-- Template hint sits ABOVE the dropzone so operators
+                                     see it before they try to format their own file.
+                                     The download is GET (no CSRF needed), keeps the
+                                     'attachment' Content-Disposition so it always
+                                     prompts a save dialog rather than rendering inline. --}}
+                                <div class="mb-3 rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 flex items-center gap-3 text-sm">
+                                    <svg class="w-5 h-5 flex-shrink-0 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <span class="flex-1 text-blue-900">
+                                        {{ __('Not sure of the format? Download the sample CSV — fill it in, then upload it back.') }}
+                                    </span>
+                                    <a href="{{ route('contacts.importTemplate') }}"
+                                       class="inline-flex items-center gap-1.5 rounded-md bg-white border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                        </svg>
+                                        {{ __('Download template') }}
+                                    </a>
+                                </div>
+
                                 <div class="border-2 border-dashed rounded-lg p-8 text-center transition-colors duration-200"
                                      :class="dragOver ? 'border-[#25D366] bg-green-50' : 'border-gray-300 hover:border-gray-400'"
                                      @dragover.prevent="dragOver = true"

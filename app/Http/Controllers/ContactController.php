@@ -207,6 +207,47 @@ class ContactController extends Controller
         return view('contacts.import', ['groups' => $groups]);
     }
 
+    /**
+     * Stream a CSV template for contact upload. Columns mirror what
+     * ContactImportService can consume: phone (required), name, and two
+     * optional custom-field slots. The phone samples are in Nigerian
+     * format because that's the deployment target — the import service
+     * normalises any locally-valid form, but operators pasting their
+     * own list copy from the sample line they see.
+     *
+     * Streamed (not file-stored) because:
+     *   1. The content is small enough (< 500 bytes) that disk I/O is wasteful
+     *   2. No filesystem permissions to think about
+     *   3. Always returns fresh content — no chance of a stale cached template
+     *      after the column spec changes
+     */
+    public function downloadTemplate(): StreamedResponse
+    {
+        $filename = 'blastiq-contacts-template.csv';
+
+        return response()->streamDownload(function (): void {
+            $out = fopen('php://output', 'w');
+            // BOM so Excel on Windows opens UTF-8 names (e.g. Olu Adébáyò)
+            // without garbling them. Excel auto-detects encoding from BOM;
+            // without it, accented Latin or Yoruba diacritics render as
+            // "Olu Adu00e9báyò" — a frequent operator complaint.
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, ['phone', 'name', 'custom_field_1', 'custom_field_2']);
+            // Sample rows. Three rows give the operator a clear visual
+            // pattern (header + 1 = "is this how I fill it?"; +2-3 confirms
+            // delimiters and column count).
+            fputcsv($out, ['+2348012345678', 'Adebayo Okonkwo',  'Lagos',  'VIP']);
+            fputcsv($out, ['+2347098765432', 'Chiamaka Nwosu',   'Abuja',  '']);
+            fputcsv($out, ['08056781234',    'Tunde Bello',      'Ibadan', 'NewLead']);
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            // 'no-store' so a re-download after a template-format change
+            // doesn't serve the old version from the browser cache.
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+        ]);
+    }
+
     public function importProcess(ImportContactsRequest $request): RedirectResponse
     {
         $userId = auth()->id();

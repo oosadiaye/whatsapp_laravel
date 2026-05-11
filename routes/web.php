@@ -75,6 +75,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:contacts.import')->group(function () {
         Route::get('/contacts/import', [ContactController::class, 'importForm'])->name('contacts.import');
         Route::post('/contacts/import', [ContactController::class, 'importProcess'])->name('contacts.importProcess');
+        // Sample CSV with the four columns the import job consumes. Kept
+        // under the same contacts.import permission gate — anyone who can
+        // import can see the template; users without import permission
+        // shouldn't be probing the column spec.
+        Route::get('/contacts/import/template', [ContactController::class, 'downloadTemplate'])->name('contacts.importTemplate');
     });
     Route::middleware('permission:contacts.view')->group(function () {
         Route::get('/contacts', [ContactController::class, 'index'])->name('contacts.index');
