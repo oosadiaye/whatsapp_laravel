@@ -109,8 +109,21 @@ class InboundCallProcessor
             ]);
 
             // Phase 17: persist SDP offer + tell Meta we're engaging + push to agent's browser.
+            //
+            // Normalise line endings to CRLF before storing. RFC 4566 mandates
+            // CRLF between SDP lines; Chrome's RTCPeerConnection parser
+            // enforces this strictly and rejects bare-LF SDP with:
+            //   "Failed to parse SessionDescription. <last-seen line>
+            //    Invalid SDP line."
+            // Meta's webhook delivers the SDP via JSON, and depending on
+            // server/client encoding, the original CRLFs sometimes arrive
+            // as bare LFs. Normalise here so EVERY consumer (browser,
+            // CallRinging broadcast, debug dumps) gets canonical CRLF.
+            // Idempotent: collapse \r\n -> \n, then expand \n -> \r\n.
             $sdpOffer = $event['session']['sdp'] ?? null;
             if ($sdpOffer !== null) {
+                $sdpOffer = str_replace("\r\n", "\n", $sdpOffer);
+                $sdpOffer = str_replace("\n", "\r\n", $sdpOffer);
                 $callLog->update(['sdp_offer' => $sdpOffer]);
             }
 
