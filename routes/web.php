@@ -150,6 +150,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/campaigns/clear-queue', [CampaignController::class, 'clearQueue'])->name('campaigns.clearQueue');
     });
     Route::middleware('permission:campaigns.delete')->group(function () {
+        // Bulk-destroy MUST be declared BEFORE the wildcard {campaign} route,
+        // otherwise Laravel matches /campaigns/bulk-delete to {campaign}=bulk-delete
+        // and 404s. Same lesson as the /contacts/import vs /contacts/{contact}
+        // ordering on line 74-78.
+        Route::post('/campaigns/bulk-delete', [CampaignController::class, 'bulkDestroy'])->name('campaigns.bulkDestroy');
         Route::delete('/campaigns/{campaign}', [CampaignController::class, 'destroy'])->name('campaigns.destroy');
     });
 

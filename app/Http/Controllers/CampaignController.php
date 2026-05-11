@@ -11,6 +11,7 @@ use App\Models\MessageTemplate;
 use App\Models\WhatsAppInstance;
 use App\Services\CampaignService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -354,6 +355,57 @@ class CampaignController extends Controller
         return redirect()
             ->route('campaigns.index')
             ->with('success', 'Campaign deleted successfully.');
+    }
+
+    /**
+     * Bulk-delete campaigns selected on the index page.
+     *
+     * Pattern mirrors clearQueue() (bulk-cancel): scoped to the current user
+     * via where('user_id', ...), validated as a list of UUIDs (campaign PK
+     * shape), and silently skips RUNNING campaigns to match the single
+     * destroy() guard. Returns to /campaigns with a counted flash so the
+     * operator sees both "deleted X" and "skipped Y because running."
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        // Accept either integer auto-increment IDs (the current
+        // campaigns migration) or string UUIDs (in case the table shape
+        // shifts later). The whereIn() below safely accepts a mixed array.
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required'],
+        ]);
+
+        // Single query scoped to the owner — selecting by ID alone would
+        // let a forged request delete another user's campaigns. The
+        // whereIn + where('user_id') combo means cross-account IDs are
+        // silently filtered out at the SQL layer.
+        $campaigns = Campaign::where('user_id', auth()->id())
+            ->whereIn('id', $validated['ids'])
+            ->get();
+
+        $deleted = 0;
+        $skipped = 0;
+        foreach ($campaigns as $campaign) {
+            if (! in_array($campaign->status, self::DELETABLE_STATUSES, true)) {
+                $skipped++;
+
+                continue;
+            }
+            $campaign->delete();
+            $deleted++;
+        }
+
+        // Single combined flash so the operator sees the whole outcome
+        // in one toast, not two separate ones.
+        $message = "Deleted {$deleted} campaign".($deleted === 1 ? '' : 's').'.';
+        if ($skipped > 0) {
+            $message .= " Skipped {$skipped} running campaign".($skipped === 1 ? '' : 's').' — pause or cancel first.';
+        }
+
+        return redirect()
+            ->route('campaigns.index')
+            ->with($skipped > 0 && $deleted === 0 ? 'error' : 'success', $message);
     }
 
     public function launch(string $id): RedirectResponse
