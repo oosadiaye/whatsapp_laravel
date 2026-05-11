@@ -215,7 +215,19 @@ class ContactController extends Controller
         if ($request->hasFile('file')) {
             $path = $request->file('file')->store('imports');
 
-            ProcessContactImport::dispatch($userId, $path, $groupId, $request->validated('column_map'));
+            // ProcessContactImport constructor order is (filePath, groupId,
+            // columnMap, userId). The previous call had the arguments in the
+            // wrong order and PHP 8's typed-promoted-properties threw a
+            // TypeError synchronously — 500 before the queue ever saw it.
+            // Cast to satisfy `int` typed properties (group_id/user_id
+            // come through as strings via the form; auth()->id() returns
+            // string|null on some auth guards).
+            ProcessContactImport::dispatch(
+                $path,
+                (int) $groupId,
+                $request->validated('column_map') ?? [],
+                (int) $userId,
+            );
 
             return redirect()
                 ->route('contacts.index')
