@@ -39,12 +39,13 @@ class MessageTemplateController extends Controller
 
     public function index(): View
     {
-        $templates = MessageTemplate::where('user_id', auth()->id())
-            ->with('whatsappInstance')
+        // Single-tenant — templates + instances are shared. The route is
+        // permission-gated by templates.view; that's the only required gate.
+        $templates = MessageTemplate::with('whatsappInstance')
             ->latest()
             ->get();
 
-        $instances = WhatsAppInstance::where('user_id', auth()->id())
+        $instances = WhatsAppInstance::query()
             ->orderBy('is_default', 'desc')
             ->orderBy('instance_name')
             ->get(['id', 'instance_name', 'business_phone_number', 'phone_number', 'status']);
@@ -170,8 +171,8 @@ class MessageTemplateController extends Controller
             'whatsapp_instance_id' => ['required', 'integer', 'exists:whatsapp_instances,id'],
         ]);
 
-        $instance = WhatsAppInstance::where('user_id', auth()->id())
-            ->findOrFail($validated['whatsapp_instance_id']);
+        // Single-tenant — any permitted user can sync from any instance.
+        $instance = WhatsAppInstance::findOrFail($validated['whatsapp_instance_id']);
 
         if (! $instance->isReady()) {
             return redirect()
@@ -221,9 +222,9 @@ class MessageTemplateController extends Controller
             'whatsapp_instance_id' => ['required', 'integer', 'exists:whatsapp_instances,id'],
         ]);
 
-        $template = MessageTemplate::where('user_id', auth()->id())->findOrFail($id);
-        $instance = WhatsAppInstance::where('user_id', auth()->id())
-            ->findOrFail($validated['whatsapp_instance_id']);
+        // Single-tenant — templates + instances are shared across the company.
+        $template = MessageTemplate::findOrFail($id);
+        $instance = WhatsAppInstance::findOrFail($validated['whatsapp_instance_id']);
 
         if ($template->isRemote()) {
             return redirect()->back()->with('error', 'Template is already managed by Meta.');

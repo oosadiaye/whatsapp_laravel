@@ -58,8 +58,9 @@ class ContactController extends Controller
 
         // Single source of truth for which instances the picker modal can show.
         // Computed in the controller (not the view) so tests can assert on it
-        // and so the view stays a thin presenter.
-        $activeInstances = WhatsAppInstance::where('user_id', auth()->id())
+        // and so the view stays a thin presenter. Single-tenant — every user
+        // sees every connected instance.
+        $activeInstances = WhatsAppInstance::query()
             ->where('status', WhatsAppInstance::STATUS_CONNECTED)
             ->orderBy('display_name')
             ->get(['id', 'display_name', 'instance_name', 'business_phone_number']);
@@ -171,7 +172,9 @@ class ContactController extends Controller
      */
     private function resolveInstanceOrError(Request $request): array
     {
-        $instances = WhatsAppInstance::where('user_id', $request->user()->id)
+        // Single-tenant: all connected instances are eligible for initiation,
+        // not just ones the current user first set up.
+        $instances = WhatsAppInstance::query()
             ->where('status', WhatsAppInstance::STATUS_CONNECTED)
             ->get();
 

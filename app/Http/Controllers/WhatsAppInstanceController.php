@@ -30,9 +30,13 @@ class WhatsAppInstanceController extends Controller
 
     public function index(): View
     {
-        $instances = WhatsAppInstance::where('user_id', auth()->id())
-            ->latest()
-            ->get();
+        // Single-tenant app — every user with the `instances.view` permission
+        // sees every instance. The original per-user filter was multi-tenant
+        // residue and meant a new user joining the app saw an empty list even
+        // though the company already has connected WhatsApp instances.
+        // The user_id column on the row is retained as audit metadata ("who
+        // first set this up") but no longer scopes the query.
+        $instances = WhatsAppInstance::latest()->get();
 
         return view('instances.index', ['instances' => $instances]);
     }
@@ -104,7 +108,10 @@ class WhatsAppInstanceController extends Controller
 
     public function show(string $id): View
     {
-        $instance = WhatsAppInstance::where('user_id', auth()->id())->findOrFail($id);
+        // See index() comment — single-tenant app, the `instances.view`
+        // route middleware is the only gate. user_id filter removed so any
+        // permitted user can open any instance.
+        $instance = WhatsAppInstance::findOrFail($id);
 
         $status = $instance->status;
         $phoneInfo = null;
@@ -137,7 +144,8 @@ class WhatsAppInstanceController extends Controller
 
     public function destroy(string $id): RedirectResponse
     {
-        $instance = WhatsAppInstance::where('user_id', auth()->id())->findOrFail($id);
+        // See index() comment — permission middleware is the gate.
+        $instance = WhatsAppInstance::findOrFail($id);
 
         // Only the local row is removed — Meta-side configuration is owned by
         // the customer's Meta App, not by us. Customer revokes access there.
@@ -150,10 +158,14 @@ class WhatsAppInstanceController extends Controller
 
     public function setDefault(string $id): RedirectResponse
     {
-        $userId = auth()->id();
-
-        WhatsAppInstance::where('user_id', $userId)->update(['is_default' => false]);
-        WhatsAppInstance::where('user_id', $userId)->where('id', $id)->update(['is_default' => true]);
+        // Default is now GLOBAL, not per-user. The single-tenant flip means
+        // "the default instance" is one app-wide pointer, not one-per-user.
+        // Clear every row's flag, then set the chosen one — wrap in a
+        // transaction so a concurrent click can't leave two rows flagged.
+        \DB::transaction(function () use ($id): void {
+            WhatsAppInstance::query()->update(['is_default' => false]);
+            WhatsAppInstance::where('id', $id)->update(['is_default' => true]);
+        });
 
         return redirect()->back()->with('success', 'Default instance updated.');
     }

@@ -157,17 +157,35 @@ class MessageTemplateControllerTest extends TestCase
         $this->assertSame(0, MessageTemplate::count());
     }
 
-    public function test_sync_cannot_target_another_users_instance(): void
+    public function test_any_admin_can_sync_any_instance_single_tenant(): void
     {
-        // Tenancy boundary: User A must not be able to sync User B's instance
-        // by submitting their instance ID.
+        // The app is single-tenant — WhatsApp instances are shared, so any
+        // admin (or user with the templates.* permission) can sync templates
+        // against any instance, including ones first set up by another user.
+        // The route is gated by templates.* permissions, not by ownership.
+        //
+        // This replaces a previous multi-tenant test that asserted 404 when
+        // user A targeted user B's instance. That tenancy boundary was
+        // removed deliberately when the team flipped to single-tenant mode.
         $userA = $this->makeAdmin();
-        $userB = $this->makeAdmin('userb-tenancy@example.com');
+        $userB = $this->makeAdmin('userb-shared@example.com');
         $instanceB = WhatsAppInstance::factory()->create(['user_id' => $userB->id]);
 
-        $this->actingAs($userA)
-            ->post(route('templates.sync'), ['whatsapp_instance_id' => $instanceB->id])
-            ->assertNotFound();
+        // No HTTP fake — the test just verifies the route accepts the call
+        // and tries to reach Meta. Whether the Meta probe succeeds (200) or
+        // fails-and-warns (302 with warning flash) both prove the controller
+        // accepted the cross-user instance ID, which is the contract.
+        Http::fake([
+            'graph.facebook.com/*' => Http::response(['data' => []], 200),
+        ]);
+
+        $response = $this->actingAs($userA)
+            ->post(route('templates.sync'), ['whatsapp_instance_id' => $instanceB->id]);
+
+        // Either a success redirect or a fail-with-warning redirect is fine
+        // — the assertion that matters is "the controller did NOT 404 because
+        // the instance belongs to a different user."
+        $this->assertNotEquals(404, $response->status());
     }
 
     public function test_submit_to_meta_pushes_template_and_captures_response(): void

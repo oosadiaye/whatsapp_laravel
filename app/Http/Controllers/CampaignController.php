@@ -40,10 +40,15 @@ class CampaignController extends Controller
 
         return view('campaigns.create', [
             'groups' => ContactGroup::where('user_id', $userId)->get(),
-            'instances' => WhatsAppInstance::where('user_id', $userId)->get(),
+            // Single-tenant: instances + templates are shared, so the dropdown
+            // shows every connected WhatsApp number, not just ones this user
+            // first set up. Groups remain user-scoped (each user curates their
+            // own contact lists). The route is already permission-gated by
+            // campaigns.create.
+            'instances' => WhatsAppInstance::all(),
             // Only APPROVED remote templates are eligible for live campaign sends.
             // Local templates remain available to manually populate the message body.
-            'templates' => MessageTemplate::where('user_id', $userId)
+            'templates' => MessageTemplate::query()
                 ->whereIn('status', [MessageTemplate::STATUS_APPROVED, MessageTemplate::STATUS_LOCAL])
                 ->orderBy('whatsapp_instance_id')
                 ->orderBy('name')
@@ -260,8 +265,9 @@ class CampaignController extends Controller
         return view('campaigns.edit', [
             'campaign' => $campaign,
             'groups' => ContactGroup::where('user_id', $userId)->get(),
-            'instances' => WhatsAppInstance::where('user_id', $userId)->get(),
-            'templates' => MessageTemplate::where('user_id', $userId)->get(),
+            // Single-tenant: see create() for rationale on shared instances/templates.
+            'instances' => WhatsAppInstance::all(),
+            'templates' => MessageTemplate::all(),
         ]);
     }
 
