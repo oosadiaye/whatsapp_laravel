@@ -54,12 +54,17 @@ class ConversationController extends Controller
         $query = Conversation::with(['contact', 'whatsappInstance', 'assignedTo'])
             ->orderByDesc('last_message_at');
 
-        // Visibility: admins/managers see everything in the account; agents only see
-        // conversations assigned to them. The conversations.view_all permission
-        // controls which side of this branch you land on.
-        if ($user->can('conversations.view_all')) {
-            $query->where('user_id', $user->id);
-        } else {
+        // Visibility (single-tenant):
+        //   - conversations.view_all → every conversation in the company
+        //     (admins / managers). Previously this branch also filtered by
+        //     user_id = current user, which silently restricted a new admin
+        //     to "conversations whose row I personally own" — empty inbox
+        //     on first login, the same multi-tenant residue we hit for
+        //     instances / contacts / campaigns.
+        //   - conversations.view_assigned → only conversations the current
+        //     user is currently assigned to (agent workflow scoping —
+        //     unrelated to multi-tenancy, stays as-is).
+        if (! $user->can('conversations.view_all')) {
             $query->where('assigned_to_user_id', $user->id);
         }
 
@@ -95,8 +100,11 @@ class ConversationController extends Controller
         // Merge messages and call_logs into one chronological timeline
         $timeline = $messages->concat($callLogs)->sortBy('created_at')->values();
 
-        // Approved templates from the same instance, used when the 24h window is closed.
-        $templates = MessageTemplate::where('user_id', $conversation->user_id)
+        // Approved templates from the same instance, used when the 24h window
+        // is closed. Single-tenant: any approved template tied to this
+        // conversation's WhatsApp instance is eligible, regardless of which
+        // user authored the template.
+        $templates = MessageTemplate::query()
             ->where(function ($q) use ($conversation) {
                 $q->where('whatsapp_instance_id', $conversation->whatsapp_instance_id)
                   ->orWhereNull('whatsapp_instance_id');
@@ -313,15 +321,18 @@ class ConversationController extends Controller
     /**
      * 403 if the user can't see this conversation under their permission set.
      *
-     * Two paths to access:
-     *   1. user has conversations.view_all + conversation belongs to their account
-     *   2. user has conversations.view_assigned + conversation is assigned to them
+     * Two paths to access (single-tenant):
+     *   1. user has conversations.view_all — sees every conversation in the
+     *      company (was previously also limited to conversation->user_id ===
+     *      $user->id, which was multi-tenant residue)
+     *   2. user has conversations.view_assigned — sees only conversations
+     *      currently assigned to them (agent workflow, unchanged)
      */
     private function authorizeConversationAccess(Request $request, Conversation $conversation): void
     {
         $user = $request->user();
 
-        if ($user->can('conversations.view_all') && $conversation->user_id === $user->id) {
+        if ($user->can('conversations.view_all')) {
             return;
         }
 

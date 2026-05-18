@@ -70,12 +70,12 @@ class CampaignBulkDeleteTest extends TestCase
         $this->assertStringContainsString('Skipped 1 running campaign', $flash);
     }
 
-    public function test_cross_account_campaign_ids_are_silently_filtered(): void
+    public function test_any_admin_can_bulk_delete_any_campaigns_single_tenant(): void
     {
-        // The whereIn + where(user_id) combo at the SQL layer means a forged
-        // request listing another user's campaign IDs simply matches 0 rows.
-        // No error, just nothing happens — the safer outcome than 403'ing
-        // (which would leak the existence of those IDs).
+        // Single-tenant: any user with campaigns.delete (admin / super_admin)
+        // can bulk-delete any campaigns, regardless of which user originally
+        // created each one. Replaces a previous multi-tenant assertion that
+        // expected cross-account IDs to be silently filtered out.
         $alice = $this->makeAdmin('alice@example.com');
         $bob   = $this->makeAdmin('bob@example.com');
 
@@ -86,8 +86,10 @@ class CampaignBulkDeleteTest extends TestCase
             ->post(route('campaigns.bulkDestroy'), ['ids' => [$aliceCampaign->id, $bobCampaign->id]])
             ->assertRedirect();
 
-        $this->assertNull(Campaign::find($aliceCampaign->id), 'own campaign deleted');
-        $this->assertNotNull(Campaign::find($bobCampaign->id), 'other user\'s campaign preserved');
+        // Both deleted now — single-tenant means "ownership" no longer
+        // restricts who can act on a row.
+        $this->assertNull(Campaign::find($aliceCampaign->id));
+        $this->assertNull(Campaign::find($bobCampaign->id));
     }
 
     public function test_user_without_campaigns_delete_permission_gets_403(): void

@@ -27,9 +27,9 @@ class CampaignController extends Controller
 
     public function index(): View
     {
-        $campaigns = Campaign::where('user_id', auth()->id())
-            ->latest()
-            ->paginate(20);
+        // Single-tenant — every user with campaigns.view sees every campaign.
+        // user_id stays as audit metadata identifying the original creator.
+        $campaigns = Campaign::latest()->paginate(20);
 
         return view('campaigns.index', ['campaigns' => $campaigns]);
     }
@@ -39,7 +39,9 @@ class CampaignController extends Controller
         $userId = auth()->id();
 
         return view('campaigns.create', [
-            'groups' => ContactGroup::where('user_id', $userId)->get(),
+            // Shared: every group visible across the company, same rationale
+            // as `instances` and `templates` below.
+            'groups' => ContactGroup::all(),
             // Single-tenant: instances + templates are shared, so the dropdown
             // shows every connected WhatsApp number, not just ones this user
             // first set up. Groups remain user-scoped (each user curates their
@@ -213,8 +215,8 @@ class CampaignController extends Controller
 
     public function show(string $id): View
     {
-        $campaign = Campaign::where('user_id', auth()->id())
-            ->with([
+        // Single-tenant — any campaigns.view user can open any campaign.
+        $campaign = Campaign::with([
                 'whatsAppInstance',
                 // Eager-load each group with two counts: total contacts in that
                 // group, and active contacts (the ones CampaignBatchDispatch
@@ -249,10 +251,11 @@ class CampaignController extends Controller
 
     public function edit(string $id): View
     {
+        // $userId kept for symmetry with the create() flow but no longer
+        // scopes campaign lookup — single-tenant means any campaigns.edit
+        // user can edit any campaign.
         $userId = auth()->id();
-        $campaign = Campaign::where('user_id', $userId)
-            ->with('contactGroups')
-            ->findOrFail($id);
+        $campaign = Campaign::with('contactGroups')->findOrFail($id);
 
         // Defense in depth: views hide the Edit button for non-editable statuses,
         // but a direct URL navigation must also be rejected.
@@ -264,7 +267,9 @@ class CampaignController extends Controller
 
         return view('campaigns.edit', [
             'campaign' => $campaign,
-            'groups' => ContactGroup::where('user_id', $userId)->get(),
+            // Shared: every group visible across the company, same rationale
+            // as `instances` and `templates` below.
+            'groups' => ContactGroup::all(),
             // Single-tenant: see create() for rationale on shared instances/templates.
             'instances' => WhatsAppInstance::all(),
             'templates' => MessageTemplate::all(),
@@ -273,7 +278,7 @@ class CampaignController extends Controller
 
     public function update(StoreCampaignRequest $request, string $id): RedirectResponse
     {
-        $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
+        $campaign = Campaign::findOrFail($id);
 
         // Mirror the edit() guard — accept updates only for editable statuses.
         // A user could otherwise POST directly to this endpoint while bypassing
@@ -345,7 +350,7 @@ class CampaignController extends Controller
 
     public function destroy(string $id): RedirectResponse
     {
-        $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
+        $campaign = Campaign::findOrFail($id);
 
         // Block deletion of RUNNING campaigns — see DELETABLE_STATUSES doc.
         // The user must Pause or Cancel first, which both stop worker dispatch
@@ -382,13 +387,10 @@ class CampaignController extends Controller
             'ids.*' => ['required'],
         ]);
 
-        // Single query scoped to the owner — selecting by ID alone would
-        // let a forged request delete another user's campaigns. The
-        // whereIn + where('user_id') combo means cross-account IDs are
-        // silently filtered out at the SQL layer.
-        $campaigns = Campaign::where('user_id', auth()->id())
-            ->whereIn('id', $validated['ids'])
-            ->get();
+        // Single-tenant — any campaigns.delete user can bulk-delete any
+        // campaigns. The whereIn() pulls only the rows the user actually
+        // listed, so other users' campaigns can't be deleted by accident.
+        $campaigns = Campaign::whereIn('id', $validated['ids'])->get();
 
         $deleted = 0;
         $skipped = 0;
@@ -416,7 +418,7 @@ class CampaignController extends Controller
 
     public function launch(string $id): RedirectResponse
     {
-        $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
+        $campaign = Campaign::findOrFail($id);
 
         // Reachability probe at launch — but warn-and-proceed rather than
         // hard-block. Two reasons:
@@ -468,7 +470,7 @@ class CampaignController extends Controller
 
     public function pause(string $id): RedirectResponse
     {
-        $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
+        $campaign = Campaign::findOrFail($id);
         $this->campaignService->pause($campaign);
 
         return redirect()->back()->with('success', 'Campaign paused.');
@@ -476,7 +478,7 @@ class CampaignController extends Controller
 
     public function resume(string $id): RedirectResponse
     {
-        $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
+        $campaign = Campaign::findOrFail($id);
         $this->campaignService->resume($campaign);
 
         return redirect()->back()->with('success', 'Campaign resumed.');
@@ -484,7 +486,7 @@ class CampaignController extends Controller
 
     public function cancel(string $id): RedirectResponse
     {
-        $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
+        $campaign = Campaign::findOrFail($id);
         $cancelledLogs = $this->campaignService->cancel($campaign);
 
         $message = $cancelledLogs > 0
@@ -503,9 +505,11 @@ class CampaignController extends Controller
      */
     public function clearQueue(): RedirectResponse
     {
-        $stuck = Campaign::where('user_id', auth()->id())
-            ->whereIn('status', ['QUEUED', 'RUNNING'])
-            ->get();
+        // Single-tenant: clear-queue is account-wide. The user clicking it
+        // must have campaigns.cancel; that's the gate. Anyone in the company
+        // hitting the panic button cancels every stuck campaign so the
+        // queue worker can recover.
+        $stuck = Campaign::whereIn('status', ['QUEUED', 'RUNNING'])->get();
 
         $totalLogs = 0;
         foreach ($stuck as $campaign) {
@@ -522,7 +526,7 @@ class CampaignController extends Controller
 
     public function clone(string $id): RedirectResponse
     {
-        $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
+        $campaign = Campaign::findOrFail($id);
         $cloned = $this->campaignService->clone($campaign);
 
         return redirect()
@@ -532,7 +536,7 @@ class CampaignController extends Controller
 
     public function exportLogs(string $id): StreamedResponse
     {
-        $campaign = Campaign::where('user_id', auth()->id())->findOrFail($id);
+        $campaign = Campaign::findOrFail($id);
 
         $logs = $campaign->messageLogs()
             ->with('contact')

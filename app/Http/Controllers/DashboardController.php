@@ -6,7 +6,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Campaign;
 use App\Models\Contact;
-use App\Models\ContactGroup;
 use App\Models\MessageLog;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -14,34 +13,38 @@ use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
+    /**
+     * Stats are ACCOUNT-WIDE (single-tenant). Every staff member with the
+     * `dashboard.view` permission sees the same numbers — total contacts
+     * across the company, total campaigns sent by anyone, today's message
+     * volume, etc. The previous per-user filter meant a new admin saw
+     * "0 campaigns / 0 contacts" on first login even though the company
+     * already had thousands of records.
+     *
+     * The user_id column on each row is preserved as audit metadata, but
+     * is no longer used to filter dashboard aggregates.
+     */
     public function index(): View
     {
-        $userId = auth()->id();
+        $totalCampaigns = Campaign::count();
+        $totalContacts = Contact::count();
 
-        $totalCampaigns = Campaign::where('user_id', $userId)->count();
-        $totalContacts = Contact::where('user_id', $userId)->count();
+        $messagesToday = MessageLog::whereDate('sent_at', Carbon::today())->count();
 
-        $messagesToday = MessageLog::whereHas('campaign', fn ($q) => $q->where('user_id', $userId))
-            ->whereDate('sent_at', Carbon::today())
-            ->count();
-
-        $deliveryRate = Campaign::where('user_id', $userId)
+        $deliveryRate = Campaign::query()
             ->where('sent_count', '>', 0)
             ->avg(DB::raw('(delivered_count / sent_count) * 100')) ?? 0;
 
-        $recentCampaigns = Campaign::where('user_id', $userId)
-            ->latest()
-            ->limit(5)
-            ->get();
+        $recentCampaigns = Campaign::latest()->limit(5)->get();
 
-        $messagesPerDay = MessageLog::whereHas('campaign', fn ($q) => $q->where('user_id', $userId))
+        $messagesPerDay = MessageLog::query()
             ->where('sent_at', '>=', Carbon::now()->subDays(30))
             ->select(DB::raw('DATE(sent_at) as date'), DB::raw('COUNT(*) as count'))
             ->groupBy('date')
             ->orderBy('date')
             ->get();
 
-        $statusBreakdown = MessageLog::whereHas('campaign', fn ($q) => $q->where('user_id', $userId))
+        $statusBreakdown = MessageLog::query()
             ->select('status', DB::raw('COUNT(*) as count'))
             ->groupBy('status')
             ->pluck('count', 'status');

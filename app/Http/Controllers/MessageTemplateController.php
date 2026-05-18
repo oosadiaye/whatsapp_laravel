@@ -87,7 +87,7 @@ class MessageTemplateController extends Controller
 
     public function edit(string $id): View
     {
-        $template = MessageTemplate::where('user_id', auth()->id())
+        $template = MessageTemplate::query()
             ->findOrFail($id);
 
         return view('templates.edit', ['template' => $template]);
@@ -102,7 +102,7 @@ class MessageTemplateController extends Controller
             'media' => ['nullable', 'file', 'max:5120', 'mimes:jpg,jpeg,png,gif,pdf,mp3,ogg'],
         ]);
 
-        $template = MessageTemplate::where('user_id', auth()->id())
+        $template = MessageTemplate::query()
             ->findOrFail($id);
 
         // Remote (Meta-managed) templates can't be edited via Cloud API after submission;
@@ -137,7 +137,7 @@ class MessageTemplateController extends Controller
 
     public function destroy(string $id): RedirectResponse
     {
-        $template = MessageTemplate::where('user_id', auth()->id())
+        $template = MessageTemplate::query()
             ->findOrFail($id);
 
         // For remote templates, also tell Meta to delete — otherwise the local row
@@ -280,7 +280,7 @@ class MessageTemplateController extends Controller
         $bodyText = $this->extractBodyText($components);
         $category = $this->mapCategoryFromMeta((string) ($remote['category'] ?? ''));
 
-        $existing = MessageTemplate::where('user_id', auth()->id())
+        $existing = MessageTemplate::query()
             ->where('whatsapp_instance_id', $instance->id)
             ->where('whatsapp_template_id', $remoteId)
             ->where('language', $language)

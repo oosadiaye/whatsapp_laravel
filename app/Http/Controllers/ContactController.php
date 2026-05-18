@@ -24,7 +24,9 @@ class ContactController extends Controller
     {
         $threshold = now()->subDays(\App\Models\Contact::ENGAGEMENT_WINDOW_DAYS);
 
-        $query = Contact::where('user_id', auth()->id())
+        // Single-tenant — every user with contacts.view sees every contact.
+        // user_id column stays as audit metadata. Route permission is the gate.
+        $query = Contact::query()
             ->with('groups')   // prevents N+1 on the view's @foreach($contact->groups)
             ->withExists([
                 // True if at least one inbound message exists for any of this
@@ -205,7 +207,9 @@ class ContactController extends Controller
 
     public function importForm(): View
     {
-        $groups = ContactGroup::where('user_id', auth()->id())->get();
+        // Single-tenant: import wizard offers every group as a destination,
+        // not just ones the current user created.
+        $groups = ContactGroup::all();
 
         return view('contacts.import', ['groups' => $groups]);
     }
@@ -282,7 +286,11 @@ class ContactController extends Controller
             array_map('trim', explode("\n", $request->validated('manual_input'))),
         );
 
-        $group = ContactGroup::where('user_id', $userId)->findOrFail($groupId);
+        // Single-tenant: any group is a valid target. user_id on the contact
+        // row is the creating user's id (audit metadata) — updateOrCreate's
+        // unique key is still (user_id, phone) so the same operator's manual
+        // re-paste idempotently updates instead of duplicating.
+        $group = ContactGroup::findOrFail($groupId);
         $imported = 0;
         $invalid = 0;
         $importService = new ContactImportService();
@@ -314,7 +322,9 @@ class ContactController extends Controller
 
     public function edit(string $id): View
     {
-        $contact = Contact::where('user_id', auth()->id())->findOrFail($id);
+        // Single-tenant: any permitted user can edit any contact. Route is
+        // gated by contacts.edit permission; no ownership filter needed.
+        $contact = Contact::findOrFail($id);
 
         return view('contacts.edit', ['contact' => $contact]);
     }
@@ -326,7 +336,7 @@ class ContactController extends Controller
             'name' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $contact = Contact::where('user_id', auth()->id())->findOrFail($id);
+        $contact = Contact::findOrFail($id);
         $contact->update($validated);
 
         return redirect()->back()->with('success', 'Contact updated successfully.');
@@ -334,7 +344,7 @@ class ContactController extends Controller
 
     public function destroy(string $id): RedirectResponse
     {
-        $contact = Contact::where('user_id', auth()->id())->findOrFail($id);
+        $contact = Contact::findOrFail($id);
         $contact->delete();
 
         return redirect()->back()->with('success', 'Contact deleted successfully.');
@@ -342,7 +352,7 @@ class ContactController extends Controller
 
     public function exportGroup(string $groupId): StreamedResponse
     {
-        $group = ContactGroup::where('user_id', auth()->id())->findOrFail($groupId);
+        $group = ContactGroup::findOrFail($groupId);
         $contacts = $group->contacts()->get(['phone', 'name']);
 
         $filename = 'contacts_' . str_replace(' ', '_', $group->name) . '_' . now()->format('Y-m-d') . '.csv';

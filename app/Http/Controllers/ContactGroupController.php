@@ -10,12 +10,21 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
+/**
+ * Single-tenant: every contact group is visible to every user with the
+ * groups.* permissions. The user_id column on a row is audit metadata
+ * (who first created the group) but does NOT scope read or write queries.
+ * The route-level permission middleware is the only authorization layer.
+ *
+ * Previously each user only saw groups they themselves created — that
+ * was multi-tenant residue and meant a newly-added admin saw an empty
+ * /groups list even when the company already had named contact lists.
+ */
 class ContactGroupController extends Controller
 {
     public function index(): View
     {
-        $groups = ContactGroup::where('user_id', auth()->id())
-            ->withCount('contacts')
+        $groups = ContactGroup::withCount('contacts')
             ->latest()
             ->get();
 
@@ -25,6 +34,9 @@ class ContactGroupController extends Controller
     public function store(StoreContactGroupRequest $request): RedirectResponse
     {
         ContactGroup::create([
+            // Audit: tag the row with the creator's id. The column stays
+            // populated so support can ask "who set this group up?" — it
+            // just no longer scopes lookups.
             'user_id' => auth()->id(),
             ...$request->validated(),
         ]);
@@ -34,8 +46,7 @@ class ContactGroupController extends Controller
 
     public function show(string $id): View
     {
-        $group = ContactGroup::where('user_id', auth()->id())
-            ->findOrFail($id);
+        $group = ContactGroup::findOrFail($id);
 
         $contacts = $group->contacts()->paginate(20);
 
@@ -52,8 +63,7 @@ class ContactGroupController extends Controller
             'description' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $group = ContactGroup::where('user_id', auth()->id())
-            ->findOrFail($id);
+        $group = ContactGroup::findOrFail($id);
 
         $group->update($validated);
 
@@ -62,8 +72,7 @@ class ContactGroupController extends Controller
 
     public function destroy(string $id): RedirectResponse
     {
-        $group = ContactGroup::where('user_id', auth()->id())
-            ->findOrFail($id);
+        $group = ContactGroup::findOrFail($id);
 
         $group->delete();
 

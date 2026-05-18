@@ -47,8 +47,14 @@ class ConversationControllerTest extends TestCase
         $this->assertCount(3, $response->viewData('conversations'));
     }
 
-    public function test_admin_does_not_see_conversations_from_other_accounts(): void
+    public function test_admin_sees_every_conversation_single_tenant(): void
     {
+        // Single-tenant: admins (conversations.view_all) see every
+        // conversation in the company, regardless of which user originally
+        // owns the row. Replaces a previous multi-tenant assertion that
+        // expected each admin to see only their own conversations — that
+        // boundary was multi-tenant residue and meant a newly-added admin
+        // saw an empty inbox on first login.
         $admin = $this->makeUser('admin');
         $otherUser = $this->makeUser('admin', 'other@example.com');
 
@@ -57,7 +63,7 @@ class ConversationControllerTest extends TestCase
 
         $response = $this->actingAs($admin)->get(route('conversations.index'));
 
-        $this->assertCount(2, $response->viewData('conversations'));
+        $this->assertCount(7, $response->viewData('conversations'));
     }
 
     public function test_agent_sees_only_assigned_conversations(): void
@@ -111,13 +117,17 @@ class ConversationControllerTest extends TestCase
         $this->actingAs($agent)->get(route('conversations.show', $conv))->assertForbidden();
     }
 
-    public function test_cross_account_show_is_forbidden(): void
+    public function test_any_admin_can_show_any_conversation_single_tenant(): void
     {
+        // Single-tenant: any admin (conversations.view_all) can open any
+        // conversation, regardless of which user originally owns the row.
+        // Replaces a previous multi-tenant assertion that expected 403 when
+        // user A's admin opened user B's conversation.
         $userA = $this->makeUser('admin');
         $userB = $this->makeUser('admin', 'b@example.com');
         $convOfB = Conversation::factory()->create(['user_id' => $userB->id]);
 
-        $this->actingAs($userA)->get(route('conversations.show', $convOfB))->assertForbidden();
+        $this->actingAs($userA)->get(route('conversations.show', $convOfB))->assertOk();
     }
 
     public function test_reply_within_window_creates_outbound_message(): void
