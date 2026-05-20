@@ -129,22 +129,53 @@ class QueueDoctor extends Command
         $this->newLine();
 
         // ── 4. Stuck campaigns ─────────────────────────────────────────
-        // Same heuristic as the in-app warning banner: QUEUED/RUNNING
-        // campaign older than N minutes with sent_count = 0.
+        // Tightened heuristic — distinguish "fan-out never happened"
+        // (the real stuck case) from "fan-out happened, rate-limited
+        // sends are draining slowly" (NOT stuck — leave it alone).
+        //
+        // QUEUED/RUNNING > N min AND sent_count = 0 AND
+        // NO MessageLog rows exist for the campaign  →  truly stuck:
+        //   the CampaignBatchDispatch job on the `default` queue never
+        //   ran (or ran and crashed before creating MessageLog rows).
+        //
+        // If MessageLog rows DO exist, the SendWhatsAppMessage children
+        // have been dispatched and are sitting in the messages queue
+        // with `available_at` set to their rate-limited slot. The
+        // worker WILL catch up — no operator action needed. False
+        // alarms here train operators to ignore the warning.
         if (Schema::hasTable('campaigns')) {
             $threshold = Carbon::now()->subMinutes(self::STUCK_MINUTES);
-            $stuck = Campaign::whereIn('status', ['QUEUED', 'RUNNING'])
+            $stuckQuery = Campaign::whereIn('status', ['QUEUED', 'RUNNING'])
+                ->where('created_at', '<', $threshold)
+                ->where(function ($q) {
+                    $q->whereNull('sent_count')->orWhere('sent_count', 0);
+                });
+
+            if (Schema::hasTable('message_logs')) {
+                $stuckQuery->whereDoesntHave('messageLogs');
+            }
+            $stuck = $stuckQuery->count();
+
+            if ($stuck > 0) {
+                $this->line("<comment>Stuck campaigns: {$stuck} have been QUEUED/RUNNING for >".self::STUCK_MINUTES.'min with no MessageLog activity.</>');
+                $this->line('  → CampaignBatchDispatch on the "default" queue never ran. Check worker.');
+                $hasProblem = true;
+            } else {
+                $this->info('Stuck campaigns: 0');
+            }
+
+            // Rate-limited campaigns (fan-out happened, sends draining slowly)
+            // get an informational line — not a warning — so operators know
+            // the doctor knows about them but isn't worried.
+            $rateLimited = Campaign::whereIn('status', ['QUEUED', 'RUNNING'])
                 ->where('created_at', '<', $threshold)
                 ->where(function ($q) {
                     $q->whereNull('sent_count')->orWhere('sent_count', 0);
                 })
+                ->whereHas('messageLogs')
                 ->count();
-            if ($stuck > 0) {
-                $this->line("<comment>Stuck campaigns: {$stuck} have been QUEUED/RUNNING for >".self::STUCK_MINUTES.'min with 0 sends.</>');
-                $this->line('  → A worker not consuming the "messages" queue is the usual cause.');
-                $hasProblem = true;
-            } else {
-                $this->info('Stuck campaigns: 0');
+            if ($rateLimited > 0) {
+                $this->info("Rate-limited campaigns: {$rateLimited} draining via the messages queue. No action needed.");
             }
         }
         $this->newLine();

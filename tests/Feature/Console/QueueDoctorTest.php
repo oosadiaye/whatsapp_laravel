@@ -84,16 +84,15 @@ class QueueDoctorTest extends TestCase
         $this->assertStringContainsString('NOT in worker', $out);
     }
 
-    public function test_detects_stuck_campaign_with_zero_sends(): void
+    public function test_detects_truly_stuck_campaign_with_no_message_logs(): void
     {
+        // "Truly stuck" = QUEUED/RUNNING > 5 min, sent_count = 0, AND
+        // no MessageLog rows exist for it. Last condition is what
+        // distinguishes a fan-out-never-ran failure from a campaign
+        // that's just rate-limit-draining slowly.
         $admin = User::factory()->create(['is_active' => true]);
         $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
 
-        // Create normally then back-date — Campaign::create's mass-assign
-        // honours `created_at` only sporadically depending on whether the
-        // model has $timestamps enabled, so do it explicitly after the
-        // row exists. withoutTimestamps() prevents Eloquent's auto-update
-        // from re-stamping the row at the new save.
         $campaign = Campaign::create([
             'user_id' => $admin->id,
             'instance_id' => $instance->id,
@@ -136,5 +135,45 @@ class QueueDoctorTest extends TestCase
         $out = Artisan::output();
 
         $this->assertStringContainsString('Stuck campaigns: 0', $out);
+    }
+
+    public function test_rate_limited_campaign_with_pending_message_logs_is_not_flagged_stuck(): void
+    {
+        // A campaign that has been QUEUED > 5 min with sent_count=0 BUT
+        // already has MessageLog rows (= fan-out happened, sends are
+        // throttling out) must NOT be flagged "stuck". It's working
+        // correctly, just rate-limited. The doctor should instead
+        // surface it as an informational "rate-limited" line.
+        $admin = User::factory()->create(['is_active' => true]);
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+
+        $campaign = Campaign::create([
+            'user_id' => $admin->id,
+            'instance_id' => $instance->id,
+            'name' => 'Throttling out',
+            'message' => 'hi',
+            'status' => 'RUNNING',
+            'sent_count' => 0,
+        ]);
+        Campaign::withoutTimestamps(function () use ($campaign): void {
+            $campaign->forceFill([
+                'created_at' => now()->subMinutes(30),
+                'updated_at' => now()->subMinutes(30),
+            ])->save();
+        });
+
+        // Create at least one MessageLog row so whereHas('messageLogs')
+        // returns true — same shape CampaignBatchDispatch would create.
+        \App\Models\MessageLog::create([
+            'campaign_id' => $campaign->id,
+            'phone' => '+2348012345678',
+            'status' => 'PENDING',
+        ]);
+
+        Artisan::call('queue:doctor');
+        $out = Artisan::output();
+
+        $this->assertStringContainsString('Stuck campaigns: 0', $out);
+        $this->assertStringContainsString('Rate-limited campaigns: 1', $out);
     }
 }
