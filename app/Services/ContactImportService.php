@@ -141,15 +141,34 @@ class ContactImportService
     /**
      * Read rows from a CSV file.
      *
+     * @param  string  $filePath  Either a Storage disk key like
+     *                            "imports/abc.csv" (returned by
+     *                            $request->file()->store('imports'))
+     *                            OR an absolute filesystem path.
      * @return array<int, array<string, string>>
      */
     private function readCsv(string $filePath): array
     {
+        // The controller stores files with $request->file('file')->store('imports'),
+        // which returns a DISK KEY relative to storage/app — NOT an absolute
+        // filesystem path. Bare fopen() resolves relative paths against the
+        // process CWD (the project root for a supervised worker), which has
+        // no /imports directory — every queued import then fails with
+        //   "fopen(imports/...): Failed to open stream: No such file or directory"
+        //
+        // Fix: if $filePath isn't already absolute, treat it as a disk key
+        // and prepend storage_path('app/'). Keeps backward-compat with any
+        // caller that passed an absolute path directly.
+        $absolutePath = $this->absoluteCsvPath($filePath);
+
         $rows = [];
-        $handle = fopen($filePath, 'r');
+        $handle = fopen($absolutePath, 'r');
 
         if ($handle === false) {
-            Log::error('ContactImportService: Failed to open CSV file', ['path' => $filePath]);
+            Log::error('ContactImportService: Failed to open CSV file', [
+                'path' => $filePath,
+                'resolved_to' => $absolutePath,
+            ]);
 
             return [];
         }
@@ -176,12 +195,45 @@ class ContactImportService
     }
 
     /**
+     * Resolve a stored-file reference to an absolute filesystem path.
+     *
+     * The controller hands us $request->file()->store('imports'), which
+     * returns disk-key strings like "imports/abc.csv". Laravel's Storage
+     * facade knows that means storage/app/imports/abc.csv. fopen() and
+     * Maatwebsite\Excel::toArray() both need the absolute filesystem path.
+     *
+     * If the caller already passed an absolute path (starts with / or
+     * Windows drive letter), pass it through unchanged.
+     *
+     * Why Storage::disk('local')->path() and not storage_path('app/...'):
+     * tests use Storage::fake('local') which remounts the disk to a temp
+     * directory. The disk's own path() method returns the *current*
+     * disk root, which is correct in both prod (real storage/app) and
+     * tests (the fake temp dir). storage_path() always returns the real
+     * production path and would break the test.
+     */
+    private function absoluteCsvPath(string $filePath): string
+    {
+        // Already absolute? Use as-is.
+        // Linux/Mac:  /foo/bar
+        // Windows:    C:\foo or C:/foo
+        if (str_starts_with($filePath, '/') || preg_match('#^[A-Za-z]:[\\\\/]#', $filePath)) {
+            return $filePath;
+        }
+
+        return \Illuminate\Support\Facades\Storage::disk('local')->path($filePath);
+    }
+
+    /**
      * Read rows from an XLSX file using Maatwebsite\Excel.
      *
      * @return array<int, array<string, string>>
      */
     private function readXlsx(string $filePath): array
     {
+        // Same path-resolution rule as readCsv — Maatwebsite\Excel::toArray
+        // needs an absolute filesystem path, not a Storage disk key.
+        $filePath = $this->absoluteCsvPath($filePath);
         $rows = [];
 
         try {
