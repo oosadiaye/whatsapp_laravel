@@ -53,26 +53,14 @@ class RealtimePulse extends Component
             ->where('created_at', '>=', now()->subMinutes(30))
             ->with(['contact', 'whatsappInstance']);
 
-        if ($user->can('conversations.view_all')) {
-            // Admin / manager / super_admin: every call on a conversation
-            // owned by this user (account scope).
-            $callQuery->whereHas('conversation', fn ($q) => $q->where('user_id', $user->id));
-        } else {
-            // Agent (view_assigned only): assigned to me OR unassigned pool.
-            //
-            // INTENTIONAL ASYMMETRY: this scope is BROADER than
-            // ConversationController::index() — that controller scopes the
-            // inbox view to ONLY conversations assigned to the agent (no
-            // unassigned pool). For real-time call alerts we want every
-            // available agent to see incoming calls so someone can grab
-            // unassigned ones. Spec source: realtime-ux-bundle-design.md
-            // section "Permission scoping". DO NOT "fix" by tightening
-            // this match the inbox — that would silently drop unassigned
-            // calls from every agent's banner.
-            //
-            // Future Phase 14.2 (round-robin auto-assignment) is expected
-            // to reduce the unassigned pool to near-zero, at which point
-            // the asymmetry becomes a non-issue.
+        // Single-tenant visibility (fb5a398):
+        //   view_all      → every in-flight call in the company
+        //   view_assigned → assigned to me OR unassigned pool (broader
+        //                   than the inbox by design so every agent
+        //                   sees a ringing unclaimed call — see
+        //                   realtime-ux-bundle-design.md section
+        //                   "Permission scoping")
+        if (! $user->can('conversations.view_all')) {
             $callQuery->whereHas('conversation', fn ($q) =>
                 $q->where(fn ($qq) =>
                     $qq->where('assigned_to_user_id', $user->id)
@@ -99,15 +87,9 @@ class RealtimePulse extends Component
             ->all();
 
         // Unread message count across visible conversations — same scoping
-        // rules as the call payload (see comment above on view_all vs view_assigned).
+        // rules as the call payload above.
         $messageQuery = Conversation::query();
-        if ($user->can('conversations.view_all')) {
-            $messageQuery->where('user_id', $user->id);
-        } else {
-            // See the matching comment above on the call-payload view_assigned
-            // branch — same intentional broader-than-inbox scoping for the
-            // unread message count. Symmetric with the call payload so an
-            // agent's banner activity matches their notification badge count.
+        if (! $user->can('conversations.view_all')) {
             $messageQuery->where(fn ($q) =>
                 $q->where('assigned_to_user_id', $user->id)
                   ->orWhereNull('assigned_to_user_id')
@@ -126,9 +108,7 @@ class RealtimePulse extends Component
             ->where('status', CallLog::STATUS_MISSED)
             ->where('created_at', '>=', now()->subDay());
 
-        if ($user->can('conversations.view_all')) {
-            $missedQuery->whereHas('conversation', fn ($q) => $q->where('user_id', $user->id));
-        } else {
+        if (! $user->can('conversations.view_all')) {
             $missedQuery->whereHas('conversation', fn ($q) =>
                 $q->where(fn ($qq) =>
                     $qq->where('assigned_to_user_id', $user->id)

@@ -39,8 +39,11 @@ class CallsPageTest extends TestCase
         $this->assertCount(3, $response->viewData('calls'));
     }
 
-    public function test_admin_does_not_see_calls_from_other_accounts(): void
+    public function test_admin_sees_every_call_single_tenant(): void
     {
+        // Single-tenant: any admin (conversations.view_all) sees every
+        // call across the company. Replaces a previous multi-tenant
+        // assertion that expected user_id scoping (1 visible).
         $admin = $this->makeUser('admin');
         $other = $this->makeUser('admin', 'other@example.com');
 
@@ -58,8 +61,9 @@ class CallsPageTest extends TestCase
             'whatsapp_instance_id' => $otherConv->whatsapp_instance_id,
         ]);
 
+        // 1 (admin's) + 5 (colleague's) = 6 total visible.
         $this->actingAs($admin)->get(route('calls.index'))
-            ->assertViewHas('calls', fn ($calls) => count($calls) === 1);
+            ->assertViewHas('calls', fn ($calls) => count($calls) === 6);
     }
 
     public function test_agent_sees_only_calls_in_assigned_conversations(): void

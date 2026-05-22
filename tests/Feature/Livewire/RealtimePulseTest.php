@@ -63,8 +63,12 @@ class RealtimePulseTest extends TestCase
             });
     }
 
-    public function test_admin_does_not_see_calls_from_other_accounts(): void
+    public function test_admin_sees_every_inflight_call_single_tenant(): void
     {
+        // Single-tenant: any admin (conversations.view_all) sees every
+        // in-flight inbound call across the company, regardless of which
+        // user originally owns the conversation row. Replaces a previous
+        // multi-tenant assertion that expected user_id scoping.
         $userA = $this->makeUser('admin');
         $userB = $this->makeUser('admin', 'b@example.com');
         $instanceB = WhatsAppInstance::factory()->create([
@@ -85,7 +89,7 @@ class RealtimePulseTest extends TestCase
 
         Livewire::actingAs($userA)
             ->test(RealtimePulse::class)
-            ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 0);
+            ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 1);
     }
 
     public function test_agent_sees_inflight_call_on_assigned_conversation(): void
@@ -245,15 +249,18 @@ class RealtimePulseTest extends TestCase
             ->assertViewHas('inflightCalls', fn ($calls) => count($calls) === 0);
     }
 
-    public function test_unread_message_count_sums_visible_conversations(): void
+    public function test_unread_message_count_sums_all_conversations_single_tenant(): void
     {
+        // Single-tenant: view_all unread count is account-wide. Replaces
+        // a previous multi-tenant assertion that excluded conversations
+        // owned by other admins (10 vs all-110 here).
         $admin = $this->makeUser('admin');
         $instance = WhatsAppInstance::factory()->create([
             'user_id' => $admin->id,
             'status' => 'CONNECTED',
         ]);
 
-        // Three conversations owned by admin — should sum to 10
+        // Conversations owned by admin: 3 + 5 + 2 = 10
         Conversation::factory()->create([
             'user_id' => $admin->id,
             'whatsapp_instance_id' => $instance->id,
@@ -270,7 +277,8 @@ class RealtimePulseTest extends TestCase
             'unread_count' => 2,
         ]);
 
-        // One conversation owned by ANOTHER admin — must NOT contribute
+        // Conversation under a colleague — now INCLUDED in the count
+        // because admin's view_all is account-wide.
         $other = $this->makeUser('admin', 'other@example.com');
         $otherInstance = WhatsAppInstance::factory()->create([
             'user_id' => $other->id,
@@ -284,7 +292,7 @@ class RealtimePulseTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(RealtimePulse::class)
-            ->assertViewHas('unreadMessages', 10);
+            ->assertViewHas('unreadMessages', 110);
     }
 
     public function test_caps_payload_to_three_calls_when_more_in_flight(): void

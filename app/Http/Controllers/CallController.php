@@ -39,12 +39,13 @@ class CallController extends Controller
 
         $query = CallLog::query()->with(['contact', 'conversation', 'whatsappInstance', 'placedBy']);
 
-        if ($user->can('conversations.view_all')) {
-            // Account-wide visibility — restrict to calls whose conversation
-            // belongs to the current user's account.
-            $query->whereHas('conversation', fn ($q) => $q->where('user_id', $user->id));
-        } else {
-            // Agent visibility — only conversations assigned to me
+        // Visibility scoping (single-tenant — fb5a398 flipped contacts/
+        // conversations/campaigns to shared visibility; CallController was
+        // missed in that pass):
+        //   - conversations.view_all  → every call in the company
+        //   - conversations.view_assigned → only calls on conversations
+        //     currently assigned to me (agent workflow scope, unchanged)
+        if (! $user->can('conversations.view_all')) {
             $query->whereHas('conversation', fn ($q) => $q->where('assigned_to_user_id', $user->id));
         }
 
@@ -80,12 +81,14 @@ class CallController extends Controller
 
         $conversation = Conversation::findOrFail($request->input('conversation_id'));
 
-        // Authorize: must have conversations.call AND own/be-assigned-to the conversation.
+        // Authorize: must have conversations.call AND either view_all
+        // (any conversation in the company — single-tenant) or be
+        // assigned-to the conversation (agent workflow scope).
         $user = $request->user();
         if (!$user->can('conversations.call')) {
             return response()->json(['error' => 'forbidden'], 403);
         }
-        $hasAccess = ($user->can('conversations.view_all') && $conversation->user_id === $user->id)
+        $hasAccess = $user->can('conversations.view_all')
             || ($user->can('conversations.view_assigned') && $conversation->assigned_to_user_id === $user->id);
         if (!$hasAccess) {
             return response()->json(['error' => 'forbidden'], 403);
@@ -194,59 +197,60 @@ class CallController extends Controller
     }
 
     /**
-     * Decline an inbound ringing call. Routes to the right provider terminate endpoint.
+     * Decline an inbound ringing call.
      */
     public function decline(CallLog $call): JsonResponse
     {
-        if ($call->provider === CallLog::PROVIDER_AFRICAS_TALKING) {
-            try {
-                app(AfricasTalkingVoiceService::class)->endCall($call->provider_session_id);
-            } catch (\Throwable $e) {
-                Log::warning('AT endCall failed during decline', [
-                    'call_id' => $call->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        } else {
-            app(WhatsAppCloudApiService::class)
-                ->endCall($call->whatsappInstance, $call->meta_call_id);
-        }
-
-        $call->update([
-            'status' => CallLog::STATUS_DECLINED,
-            'ended_at' => now(),
-        ]);
-        CallTerminated::dispatch($call, 'declined');
+        $this->terminate($call, CallLog::STATUS_DECLINED, 'declined');
 
         return response()->json(['declined' => true]);
     }
 
     /**
-     * Hang up an in-progress call from the agent side. Routes to the right provider terminate endpoint.
+     * Hang up an in-progress call from the agent side.
      */
     public function hangup(CallLog $call): JsonResponse
     {
-        if ($call->provider === CallLog::PROVIDER_AFRICAS_TALKING) {
-            try {
+        $this->terminate($call, CallLog::STATUS_ENDED, 'agent_hung_up');
+
+        return response()->json(['ended' => true]);
+    }
+
+    /**
+     * Shared terminate flow for decline + hangup.
+     *
+     * Routes to the right provider terminate endpoint (Meta vs Africa's
+     * Talking), then updates local state and broadcasts CallTerminated.
+     *
+     * Provider failures are non-fatal — we still mark the call ended
+     * locally and notify other browser sessions. The customer may briefly
+     * hear silence before the natural disconnect, but the agent's UI is
+     * consistent. (Future improvement: enqueue a retry job for the
+     * provider-side terminate so the customer's side hangs up reliably.)
+     */
+    private function terminate(CallLog $call, string $finalStatus, string $broadcastReason): void
+    {
+        $context = ['call_id' => $call->id, 'reason' => $broadcastReason];
+        try {
+            if ($call->provider === CallLog::PROVIDER_AFRICAS_TALKING) {
                 app(AfricasTalkingVoiceService::class)->endCall($call->provider_session_id);
-            } catch (\Throwable $e) {
-                Log::warning('AT endCall failed during hangup', [
-                    'call_id' => $call->id,
-                    'error' => $e->getMessage(),
-                ]);
+            } else {
+                app(WhatsAppCloudApiService::class)
+                    ->endCall($call->whatsappInstance, $call->meta_call_id);
             }
-        } else {
-            app(WhatsAppCloudApiService::class)
-                ->endCall($call->whatsappInstance, $call->meta_call_id);
+        } catch (\Throwable $e) {
+            // Log + continue. Customer-side may not hear the hangup tone if
+            // the provider call fails, but the agent's UI must still end
+            // cleanly — letting an exception bubble would surface as a 500
+            // and leave the call_log in an in-flight state.
+            Log::warning('Provider endCall failed during terminate', $context + ['error' => $e->getMessage()]);
         }
 
         $call->update([
-            'status' => CallLog::STATUS_ENDED,
+            'status' => $finalStatus,
             'ended_at' => now(),
         ]);
-        CallTerminated::dispatch($call, 'agent_hung_up');
-
-        return response()->json(['ended' => true]);
+        CallTerminated::dispatch($call, $broadcastReason);
     }
 
     public function quality(
