@@ -13,13 +13,13 @@
 
 import AfricasTalking from 'africastalking-client';
 import { startStatsCollection, postQuality } from './call-stats-collector';
+import { createCallStateMixin } from './call-state-mixin';
 
 // ─── Outbound (agent dialing customer) ─────────────────────────────────
 window.outgoingCall = (data) => ({
     ...data,
+    ...createCallStateMixin(),
     state: 'calling',
-    durationSeconds: 0,
-    durationTimer: null,
     muted: false,
     atClient: null,
     _statsHandle: null,
@@ -81,7 +81,7 @@ window.outgoingCall = (data) => ({
     },
 
     teardown(reason) {
-        clearInterval(this.durationTimer);
+        this.stopDurationTimer();
         try { this.atClient?.disconnect(); } catch (_) {}
         this.atClient = null;
         const aggregate = this._statsHandle?.stop();
@@ -90,29 +90,18 @@ window.outgoingCall = (data) => ({
         this.state = reason === 'error' ? 'failed' : 'ended';
     },
 
-    startDurationTimer() {
-        this.durationTimer = setInterval(() => this.durationSeconds++, 1000);
-    },
-
-    formatDuration(seconds) {
-        const m = Math.floor(seconds / 60);
-        return `${m}:${String(seconds % 60).padStart(2, '0')}`;
-    },
-
     dismiss() { this.state = 'ended'; },
 });
 
 // ─── Inbound AT call (customer dialing the virtual number) ─────────────
 window.incomingAtCall = (data) => ({
     ...data,
+    ...createCallStateMixin(),
     state: 'ringing',
-    durationSeconds: 0,
-    durationTimer: null,
     muted: false,
     atClient: null,
     echoChannel: null,
     _statsHandle: null,
-    errorMessage: '',
 
     init() {
         // Mirror calls.js incomingCall — start the looping ringtone while
@@ -220,33 +209,11 @@ window.incomingAtCall = (data) => ({
 
     teardown(reason) {
         window.bqStopRingtone?.();
-        clearInterval(this.durationTimer);
+        this.stopDurationTimer();
         try { this.atClient?.disconnect(); } catch (_) {}
         const aggregate = this._statsHandle?.stop();
         postQuality(this.callId, this.csrf, aggregate);
         this._statsHandle = null;
         this.state = 'terminated';
-    },
-
-    startDurationTimer() {
-        this.durationTimer = setInterval(() => this.durationSeconds++, 1000);
-    },
-
-    async post(url, body) {
-        return fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': this.csrf,
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify(body),
-            credentials: 'same-origin',
-        });
-    },
-
-    formatDuration(seconds) {
-        const m = Math.floor(seconds / 60);
-        return `${m}:${String(seconds % 60).padStart(2, '0')}`;
     },
 });

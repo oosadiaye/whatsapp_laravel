@@ -96,21 +96,7 @@ class CallController extends Controller
 
         try {
             $sessionId = $service->placeCall($conversation->contact->phone);
-
-            $call = CallLog::create([
-                'conversation_id' => $conversation->id,
-                'contact_id' => $conversation->contact_id,
-                'whatsapp_instance_id' => $conversation->whatsapp_instance_id,
-                'direction' => 'outbound',
-                'provider' => CallLog::PROVIDER_AFRICAS_TALKING,
-                'provider_session_id' => $sessionId,
-                'status' => CallLog::STATUS_INITIATED,
-                'started_at' => now(),
-                'placed_by_user_id' => auth()->id(),
-                'from_phone' => Setting::get('africastalking_virtual_number'),
-                'to_phone' => $conversation->contact->phone,
-            ]);
-
+            $call = $this->recordOutboundAtCall($conversation, $sessionId);
             CallRinging::dispatch($call);
 
             return response()->json([
@@ -118,19 +104,7 @@ class CallController extends Controller
                 'session_id' => $sessionId,
             ]);
         } catch (VoiceProviderException | ConfigurationException $e) {
-            // Audit row for the failure.
-            CallLog::create([
-                'conversation_id' => $conversation->id,
-                'contact_id' => $conversation->contact_id,
-                'whatsapp_instance_id' => $conversation->whatsapp_instance_id,
-                'direction' => 'outbound',
-                'provider' => CallLog::PROVIDER_AFRICAS_TALKING,
-                'status' => CallLog::STATUS_FAILED,
-                'failure_reason' => $e->getMessage(),
-                'placed_by_user_id' => auth()->id(),
-                'from_phone' => Setting::get('africastalking_virtual_number') ?? '',
-                'to_phone' => $conversation->contact->phone,
-            ]);
+            $this->recordOutboundAtFailure($conversation, $e->getMessage());
 
             return response()->json([
                 'error' => 'Voice service unavailable. Try again in a moment, or contact via WhatsApp message.',
@@ -194,6 +168,57 @@ class CallController extends Controller
         $call->update(['sdp_answer' => $sdp]);
 
         return response()->json(['accepted' => true]);
+    }
+
+    /**
+     * Build the success CallLog row for an outbound AT call.
+     *
+     * Extracted from placeOutbound so the action method is purely the
+     * authorisation + service-call + broadcast spine. Field overlap with
+     * recordOutboundAtFailure() is ~80%; the diff is `status`/`provider_session_id`/
+     * `started_at` vs `failure_reason`. Kept as two methods (not a builder
+     * with optional args) because the call sites read more naturally
+     * when each helper names its purpose.
+     */
+    private function recordOutboundAtCall(Conversation $conversation, string $sessionId): CallLog
+    {
+        return CallLog::create([
+            'conversation_id' => $conversation->id,
+            'contact_id' => $conversation->contact_id,
+            'whatsapp_instance_id' => $conversation->whatsapp_instance_id,
+            'direction' => CallLog::DIRECTION_OUTBOUND,
+            'provider' => CallLog::PROVIDER_AFRICAS_TALKING,
+            'provider_session_id' => $sessionId,
+            'status' => CallLog::STATUS_INITIATED,
+            'started_at' => now(),
+            'placed_by_user_id' => auth()->id(),
+            'from_phone' => Setting::get('africastalking_virtual_number'),
+            'to_phone' => $conversation->contact->phone,
+        ]);
+    }
+
+    /**
+     * Build an audit CallLog row when the AT API rejected the dial.
+     *
+     * Keeps a failed attempt visible on the /calls history page so
+     * operators can see "tried to call X, AT said Y" without grepping
+     * laravel.log. from_phone falls back to '' when the virtual number
+     * setting itself is the misconfiguration that caused the failure.
+     */
+    private function recordOutboundAtFailure(Conversation $conversation, string $reason): CallLog
+    {
+        return CallLog::create([
+            'conversation_id' => $conversation->id,
+            'contact_id' => $conversation->contact_id,
+            'whatsapp_instance_id' => $conversation->whatsapp_instance_id,
+            'direction' => CallLog::DIRECTION_OUTBOUND,
+            'provider' => CallLog::PROVIDER_AFRICAS_TALKING,
+            'status' => CallLog::STATUS_FAILED,
+            'failure_reason' => $reason,
+            'placed_by_user_id' => auth()->id(),
+            'from_phone' => Setting::get('africastalking_virtual_number') ?? '',
+            'to_phone' => $conversation->contact->phone,
+        ]);
     }
 
     /**

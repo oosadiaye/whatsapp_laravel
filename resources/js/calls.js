@@ -16,21 +16,19 @@
  * CallTerminated Echo event): teardown — peer.close(), stop mic tracks.
  */
 import { startStatsCollection, postQuality } from './call-stats-collector';
+import { createCallStateMixin } from './call-state-mixin';
 
 window.incomingCall = (data) => ({
     ...data,
+    ...createCallStateMixin(),  // durationSeconds, durationTimer, errorMessage,
+                                // post(), safeReadJson(), formatDuration(),
+                                // startDurationTimer(), stopDurationTimer()
     state: 'ringing',
     peer: null,
     micStream: null,
     muted: false,
-    durationSeconds: 0,
-    durationTimer: null,
     echoChannel: null,
     _statsHandle: null,
-    // Last failure message — surfaced into the connect_failed banner so the
-    // operator can see WHY the connect failed (mic vs claim vs server vs SDP)
-    // without opening DevTools. Reset on each retryAccept().
-    errorMessage: '',
 
     init() {
         // Start the looping ringtone for as long as the banner is in 'ringing'.
@@ -179,15 +177,6 @@ window.incomingCall = (data) => ({
         await this.acceptCall();
     },
 
-    /**
-     * Best-effort JSON read on a non-OK response — Laravel's debug HTML pages
-     * aren't JSON and would throw. Returns null on parse failure so the caller
-     * can fall back to a generic message.
-     */
-    async safeReadJson(res) {
-        try { return await res.json(); } catch (_) { return null; }
-    },
-
     async declineCall() {
         window.bqStopRingtone?.();
         await this.post(`/calls/${this.callId}/decline`, {});
@@ -204,17 +193,12 @@ window.incomingCall = (data) => ({
         this.micStream?.getAudioTracks().forEach(t => t.enabled = !this.muted);
     },
 
-    startDurationTimer() {
-        this.durationTimer = setInterval(() => this.durationSeconds++, 1000);
-    },
-
     cleanupMedia() {
         try { this.peer?.close(); } catch (_) {}
         this.micStream?.getTracks().forEach(t => t.stop());
         this.peer = null;
         this.micStream = null;
-        clearInterval(this.durationTimer);
-        this.durationTimer = null;
+        this.stopDurationTimer();
         const aggregate = this._statsHandle?.stop();
         postQuality(this.callId, this.csrf, aggregate);
         this._statsHandle = null;
@@ -224,24 +208,5 @@ window.incomingCall = (data) => ({
         window.bqStopRingtone?.();
         this.cleanupMedia();
         this.state = 'terminated';
-    },
-
-    async post(url, body) {
-        return fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': this.csrf,
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify(body),
-            credentials: 'same-origin',
-        });
-    },
-
-    formatDuration(seconds) {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m}:${s.toString().padStart(2, '0')}`;
     },
 });
