@@ -67,4 +67,30 @@ class CallQualityCalculatorTest extends TestCase
         // Verify exactly 2 decimal places by comparing to its rounded self.
         $this->assertSame(round($mos, 2), $mos);
     }
+
+    public function test_calibration_weights_are_config_driven(): void
+    {
+        // Pin the config-overridability contract introduced when the
+        // hardcoded magic numbers moved to config/voice.php. Doubling the
+        // packet-loss weight from 4.0 → 8.0 must produce a strictly LOWER
+        // MOS for the same input — proving the config value reaches the
+        // calculation rather than being ignored.
+        $calculator = new CallQualityCalculator();
+
+        $packetLoss = 5.0;
+        $jitter = 10.0;
+        $rtt = 100;
+
+        $baseline = $calculator->computeMos($packetLoss, $jitter, $rtt);
+
+        // Boost the packet-loss penalty.
+        config()->set('voice.mos.packet_loss_weight', 8.0);
+        $stricter = $calculator->computeMos($packetLoss, $jitter, $rtt);
+
+        $this->assertLessThan(
+            $baseline,
+            $stricter,
+            'Doubling packet_loss_weight must lower MOS for the same input — proves config drives the formula.',
+        );
+    }
 }

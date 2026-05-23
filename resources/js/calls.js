@@ -90,8 +90,17 @@ window.incomingCall = (data) => ({
             if (!this.sdpOffer || typeof this.sdpOffer !== 'string') {
                 throw new Error('Missing SDP offer on the call. The Meta calling webhook may not have included it — check whatsapp.calls webhook logs.');
             }
+            // ICE servers from Vite env (set in .env via VITE_STUN_URLS,
+            // comma-separated, mirroring config/voice.php's stun_urls).
+            // Default falls back to Google's public STUN so a fresh dev
+            // setup works without extra config.
+            const stunUrls = (import.meta.env.VITE_STUN_URLS
+                || 'stun:stun.l.google.com:19302')
+                .split(',')
+                .map(u => u.trim())
+                .filter(Boolean);
             this.peer = new RTCPeerConnection({
-                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+                iceServers: stunUrls.map(urls => ({ urls })),
             });
 
             // 4. Audio rendering — Meta's stream → <audio> element.
