@@ -9,6 +9,7 @@ use App\Events\Calling\CallRinging;
 use App\Events\Calling\CallTerminated;
 use App\Exceptions\ConfigurationException;
 use App\Exceptions\VoiceProviderException;
+use App\Http\Requests\StoreCallQualityRequest;
 use App\Models\CallLog;
 use App\Models\Conversation;
 use App\Models\Setting;
@@ -278,29 +279,20 @@ class CallController extends Controller
         CallTerminated::dispatch($call, $broadcastReason);
     }
 
+    /**
+     * Persist call-quality telemetry posted by the browser collector.
+     *
+     * Authorisation + validation live in StoreCallQualityRequest. The
+     * action below is purely: compute MOS from the validated inputs,
+     * merge into the JSON metrics payload, persist, return MOS for
+     * the client to display.
+     */
     public function quality(
-        Request $request,
+        StoreCallQualityRequest $request,
         CallLog $call,
         CallQualityCalculator $calculator,
     ): JsonResponse {
-        // Ownership check: only the agent who placed/answered may post.
-        // Outbound: matches placed_by_user_id.
-        // Inbound: matches the parent conversation's assigned_to_user_id.
-        $userId = auth()->id();
-        $owns = $call->placed_by_user_id === $userId
-            || $call->conversation?->assigned_to_user_id === $userId;
-        if (! $owns) {
-            return response()->json(['error' => 'forbidden'], 403);
-        }
-
-        $validated = $request->validate([
-            'avg_jitter_ms' => ['required', 'numeric', 'min:0', 'max:10000'],
-            'avg_packet_loss_pct' => ['required', 'numeric', 'min:0', 'max:100'],
-            'avg_rtt_ms' => ['required', 'integer', 'min:0', 'max:60000'],
-            'samples_captured' => ['required', 'integer', 'min:0', 'max:1000'],
-            'ice_candidate_type' => ['required', 'string', 'in:host,srflx,relay,prflx,unknown'],
-            'codec' => ['required', 'string', 'max:32'],
-        ]);
+        $validated = $request->validated();
 
         $mos = $calculator->computeMos(
             (float) $validated['avg_packet_loss_pct'],
@@ -308,7 +300,7 @@ class CallController extends Controller
             (int) $validated['avg_rtt_ms'],
         );
 
-        $metrics = [
+        $call->update(['quality_metrics' => [
             'avg_jitter_ms' => (float) $validated['avg_jitter_ms'],
             'avg_packet_loss_pct' => (float) $validated['avg_packet_loss_pct'],
             'avg_rtt_ms' => (int) $validated['avg_rtt_ms'],
@@ -316,9 +308,7 @@ class CallController extends Controller
             'ice_candidate_type' => $validated['ice_candidate_type'],
             'codec' => $validated['codec'],
             'mos' => $mos,
-        ];
-
-        $call->update(['quality_metrics' => $metrics]);
+        ]]);
 
         return response()->json(['mos' => $mos]);
     }
