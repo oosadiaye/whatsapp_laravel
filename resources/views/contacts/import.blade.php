@@ -168,7 +168,7 @@
                                                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
                                             <option value="">{{ __('-- Select column --') }}</option>
                                             <template x-for="(header, idx) in csvHeaders" :key="idx">
-                                                <option :value="idx" x-text="header"></option>
+                                                <option :value="header" x-text="header"></option>
                                             </template>
                                         </select>
                                     </div>
@@ -178,7 +178,7 @@
                                                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
                                             <option value="">{{ __('-- None --') }}</option>
                                             <template x-for="(header, idx) in csvHeaders" :key="idx">
-                                                <option :value="idx" x-text="header"></option>
+                                                <option :value="header" x-text="header"></option>
                                             </template>
                                         </select>
                                     </div>
@@ -188,7 +188,7 @@
                                                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
                                             <option value="">{{ __('-- None --') }}</option>
                                             <template x-for="(header, idx) in csvHeaders" :key="idx">
-                                                <option :value="idx" x-text="header"></option>
+                                                <option :value="header" x-text="header"></option>
                                             </template>
                                         </select>
                                     </div>
@@ -198,7 +198,7 @@
                                                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
                                             <option value="">{{ __('-- None --') }}</option>
                                             <template x-for="(header, idx) in csvHeaders" :key="idx">
-                                                <option :value="idx" x-text="header"></option>
+                                                <option :value="header" x-text="header"></option>
                                             </template>
                                         </select>
                                     </div>
@@ -404,7 +404,7 @@
 
                 parseCSV() {
                     if (!this.fileData) return;
-                    const lines = this.fileData.split(/\r?\n/).filter(line => line.trim());
+                    const lines = this.fileData.replace(/^﻿/, '').split(/\r?\n/).filter(line => line.trim());
                     if (lines.length === 0) return;
 
                     this.csvHeaders = this.splitCSVLine(lines[0]);
@@ -418,10 +418,10 @@
                     this.csvHeaders.forEach((header, idx) => {
                         const h = header.toLowerCase().trim();
                         if (h.includes('phone') || h.includes('number') || h.includes('wa') || h.includes('mobile')) {
-                            this.columnMap.phone = String(idx);
+                            this.columnMap.phone = header;
                         }
                         if (h.includes('name') && !h.includes('last') && !h.includes('first')) {
-                            this.columnMap.name = String(idx);
+                            this.columnMap.name = header;
                         }
                     });
                 },

@@ -191,6 +191,13 @@ class ContactImportService
             return [];
         }
 
+        // Strip the UTF-8 BOM Excel (and our own downloadTemplate) prepends to
+        // the first cell — otherwise the first header key becomes "\xEF\xBB\xBFphone"
+        // and never matches the posted column map.
+        if (isset($headers[0]) && str_starts_with($headers[0], "\xEF\xBB\xBF")) {
+            $headers[0] = substr($headers[0], 3);
+        }
+
         $headers = array_map('trim', $headers);
 
         while (($line = fgetcsv($handle)) !== false) {
