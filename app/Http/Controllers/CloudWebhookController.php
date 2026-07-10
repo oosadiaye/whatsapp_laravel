@@ -130,6 +130,15 @@ class CloudWebhookController extends Controller
             }
 
             $mappedStatus = $this->mapStatus($rawStatus);
+
+            // Capture prior state BEFORE the update so we only bump the
+            // campaign counters once. Meta retries webhooks on non-2xx, so
+            // the same status can arrive several times — without this guard
+            // delivered/read/failed counts inflate.
+            $alreadyDelivered = $log->delivered_at !== null;
+            $alreadyRead = $log->read_at !== null;
+            $alreadyFailed = $log->status === 'FAILED';
+
             $updates = ['status' => $mappedStatus];
 
             // Meta gives a unix timestamp string; prefer it over now() for accuracy.
@@ -147,20 +156,26 @@ class CloudWebhookController extends Controller
 
             $log->update($updates);
 
-            $this->updateCampaignCounters($log->campaign, $mappedStatus);
+            $this->updateCampaignCounters($log->campaign, $mappedStatus, $alreadyDelivered, $alreadyRead, $alreadyFailed);
         }
     }
 
-    private function updateCampaignCounters(?Campaign $campaign, string $mappedStatus): void
-    {
+    private function updateCampaignCounters(
+        ?Campaign $campaign,
+        string $mappedStatus,
+        bool $alreadyDelivered,
+        bool $alreadyRead,
+        bool $alreadyFailed,
+    ): void {
         if ($campaign === null) {
             return;
         }
 
+        // Only count the transition if this log hasn't recorded it yet.
         match ($mappedStatus) {
-            'DELIVERED' => $campaign->increment('delivered_count'),
-            'READ' => $campaign->increment('read_count'),
-            'FAILED' => $campaign->increment('failed_count'),
+            'DELIVERED' => ! $alreadyDelivered && $campaign->increment('delivered_count'),
+            'READ' => ! $alreadyRead && $campaign->increment('read_count'),
+            'FAILED' => ! $alreadyFailed && $campaign->increment('failed_count'),
             default => null,
         };
     }

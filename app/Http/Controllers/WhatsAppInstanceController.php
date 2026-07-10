@@ -9,6 +9,7 @@ use App\Models\WhatsAppInstance;
 use App\Services\WhatsAppCloudApiService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -118,9 +119,21 @@ class WhatsAppInstanceController extends Controller
 
         if ($instance->isReady()) {
             try {
-                $phoneInfo = $this->cloudApi->getPhoneNumberInfo($instance);
+                // Cache the Meta lookup for 5 minutes so a page refresh (or a
+                // teammate also opening the page) doesn't re-hit graph.facebook.com
+                // on every load and risk Meta rate limits.
+                $phoneInfo = Cache::remember(
+                    "instance_phone_info.{$instance->id}",
+                    now()->addMinutes(5),
+                    fn () => $this->cloudApi->getPhoneNumberInfo($instance),
+                );
+
                 $status = 'CONNECTED';
 
+                // Persist refreshed metadata + mark CONNECTED on a successful
+                // probe. We only ever upgrade the stored status here; a
+                // transient network blip must NOT flip a healthy instance to
+                // CREDENTIALS_INVALID (see catch below).
                 $instance->update([
                     'quality_rating' => $phoneInfo['quality_rating'] ?? $instance->quality_rating,
                     'messaging_limit_tier' => $phoneInfo['messaging_limit_tier'] ?? $instance->messaging_limit_tier,
@@ -130,7 +143,10 @@ class WhatsAppInstanceController extends Controller
                 ]);
             } catch (Throwable $e) {
                 Log::warning('Cloud API getPhoneNumberInfo failed', ['error' => $e->getMessage()]);
-                $status = 'CREDENTIALS_INVALID';
+                // Keep the last-known status. A transient error (timeout, 5xx,
+                // DNS blip) is not proof the credentials are invalid, so we
+                // must not downgrade the row here.
+                $phoneInfo = null;
             }
         }
 

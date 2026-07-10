@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Models\Contact;
 use App\Models\ContactGroup;
+use App\Models\Setting;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -89,10 +90,19 @@ class ContactImportService
     /**
      * Normalize a raw phone number string into a clean international format.
      *
+     * When the input is a local number (leading 0 or missing a country code),
+     * the configured `default_country_code` setting is prepended so the stored
+     * value is full E.164. This keeps send-time behaviour consistent across
+     * orgs: WhatsAppCloudApiService only strips non-digits and assumes the
+     * stored phone is already E.164, so the country code must be applied here
+     * at import time, not hardcoded to Nigeria.
+     *
      * @return string|null  Normalized phone number or null if invalid
      */
-    public function normalizePhone(string $raw, string $defaultCountryCode = '234'): ?string
+    public function normalizePhone(string $raw, ?string $defaultCountryCode = null): ?string
     {
+        $defaultCountryCode ??= (string) Setting::get('default_country_code', '234');
+
         $phone = preg_replace('/[^0-9]/', '', $raw);
 
         if ($phone === '' || $phone === null) {

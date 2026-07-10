@@ -140,9 +140,106 @@ class AfricasTalkingWebhookTest extends TestCase
         });
     }
 
+    public function test_inbound_call_control_dials_assigned_agent_client(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
+        $admin->assignRole(User::ROLE_ADMIN);
+        WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+
+        $agent = User::factory()->create([
+            'role' => User::ROLE_AGENT,
+            'is_active' => true,
+            'last_seen_at' => now(),
+        ]);
+        $agent->assignRole(User::ROLE_AGENT);
+
+        // isActive=1 → AT wants Voice XML. We must <Dial> the assigned agent's
+        // browser client to actually bridge audio.
+        $response = $this->postWebhook([
+            'isActive' => '1',
+            'sessionId' => 'sess_ctrl_inbound',
+            'direction' => 'Inbound',
+            'callerNumber' => '+2348033333333',
+            'destinationNumber' => '+2348100000000',
+        ]);
+
+        $response->assertOk();
+
+        $call = CallLog::where('provider_session_id', 'sess_ctrl_inbound')->first();
+        $this->assertNotNull($call);
+        $this->assertSame($agent->id, $call->conversation->assigned_to_user_id);
+
+        $response->assertSee('<Dial', false);
+        $response->assertSee('phoneNumbers="agent_'.$agent->id.'"', false);
+        // callerId is the customer's number so the agent's softphone shows who's calling.
+        $response->assertSee('callerId="+2348033333333"', false);
+    }
+
+    public function test_inbound_call_control_with_no_agent_returns_say(): void
+    {
+        // Org instance exists but NO online agent → round-robin returns null →
+        // we tell the caller agents are busy instead of bridging to nobody.
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
+        $admin->assignRole(User::ROLE_ADMIN);
+        WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+
+        $response = $this->postWebhook([
+            'isActive' => '1',
+            'sessionId' => 'sess_ctrl_noagent',
+            'direction' => 'Inbound',
+            'callerNumber' => '+2348044444444',
+            'destinationNumber' => '+2348100000000',
+        ]);
+
+        $response->assertOk();
+        $response->assertSee('<Say>', false);
+        $response->assertDontSee('<Dial', false);
+    }
+
+    public function test_outbound_call_control_bridges_to_placing_agent_client(): void
+    {
+        $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_ctrl_outbound');
+
+        // Customer answered the server-initiated call; AT asks what to do.
+        // We bridge them to the agent who placed it.
+        $response = $this->postWebhook([
+            'isActive' => '1',
+            'sessionId' => 'sess_ctrl_outbound',
+            'direction' => 'Outbound',
+            'callerNumber' => '+2348100000000',
+            'destinationNumber' => $call->to_phone,
+        ]);
+
+        $response->assertOk();
+        $response->assertSee('<Dial', false);
+        $response->assertSee('phoneNumbers="agent_'.$call->placed_by_user_id.'"', false);
+    }
+
+    public function test_outbound_call_control_unknown_session_rejects(): void
+    {
+        $response = $this->postWebhook([
+            'isActive' => '1',
+            'sessionId' => 'sess_ctrl_unknown',
+            'direction' => 'Outbound',
+            'destinationNumber' => '+2348055555555',
+        ]);
+
+        $response->assertOk();
+        $response->assertSee('<Reject', false);
+    }
+
     private function postWebhook(array $payload)
     {
-        return $this->post(route('webhook.africastalking.voice'), $payload);
+        // The controller verifies the HMAC-SHA256 of the raw body against the
+        // configured API key in every environment (no test bypass), so tests
+        // must sign their payloads. Posting as JSON and signing json_encode()
+        // keeps getContent() in lock-step with the computed signature.
+        $key = Crypt::decryptString(Setting::get('africastalking_api_key'));
+        $signature = hash_hmac('sha256', json_encode($payload), $key);
+
+        return $this->postJson(route('webhook.africastalking.voice'), $payload, [
+            'X-Africastalking-Signature' => $signature,
+        ]);
     }
 
     private function makeOutboundCall(string $status, string $sessionId): CallLog

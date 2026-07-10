@@ -34,11 +34,24 @@ class CallCostCalculationTest extends TestCase
         Setting::set('africastalking_rate_per_minute_kobo', '600');  // ₦6/min
     }
 
+    private function postWebhook(array $payload)
+    {
+        // The controller verifies the HMAC-SHA256 of the raw body against the
+        // configured API key in every environment (no test bypass), so tests
+        // must sign their payloads.
+        $key = Crypt::decryptString(Setting::get('africastalking_api_key'));
+        $signature = hash_hmac('sha256', json_encode($payload), $key);
+
+        return $this->postJson(route('webhook.africastalking.voice'), $payload, [
+            'X-Africastalking-Signature' => $signature,
+        ]);
+    }
+
     public function test_ninety_seconds_at_six_naira_per_minute_costs_900_kobo(): void
     {
         $call = $this->makeCall('sess_90s');
 
-        $this->post(route('webhook.africastalking.voice'), [
+        $this->postWebhook([
             'sessionId' => 'sess_90s',
             'status' => 'Completed',
             'direction' => 'Outbound',
@@ -54,7 +67,7 @@ class CallCostCalculationTest extends TestCase
     {
         $call = $this->makeCall('sess_0s');
 
-        $this->post(route('webhook.africastalking.voice'), [
+        $this->postWebhook([
             'sessionId' => 'sess_0s',
             'status' => 'Completed',
             'direction' => 'Outbound',

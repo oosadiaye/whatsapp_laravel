@@ -27,6 +27,13 @@ class CampaignBatchDispatch implements ShouldQueue
     {
         $this->campaign = $this->campaign->fresh();
 
+        // The campaign may have been cancelled (or otherwise moved off QUEUED)
+        // between launch() dispatching this job and the worker picking it up.
+        // Bail rather than resurrecting it as RUNNING and fanning out sends.
+        if ($this->campaign->status !== 'QUEUED') {
+            return;
+        }
+
         $this->campaign->update([
             'status' => 'RUNNING',
             'started_at' => Carbon::now(),
