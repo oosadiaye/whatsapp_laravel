@@ -6,7 +6,7 @@ Send Meta-approved WhatsApp Business templates as bulk marketing campaigns throu
 
 ## What it does
 
-- **Per-customer Meta Cloud API instances** — each customer brings their own Meta Business account, you manage many under one platform
+- **Multiple Meta Cloud API numbers** — register many WhatsApp business numbers (one `WhatsAppInstance` per number) in a single-tenant workspace. Visibility is shared and role-scoped, **not** per-customer tenant isolation — `user_id` on records is audit metadata only
 - **Sync approved templates** — pull every template Meta has registered for a WABA, with pagination, on-demand or every 15 minutes via scheduled sync
 - **Campaign blasting** — pick template + contact group → personalized variable substitution → rate-limited queued send
 - **Real delivery tracking** — HMAC-validated webhooks update message logs with sent/delivered/read/failed states using Meta's reported timestamps
@@ -15,7 +15,7 @@ Send Meta-approved WhatsApp Business templates as bulk marketing campaigns throu
 
 ## Architecture in one paragraph
 
-Direct integration with Meta's **WhatsApp Cloud API** at `graph.facebook.com/v20.0`. No third-party BSPs (Twilio, Vonage, 360dialog) — those add 20-40% markup for capabilities you already have direct. Each `WhatsAppInstance` model row carries one Meta phone number's credentials. The `WhatsAppMessenger` service is a thin facade that normalizes provider responses into a `SendResult` DTO so callers don't worry about response shape. Webhook events route per-instance via `/webhooks/whatsapp/{instance}` so each customer can use their own Meta App with its own `app_secret`.
+Direct integration with Meta's **WhatsApp Cloud API** at `graph.facebook.com/v20.0`. No third-party BSPs (Twilio, Vonage, 360dialog) — those add 20-40% markup for capabilities you already have direct. Each `WhatsAppInstance` model row carries one Meta phone number's credentials. The `WhatsAppMessenger` service is a thin facade that normalizes provider responses into a `SendResult` DTO so callers don't worry about response shape. Webhook events route per-instance via `/webhooks/whatsapp/{instance}` so each registered number can use its own Meta App with its own `app_secret`. The app is **single-tenant**: all permitted staff share visibility of contacts/conversations/campaigns/calls, gated by role permissions (`conversations.view_all` vs `view_assigned`) rather than per-customer isolation.
 
 ## Tech stack
 
