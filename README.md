@@ -32,7 +32,7 @@ Direct integration with Meta's **WhatsApp Cloud API** at `graph.facebook.com/v20
 
 ## Quick start (local development)
 
-**Prerequisites:** PHP 8.2+, Composer 2, Node 20+, MySQL or SQLite
+**Prerequisites:** PHP 8.3+, Composer 2, Node 20+, MySQL or SQLite
 
 ```bash
 # 1. Clone and install

@@ -5,7 +5,7 @@
 | Component | Minimum | Recommended |
 |---|---|---|
 | OS | Linux (any) | Ubuntu 22.04+ or RHEL 9+ |
-| PHP | 8.2 | 8.3 |
+| PHP | 8.3 | 8.3 |
 | PHP extensions | bcmath, ctype, curl, fileinfo, mbstring, openssl, pdo_mysql, tokenizer, xml | + redis, intl, gd, zip |
 | Composer | 2.5+ | 2.7+ |
 | Node | 18+ (only for build) | 20+ |

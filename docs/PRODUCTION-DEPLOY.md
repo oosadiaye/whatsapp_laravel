@@ -26,8 +26,8 @@ If this is the first time deploying BlastIQ on a server, work through this list 
 ### 1. System dependencies
 
 ```bash
-# PHP 8.2+ with required extensions
-php --version  # confirm 8.2+
+# PHP 8.3+ with required extensions
+php --version  # confirm 8.3+
 # Required extensions: pdo_mysql, mbstring, openssl, xml, ctype, json, bcmath, fileinfo, tokenizer
 
 # Composer
