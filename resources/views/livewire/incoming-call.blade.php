@@ -1,10 +1,25 @@
 @php($_isAt = $call->provider === \App\Models\CallLog::PROVIDER_AFRICAS_TALKING)
+@php($_isMeta = $call->provider === \App\Models\CallLog::PROVIDER_META_WHATSAPP)
+@if($_isMeta)
+    {{-- The Meta Cloud Calling API is not generally available, and the
+         send/accept endpoints in WhatsAppCloudApiService are flagged as
+         speculative. Rather than attempt a WebRTC handshake that can never
+         succeed (and fail opaquely with "Missing SDP offer"), show a clear
+         notice. Live calls use the Africa's Talking dialer (provider=
+         africastalking). --}}
+    <div class="flex items-center gap-3 bg-gray-100 border-b border-gray-300 text-gray-700 px-4 py-3 text-sm">
+        <span class="flex-1">
+            Incoming WhatsApp call — live answering isn't available in this
+            build (Meta Cloud Calling API not enabled). Use the Africa's
+            Talking dialer for real-time calls.
+        </span>
+    </div>
+@else
 <div @if($_isAt) x-data="incomingAtCall({
     callId: {{ $call->id }},
     sessionId: @js(session()->getId()),
     contactName: @js($call->contact->display_name ?? 'Unknown'),
     phone: @js($call->from_phone),
-    atToken: @js($atToken),
     csrf: @js(csrf_token()),
 })" @else x-data="incomingCall({
     callId: {{ $call->id }},
@@ -16,10 +31,10 @@
     csrf: @js(csrf_token()),
 })" @endif x-init="init()">
     {{-- Phase 18: same template DOM serves both providers; the x-data
-         factory above differs (raw WebRTC vs AT SDK) but the state
-         names (ringing/connecting/connected/mic_denied/claimed_elsewhere)
-         and method names (acceptCall/declineCall/toggleMute/hangup) are
-         intentionally identical so the markup below works for both. --}}
+          factory above differs (raw WebRTC vs AT SDK) but the state
+          names (ringing/connecting/connected/mic_denied/claimed_elsewhere)
+          and method names (acceptCall/declineCall/toggleMute/hangup) are
+          intentionally identical so the markup below works for both. --}}
     <template x-if="state === 'ringing'">
         <div class="flex items-center gap-3 bg-emerald-600 text-white px-4 py-3 shadow-md">
             <span class="text-xl animate-pulse" aria-hidden="true">📞</span>
@@ -115,3 +130,4 @@
 
     <audio id="bq-remote-audio" autoplay></audio>
 </div>
+@endif
