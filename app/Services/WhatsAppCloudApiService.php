@@ -48,7 +48,12 @@ class WhatsAppCloudApiService
             ->acceptJson()
             ->asJson()
             ->timeout(15)
-            ->retry(2, 250, throw: false);
+            // Retry ONLY on connection-level failures. A 5xx *response* may mean
+            // Meta already processed a non-idempotent POST (message send / call
+            // terminate); blindly retrying it would duplicate the side effect.
+            ->retry(2, 250, function (\Throwable $exception): bool {
+                return $exception instanceof \Illuminate\Http\Client\ConnectionException;
+            }, throw: false);
     }
 
     private function url(string $path): string

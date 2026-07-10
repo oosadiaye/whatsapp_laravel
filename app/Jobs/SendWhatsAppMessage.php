@@ -51,6 +51,17 @@ class SendWhatsAppMessage implements ShouldQueue
 
     public function handle(WhatsAppMessenger $messenger): void
     {
+        // Idempotency guard: once this log leaves PENDING it has already been
+        // sent (or failed) by a prior run of this job. Meta's send API has no
+        // idempotency key, so if the worker retries after a successful send
+        // (e.g. the status write below, the increment, or checkCompletion threw,
+        // or the worker restarted) re-entering a send branch would deliver a
+        // DUPLICATE message to the customer. Bail instead.
+        $this->log->refresh();
+        if ($this->log->status !== 'PENDING') {
+            return;
+        }
+
         $this->campaign->refresh();
 
         if ($this->campaign->status === 'PAUSED') {

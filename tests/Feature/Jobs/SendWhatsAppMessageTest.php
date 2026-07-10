@@ -131,6 +131,31 @@ class SendWhatsAppMessageTest extends TestCase
         $this->assertStringContainsString('no WhatsApp instance', $log->fresh()->error_message);
     }
 
+    public function test_already_sent_log_is_not_resent_on_retry(): void
+    {
+        $user = User::factory()->create();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
+        [$campaign, $contact, $log] = $this->setupSend($user, $instance, [
+            'message' => 'Hello',
+        ]);
+
+        // Simulate a prior successful send whose post-send bookkeeping threw
+        // and is now being retried by the queue: the log is already SENT.
+        $log->update(['status' => 'SENT', 'whatsapp_message_id' => 'wamid.original']);
+        $sentBefore = $campaign->fresh()->sent_count;
+
+        Http::fake();
+
+        SendWhatsAppMessage::dispatch($log, $campaign, $contact);
+
+        // Idempotency guard must prevent a duplicate customer-facing send and
+        // a double sent_count increment.
+        Http::assertNothingSent();
+        $this->assertSame('SENT', $log->fresh()->status);
+        $this->assertSame('wamid.original', $log->fresh()->whatsapp_message_id);
+        $this->assertSame($sentBefore, $campaign->fresh()->sent_count);
+    }
+
     /**
      * @return array{0: Campaign, 1: Contact, 2: MessageLog}
      */

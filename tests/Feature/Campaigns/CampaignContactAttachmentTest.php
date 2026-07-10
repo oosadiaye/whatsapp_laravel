@@ -174,6 +174,85 @@ class CampaignContactAttachmentTest extends TestCase
         $this->assertSame(0, MessageLog::where('campaign_id', $campaign->id)->count());
     }
 
+    public function test_batch_dispatch_bails_when_campaign_not_queued(): void
+    {
+        Http::fake();
+        Bus::fake([\App\Jobs\SendWhatsAppMessage::class]);
+
+        $admin = $this->makeAdmin();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+        $group = ContactGroup::create(['user_id' => $admin->id, 'name' => 'Targets']);
+        Contact::factory()->count(3)->create(['user_id' => $admin->id, 'is_active' => true])
+            ->each(fn ($c) => $group->contacts()->attach($c->id));
+
+        // Already RUNNING (e.g. a retried/duplicate dispatch): must NOT re-fan-out.
+        $campaign = Campaign::create([
+            'user_id' => $admin->id,
+            'instance_id' => $instance->id,
+            'name' => 'Running',
+            'message' => 'Hi',
+            'status' => 'RUNNING',
+        ]);
+        $campaign->contactGroups()->attach($group->id);
+
+        (new CampaignBatchDispatch($campaign))->handle();
+
+        $this->assertSame('RUNNING', $campaign->fresh()->status);
+        $this->assertSame(0, MessageLog::where('campaign_id', $campaign->id)->count());
+        Bus::assertNotDispatched(\App\Jobs\SendWhatsAppMessage::class);
+    }
+
+    public function test_batch_dispatch_failed_handler_marks_campaign_failed(): void
+    {
+        $admin = $this->makeAdmin();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+        $campaign = Campaign::create([
+            'user_id' => $admin->id,
+            'instance_id' => $instance->id,
+            'name' => 'Doomed',
+            'message' => 'Hi',
+            'status' => 'RUNNING',
+        ]);
+
+        (new CampaignBatchDispatch($campaign))->failed(new \RuntimeException('db timeout mid-fanout'));
+
+        $this->assertSame('FAILED', $campaign->fresh()->status);
+        $this->assertNotNull($campaign->fresh()->completed_at);
+    }
+
+    public function test_batch_dispatch_counts_a_contact_in_multiple_groups_once(): void
+    {
+        Http::fake();
+        Bus::fake([\App\Jobs\SendWhatsAppMessage::class]);
+
+        $admin = $this->makeAdmin();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+        $groupA = ContactGroup::create(['user_id' => $admin->id, 'name' => 'A']);
+        $groupB = ContactGroup::create(['user_id' => $admin->id, 'name' => 'B']);
+
+        $shared = Contact::factory()->create(['user_id' => $admin->id, 'is_active' => true]);
+        $groupA->contacts()->attach($shared->id);
+        $groupB->contacts()->attach($shared->id);
+
+        $campaign = Campaign::create([
+            'user_id' => $admin->id,
+            'instance_id' => $instance->id,
+            'name' => 'Overlap',
+            'message' => 'Hi',
+            'status' => 'QUEUED',
+            'rate_per_minute' => 60,
+            'delay_min' => 0,
+            'delay_max' => 1,
+        ]);
+        $campaign->contactGroups()->attach([$groupA->id, $groupB->id]);
+
+        (new CampaignBatchDispatch($campaign))->handle();
+
+        $this->assertSame(1, $campaign->fresh()->total_contacts, 'Shared contact should count once');
+        $this->assertSame(1, MessageLog::where('campaign_id', $campaign->id)->count());
+        Bus::assertDispatchedTimes(\App\Jobs\SendWhatsAppMessage::class, 1);
+    }
+
     private function makeAdmin(): User
     {
         $user = User::factory()->create(['is_active' => true]);

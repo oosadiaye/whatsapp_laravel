@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Models\Campaign;
+use App\Models\Contact;
 use App\Models\MessageLog;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -12,6 +13,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class CampaignBatchDispatch implements ShouldQueue
 {
@@ -39,10 +41,18 @@ class CampaignBatchDispatch implements ShouldQueue
             'started_at' => Carbon::now(),
         ]);
 
-        $contacts = $this->campaign
-            ->contactGroups
-            ->flatMap(fn ($g) => $g->contacts()->active()->get())
-            ->unique('id');
+        // Resolve the audience in ONE query (a contact in several of the
+        // campaign's groups appears once) instead of an N+1 get()-per-group
+        // that materialized every group's contacts separately.
+        $groupIds = $this->campaign->contactGroups->pluck('id');
+        $contacts = Contact::query()
+            ->active()
+            ->whereIn('id', function ($q) use ($groupIds) {
+                $q->select('contact_id')
+                    ->from('contact_group')
+                    ->whereIn('group_id', $groupIds);
+            })
+            ->get();
 
         $this->campaign->update([
             'total_contacts' => $contacts->count(),
@@ -80,5 +90,24 @@ class CampaignBatchDispatch implements ShouldQueue
                 ->delay(now()->addMilliseconds((int) $delay))
                 ->onQueue('messages');
         }
+    }
+
+    /**
+     * A crash mid-fan-out (e.g. a DB timeout on a large contact list) would
+     * otherwise leave the campaign stuck in RUNNING with only a partial
+     * audience dispatched and no operator signal. Mark it FAILED so it is
+     * visible on the campaigns list and can be investigated or relaunched.
+     */
+    public function failed(\Throwable $e): void
+    {
+        $this->campaign->fresh()?->update([
+            'status' => 'FAILED',
+            'completed_at' => Carbon::now(),
+        ]);
+
+        Log::error('CampaignBatchDispatch failed', [
+            'campaign_id' => $this->campaign->id,
+            'error' => $e->getMessage(),
+        ]);
     }
 }

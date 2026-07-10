@@ -123,40 +123,46 @@ class CloudWebhookController extends Controller
                 continue;
             }
 
-            $log = MessageLog::where('whatsapp_message_id', $messageId)->first();
+            // Serialize concurrent redeliveries of the SAME message. Meta retries
+            // on non-2xx, and two deliveries landing at once could both read
+            // "not yet delivered" and double-bump the campaign counter. The row
+            // lock makes the read-then-increment below atomic per message.
+            \Illuminate\Support\Facades\DB::transaction(function () use ($messageId, $rawStatus, $status): void {
+                $log = MessageLog::where('whatsapp_message_id', $messageId)
+                    ->lockForUpdate()
+                    ->first();
 
-            if ($log === null) {
-                continue;
-            }
+                if ($log === null) {
+                    return;
+                }
 
-            $mappedStatus = $this->mapStatus($rawStatus);
+                $mappedStatus = $this->mapStatus($rawStatus);
 
-            // Capture prior state BEFORE the update so we only bump the
-            // campaign counters once. Meta retries webhooks on non-2xx, so
-            // the same status can arrive several times — without this guard
-            // delivered/read/failed counts inflate.
-            $alreadyDelivered = $log->delivered_at !== null;
-            $alreadyRead = $log->read_at !== null;
-            $alreadyFailed = $log->status === 'FAILED';
+                // Capture prior state BEFORE the update so we only bump the
+                // campaign counters once per real transition.
+                $alreadyDelivered = $log->delivered_at !== null;
+                $alreadyRead = $log->read_at !== null;
+                $alreadyFailed = $log->status === 'FAILED';
 
-            $updates = ['status' => $mappedStatus];
+                $updates = ['status' => $mappedStatus];
 
-            // Meta gives a unix timestamp string; prefer it over now() for accuracy.
-            $occurredAt = isset($status['timestamp'])
-                ? Carbon::createFromTimestamp((int) $status['timestamp'])
-                : Carbon::now();
+                // Meta gives a unix timestamp string; prefer it over now() for accuracy.
+                $occurredAt = isset($status['timestamp'])
+                    ? Carbon::createFromTimestamp((int) $status['timestamp'])
+                    : Carbon::now();
 
-            match ($mappedStatus) {
-                'DELIVERED' => $updates['delivered_at'] = $occurredAt,
-                'READ' => $updates['read_at'] = $occurredAt,
-                'SENT' => $updates['sent_at'] = $log->sent_at ?? $occurredAt,
-                'FAILED' => $updates['error_message'] = $this->extractErrorMessage($status),
-                default => null,
-            };
+                match ($mappedStatus) {
+                    'DELIVERED' => $updates['delivered_at'] = $occurredAt,
+                    'READ' => $updates['read_at'] = $occurredAt,
+                    'SENT' => $updates['sent_at'] = $log->sent_at ?? $occurredAt,
+                    'FAILED' => $updates['error_message'] = $this->extractErrorMessage($status),
+                    default => null,
+                };
 
-            $log->update($updates);
+                $log->update($updates);
 
-            $this->updateCampaignCounters($log->campaign, $mappedStatus, $alreadyDelivered, $alreadyRead, $alreadyFailed);
+                $this->updateCampaignCounters($log->campaign, $mappedStatus, $alreadyDelivered, $alreadyRead, $alreadyFailed);
+            });
         }
     }
 

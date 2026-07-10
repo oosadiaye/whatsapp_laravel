@@ -228,6 +228,33 @@ class AfricasTalkingWebhookTest extends TestCase
         $response->assertSee('<Reject', false);
     }
 
+    public function test_invalid_signature_is_rejected_and_does_not_mutate(): void
+    {
+        $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_badsig');
+
+        // Correct payload but a forged signature — an attacker could otherwise
+        // fabricate a Completed event to inflate cost, or hijack call-control.
+        $this->postJson(route('webhook.africastalking.voice'), [
+            'sessionId' => 'sess_badsig',
+            'status' => 'Completed',
+            'direction' => 'Outbound',
+            'durationInSeconds' => '90',
+        ], ['X-Africastalking-Signature' => 'deadbeefdeadbeef'])
+            ->assertStatus(401);
+
+        // The call must be untouched.
+        $this->assertSame(CallLog::STATUS_RINGING, $call->fresh()->status);
+    }
+
+    public function test_missing_signature_is_rejected(): void
+    {
+        $this->postJson(route('webhook.africastalking.voice'), [
+            'sessionId' => 'sess_nosig',
+            'status' => 'Completed',
+            'direction' => 'Outbound',
+        ])->assertStatus(401);
+    }
+
     private function postWebhook(array $payload)
     {
         // The controller verifies the HMAC-SHA256 of the raw body against the

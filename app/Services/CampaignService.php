@@ -54,10 +54,10 @@ class CampaignService
      *     a worker, which would still fire and try to send if the worker
      *     comes online later
      *
-     * We mark the PENDING logs as 'CANCELLED' so SendWhatsAppMessage's
-     * own sanity check (it should refuse to send if log->status !==
-     * 'PENDING') skips them, and we delete any queued database jobs
-     * that reference this campaign by serialized payload.
+     * We mark the PENDING logs as 'CANCELLED' so SendWhatsAppMessage's own
+     * status guard (it refuses to send when log->status !== 'PENDING') skips
+     * them when they run. Already-queued jobs are left to self-abort via that
+     * guard rather than purged from the queue.
      *
      * Returns the count of pending logs that were cancelled, useful for
      * the controller's flash message ("Cancelled. 7 pending sends aborted.").
@@ -69,11 +69,9 @@ class CampaignService
             'completed_at' => Carbon::now(),
         ]);
 
-        // Mark every still-PENDING MessageLog as CANCELLED so even if a
-        // SendWhatsAppMessage job somehow runs later, it sees the log isn't
-        // PENDING and bails. (This depends on SendWhatsAppMessage having a
-        // PENDING-status guard; if it doesn't, this is at least a recordable
-        // signal of the cancellation intent.)
+        // Mark every still-PENDING MessageLog as CANCELLED. Any already-queued
+        // SendWhatsAppMessage job re-reads its log in handle() and bails because
+        // the status is no longer PENDING — so no queue purge is needed.
         $cancelledLogs = MessageLog::where('campaign_id', $campaign->id)
             ->where('status', 'PENDING')
             ->update([
@@ -81,29 +79,12 @@ class CampaignService
                 'error_message' => 'Campaign cancelled before send',
             ]);
 
-        // Best-effort cleanup of the database queue table. Jobs are stored
-        // with their serialized payload in `payload`; we match by the
-        // campaign id token. Only relevant when QUEUE_CONNECTION=database.
-        // This is intentionally narrow — we don't want to delete unrelated
-        // jobs that happen to mention the same number elsewhere.
-        if (config('queue.default') === 'database') {
-            try {
-                DB::table('jobs')
-                    ->where('queue', 'messages')
-                    ->where('payload', 'like', '%"campaign_id";i:'.$campaign->id.';%')
-                    ->delete();
-                DB::table('jobs')
-                    ->where('queue', 'default')
-                    ->where('payload', 'like', '%"campaign":'.$campaign->id.'%')
-                    ->orWhere('payload', 'like', '%CampaignBatchDispatch%campaign_id%'.$campaign->id.'%')
-                    ->delete();
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('Could not clean up queue jobs on cancel', [
-                    'campaign_id' => $campaign->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
+        // NOTE: queued/delayed jobs are intentionally NOT purged from the queue
+        // here. The previous payload-LIKE delete matched the serialized
+        // ModelIdentifier shape unreliably (it keys on `id`, not `campaign_id`)
+        // and is irrelevant on Redis/Horizon anyway, so it was removed rather
+        // than left as a false safety net. Correctness is the log-status guard:
+        // the jobs run, see a non-PENDING log, and abort.
 
         return $cancelledLogs;
     }

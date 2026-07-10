@@ -45,6 +45,14 @@ class Setting extends Model
         try {
             return \Illuminate\Support\Facades\Crypt::decryptString($raw);
         } catch (\Throwable $e) {
+            // A decrypt failure almost always means APP_KEY was rotated without
+            // re-encrypting stored secrets. Surface it (don't fail silently) so
+            // "credentials suddenly missing" is diagnosable from the log.
+            \Illuminate\Support\Facades\Log::warning('Setting::getEncrypted decrypt failed', [
+                'key' => $key,
+                'error' => $e->getMessage(),
+            ]);
+
             return $default;
         }
     }
