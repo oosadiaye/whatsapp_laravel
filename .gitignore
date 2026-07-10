@@ -24,6 +24,7 @@ Homestead.yaml
 Thumbs.db
 
 # Local dev artifacts
+/.playwright-mcp
 /database/database.sqlite
 /database/*.sqlite
 /storage/framework/cache/data
