@@ -75,7 +75,41 @@
             </div>
 
             @can('conversations.call')
-                <div x-data="{ open: false }">
+                <div x-data="{
+                    open: false,
+                    placing: false,
+                    error: '',
+                    async placeCall() {
+                        if (this.placing) return;
+                        this.placing = true;
+                        this.error = '';
+                        try {
+                            const res = await fetch(@js(route('calls.outbound')), {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': @js(csrf_token()),
+                                    'Accept': 'application/json',
+                                },
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ conversation_id: {{ $conversation->id }} }),
+                            });
+                            if (res.ok) {
+                                // The in-flight-call banner (polls every 3s) mounts the
+                                // softphone; it auto-answers when the customer picks up.
+                                this.open = false;
+                                return;
+                            }
+                            let msg = 'Could not start the call.';
+                            try { const b = await res.json(); if (b && b.error) msg = b.error; } catch (e) {}
+                            this.error = msg;
+                        } catch (e) {
+                            this.error = 'Network error placing the call. Check your connection and try again.';
+                        } finally {
+                            this.placing = false;
+                        }
+                    }
+                }">
                     <button type="button"
                             @click="open = true"
                             class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition"
@@ -105,22 +139,20 @@
                                 <p class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2 mb-4">
                                     This will dial the customer's phone number directly via Africa's Talking. Standard per-minute rates apply. Audio plays in your browser.
                                 </p>
+                                <p x-show="error" x-cloak x-text="error"
+                                   class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 mb-4"></p>
                                 <div class="flex justify-end gap-2">
                                     <button type="button" @click="open = false"
                                             class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
                                         Cancel
                                     </button>
-                                    <form method="POST" action="{{ route('calls.outbound') }}">
-                                        @csrf
-                                        <input type="hidden" name="conversation_id" value="{{ $conversation->id }}">
-                                        <button type="submit"
-                                                class="inline-flex items-center px-5 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700">
-                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
-                                            </svg>
-                                            Call now
-                                        </button>
-                                    </form>
+                                    <button type="button" @click="placeCall()" :disabled="placing"
+                                            class="inline-flex items-center px-5 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
+                                        </svg>
+                                        <span x-text="placing ? 'Starting…' : 'Call now'"></span>
+                                    </button>
                                 </div>
                             </div>
                         </div>

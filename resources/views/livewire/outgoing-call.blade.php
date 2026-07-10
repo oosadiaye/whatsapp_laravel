@@ -3,13 +3,15 @@
     sessionId: @js($call->provider_session_id),
     customerPhone: @js($call->to_phone),
     contactName: @js($call->contact->display_name ?? $call->to_phone),
-    atToken: @js($atToken),
     csrf: @js(csrf_token()),
 })" x-init="init()">
-    <template x-if="state === 'calling'">
+    <template x-if="state === 'calling' || state === 'connecting'">
         <div class="flex items-center justify-between bg-amber-100 border-b border-amber-300 text-amber-900 px-4 py-3 shadow-md">
             <div>
-                <span class="font-medium">Calling <span x-text="contactName"></span></span>
+                <span class="font-medium">
+                    <span x-show="state === 'calling'">Calling <span x-text="contactName"></span>…</span>
+                    <span x-show="state === 'connecting'" x-cloak>Connecting <span x-text="contactName"></span>…</span>
+                </span>
                 <span class="ml-3 text-sm font-mono" x-text="formatDuration(durationSeconds)"></span>
             </div>
             <button @click="hangup()"
@@ -39,9 +41,12 @@
     </template>
 
     <template x-if="state === 'failed'">
-        <div class="flex items-center justify-between bg-red-100 border-b border-red-300 text-red-900 px-4 py-3 text-sm">
-            <span>Could not start call. Voice provider may be unreachable.</span>
-            <button @click="dismiss()" class="px-3 py-1.5 text-sm">Dismiss</button>
+        <div class="bg-red-100 border-b border-red-300 text-red-900 px-4 py-3 text-sm">
+            <div class="flex items-center justify-between">
+                <span>Could not start call. Voice provider may be unreachable.</span>
+                <button @click="dismiss()" class="px-3 py-1.5 text-sm">Dismiss</button>
+            </div>
+            <p class="mt-1.5 text-xs font-mono text-red-800/70 break-all" x-show="errorMessage" x-text="errorMessage"></p>
         </div>
     </template>
 </div>

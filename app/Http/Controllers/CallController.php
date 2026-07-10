@@ -126,6 +126,8 @@ class CallController extends Controller
      */
     public function claim(Request $request, CallLog $call): JsonResponse
     {
+        $this->authorizeCallAccess($call);
+
         $sessionId = $request->input('session_id');
         if (!is_string($sessionId) || $sessionId === '' || strlen($sessionId) > 64) {
             return response()->json(['error' => 'invalid session_id'], 422);
@@ -155,6 +157,8 @@ class CallController extends Controller
      */
     public function answer(Request $request, CallLog $call, WhatsAppCloudApiService $service): JsonResponse
     {
+        $this->authorizeCallAccess($call);
+
         $sessionId = $request->input('session_id');
         $sdp = $request->input('sdp');
 
@@ -227,6 +231,7 @@ class CallController extends Controller
      */
     public function decline(CallLog $call): JsonResponse
     {
+        $this->authorizeCallAccess($call);
         $this->terminate($call, CallLog::STATUS_DECLINED, 'declined');
 
         return response()->json(['declined' => true]);
@@ -237,9 +242,35 @@ class CallController extends Controller
      */
     public function hangup(CallLog $call): JsonResponse
     {
+        $this->authorizeCallAccess($call);
         $this->terminate($call, CallLog::STATUS_ENDED, 'agent_hung_up');
 
         return response()->json(['ended' => true]);
+    }
+
+    /**
+     * Ensure the acting user may control this specific call.
+     *
+     * Mirrors the ownership predicate already enforced by
+     * {@see StoreCallQualityRequest::authorize()} and placeOutbound():
+     * company-wide viewers (conversations.view_all), the agent the call's
+     * conversation is assigned to, or the agent who placed an outbound call.
+     *
+     * Without this, any user holding conversations.reply could claim/answer/
+     * decline/hangup ANY call by enumerating the integer call_logs.id —
+     * terminating a colleague's live PSTN call, or claim+answer to intercept
+     * the customer's audio. The four call-mutation endpoints were the only
+     * ones missing this check.
+     */
+    private function authorizeCallAccess(CallLog $call): void
+    {
+        $user = auth()->user();
+
+        $allowed = $user->can('conversations.view_all')
+            || $call->placed_by_user_id === $user->id
+            || $call->conversation?->assigned_to_user_id === $user->id;
+
+        abort_unless($allowed, 403, 'You do not have access to this call.');
     }
 
     /**

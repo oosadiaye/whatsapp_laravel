@@ -1,5 +1,12 @@
 <div wire:poll.3s>
-    @if($call)
+    @if($call && $call->provider === \App\Models\CallLog::PROVIDER_AFRICAS_TALKING)
+        {{-- Africa's Talking outbound: mount the real WebRTC softphone banner.
+             wire:key preserves the nested component (and its Alpine softphone
+             state) across this component's 3s polls, so the audio session isn't
+             torn down every cycle. The persistent client lives in the layout;
+             this banner just drives the call UI + answers the bridged leg. --}}
+        <livewire:outgoing-call :call="$call" :wire:key="'ocall-'.$call->id" />
+    @elseif($call)
         @php
             $bannerClass = match($call->status) {
                 'connected' => 'bg-emerald-100 border-emerald-300 text-emerald-900',

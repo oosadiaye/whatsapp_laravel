@@ -131,6 +131,131 @@ class CallRouteTest extends TestCase
         $this->assertSame(CallLog::STATUS_ENDED, $call->fresh()->status);
     }
 
+    // ─── Authorization (regression guard for the call-control IDOR) ──────────
+    // Only the agent the call's conversation is assigned to, the agent who
+    // placed an outbound call, or a company-wide (view_all) user may control a
+    // call. Previously these four endpoints were gated ONLY by the blanket
+    // conversations.reply permission, so any agent could hijack a colleague's
+    // live call (or claim+answer to intercept the customer's audio) by
+    // enumerating the integer call_logs.id.
+
+    public function test_claim_by_unrelated_agent_is_forbidden(): void
+    {
+        $call = $this->makeRingingCall($this->makeAgent());
+        $intruder = $this->makeAgent();
+
+        $this->actingAs($intruder)
+            ->postJson(route('calls.claim', $call), ['session_id' => 'aaaaaaaa-bbbb-cccc-dddd-999999999999'])
+            ->assertForbidden();
+
+        $this->assertNull($call->fresh()->answered_by_session_id);
+    }
+
+    public function test_answer_by_unrelated_agent_is_forbidden(): void
+    {
+        $call = $this->makeRingingCall($this->makeAgent());
+        $call->update(['answered_by_session_id' => 'sid-x']);
+        $intruder = $this->makeAgent();
+
+        $this->actingAs($intruder)
+            ->postJson(route('calls.answer', $call), ['session_id' => 'sid-x', 'sdp' => 'blob'])
+            ->assertForbidden();
+
+        $this->assertNull($call->fresh()->sdp_answer);
+    }
+
+    public function test_decline_by_unrelated_agent_is_forbidden(): void
+    {
+        Event::fake([CallTerminated::class]);
+        $call = $this->makeRingingCall($this->makeAgent());
+        $intruder = $this->makeAgent();
+
+        $this->actingAs($intruder)
+            ->postJson(route('calls.decline', $call))
+            ->assertForbidden();
+
+        $this->assertSame(CallLog::STATUS_RINGING, $call->fresh()->status);
+        Event::assertNotDispatched(CallTerminated::class);
+    }
+
+    public function test_hangup_by_unrelated_agent_is_forbidden(): void
+    {
+        Event::fake([CallTerminated::class]);
+        $call = $this->makeRingingCall($this->makeAgent());
+        $call->update(['status' => CallLog::STATUS_CONNECTED]);
+        $intruder = $this->makeAgent();
+
+        $this->actingAs($intruder)
+            ->postJson(route('calls.hangup', $call))
+            ->assertForbidden();
+
+        $this->assertSame(CallLog::STATUS_CONNECTED, $call->fresh()->status);
+        Event::assertNotDispatched(CallTerminated::class);
+    }
+
+    public function test_hangup_allowed_for_agent_who_placed_the_outbound_call(): void
+    {
+        Event::fake([CallTerminated::class]);
+        $placer = $this->makeAgent();
+        $call = $this->makeOutboundCall($placer); // conversation assigned to a different agent
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $this->actingAs($placer)
+            ->postJson(route('calls.hangup', $call))
+            ->assertOk();
+
+        $this->assertSame(CallLog::STATUS_ENDED, $call->fresh()->status);
+    }
+
+    public function test_hangup_still_ends_call_locally_when_provider_endcall_fails(): void
+    {
+        Event::fake([CallTerminated::class]);
+        $agent = $this->makeAgent();
+        $call = $this->makeRingingCall($agent);
+        $call->update(['status' => CallLog::STATUS_CONNECTED]);
+
+        // Provider terminate returns 500 — terminate() must swallow it and
+        // still end the call locally + broadcast so the agent UI isn't stuck.
+        Http::fake(['*' => Http::response(['error' => 'provider down'], 500)]);
+
+        $this->actingAs($agent)
+            ->postJson(route('calls.hangup', $call))
+            ->assertOk();
+
+        $this->assertSame(CallLog::STATUS_ENDED, $call->fresh()->status);
+        Event::assertDispatched(CallTerminated::class, fn ($e) => $e->call->id === $call->id);
+    }
+
+    private function makeOutboundCall(User $placer): CallLog
+    {
+        $owner = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
+        $owner->assignRole(User::ROLE_ADMIN);
+        $otherAgent = $this->makeAgent();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $owner->id]);
+        $contact = Contact::factory()->create(['user_id' => $owner->id, 'phone' => '23480'.fake()->unique()->numerify('########')]);
+        $conversation = \App\Models\Conversation::create([
+            'user_id' => $owner->id,
+            'contact_id' => $contact->id,
+            'whatsapp_instance_id' => $instance->id,
+            'assigned_to_user_id' => $otherAgent->id,
+            'unread_count' => 0,
+        ]);
+
+        return CallLog::create([
+            'conversation_id' => $conversation->id,
+            'contact_id' => $contact->id,
+            'whatsapp_instance_id' => $instance->id,
+            'direction' => CallLog::DIRECTION_OUTBOUND,
+            'provider' => CallLog::PROVIDER_META_WHATSAPP,
+            'meta_call_id' => 'wacid.'.fake()->unique()->numerify('########'),
+            'status' => CallLog::STATUS_CONNECTED,
+            'placed_by_user_id' => $placer->id,
+            'from_phone' => '2348000000000',
+            'to_phone' => $contact->phone,
+            'started_at' => now(),
+        ]);
+    }
+
     private function makeAgent(): User
     {
         $agent = User::factory()->create([

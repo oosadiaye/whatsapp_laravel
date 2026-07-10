@@ -17,10 +17,38 @@
 //   methods: call(number) | answer() | hangup() | dtmf(d) | muteAudio() | unmuteAudio() | hold() | unhold()
 // The package is npm-deprecated; if you swap to AT's current vendor SDK, the
 // only surface that must keep working is the small set bqVoiceClient.boot() wires.
+//
+// RUNTIME NOTE: africastalking-client@1.0.7 has a module-cache state-leak bug
+// where a static `import` retains broken WebSocket state across reconnect
+// attempts, creating a zombie client that never emits `ready`. To avoid this
+// the SDK is NOT imported via npm — it is loaded from CDN (see the <script>
+// tag in layouts/app.blade.php). On reconnect the script is removed and
+// re-loaded with a cache-busting query param so the module cache is bypassed.
 
-import Africastalking from 'africastalking-client';
 import { startStatsCollection, postQuality } from './call-stats-collector';
 import { createCallStateMixin } from './call-state-mixin';
+
+const AT_SDK_URL = 'https://unpkg.com/africastalking-client@1.0.7/build/africastalking.js';
+
+/** Load the AT WebRTC SDK from CDN (first load) or force-reload it (reconnect). */
+function loadAtSdk(forceReload = false) {
+    if (!forceReload && typeof window.Africastalking?.Client !== 'undefined') {
+        return Promise.resolve(true);
+    }
+    document.querySelectorAll('script[data-at-sdk]').forEach(s => s.remove());
+    delete window.Africastalking;
+    return new Promise((resolve) => {
+        const s = document.createElement('script');
+        s.src = `${AT_SDK_URL}?t=${Date.now()}`;
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        s.dataset.atSdk = '';
+        const timer = setTimeout(() => { s.remove(); resolve(false); }, 15000);
+        s.onload = () => { clearTimeout(timer); setTimeout(() => resolve(true), 100); };
+        s.onerror = () => { clearTimeout(timer); s.remove(); resolve(false); };
+        document.head.appendChild(s);
+    });
+}
 
 // ─── Persistent softphone singleton ─────────────────────────────────────
 // One registered client per page. The per-call Alpine banners attach()
@@ -40,12 +68,12 @@ window.bqVoiceClient = {
     /** Register the WebRTC client with a real AT capability token. Idempotent. */
     boot(token) {
         if (this._booted || !token) return;
-        if (typeof Africastalking === 'undefined' || !Africastalking || !Africastalking.Client) {
+        if (typeof window.Africastalking === 'undefined' || !window.Africastalking.Client) {
             console.error('[BQ Voice] africastalking-client SDK not available (blocked or failed to load).');
             return;
         }
         try {
-            this.client = new Africastalking.Client(token);
+            this.client = new window.Africastalking.Client(token);
         } catch (e) {
             console.error('[BQ Voice] failed to construct AT client', e);
             return;
@@ -59,7 +87,11 @@ window.bqVoiceClient = {
 
         on('ready', () => { this.ready = true; });
         on('notready', () => { this.ready = false; });
-        on('offline', () => { this.ready = false; console.warn('[BQ Voice] client offline / token expired.'); });
+        on('offline', () => {
+            this.ready = false;
+            console.warn('[BQ Voice] client offline. Attempting reconnect in 5s...');
+            this._scheduleReboot();
+        });
         on('calling', () => {});
         on('closed', () => {});
         // Route call lifecycle to the active banner (if any).
@@ -70,6 +102,24 @@ window.bqVoiceClient = {
         on('callaccepted', () => { this.banner?.onAccepted?.(); });
         on('hangup', (cause) => { this.banner?.onHangup?.(cause); });
         on('error', (err) => { console.error('[BQ Voice] SDK error', err); this.banner?.onError?.(err); });
+    },
+
+    /** Tear down, force-reload the SDK from CDN (bypassing buggy module cache),
+     *  wait the recommended 5s, then re-boot with the meta tag token. */
+    async _scheduleReboot() {
+        // Clean up existing client state.
+        this.ready = false;
+        this._booted = false;
+        try { this.client?.hangup(); } catch { /* ignore */ }
+        this.client = null;
+        this.banner = null;
+        this._lastIncoming = null;
+
+        await new Promise(r => setTimeout(r, 5000));
+        const token = document.querySelector('meta[name="at-voice-token"]')?.getAttribute('content');
+        if (!token) return;
+        const ok = await loadAtSdk(true);
+        if (ok) this.boot(token);
     },
 
     attach(banner) {

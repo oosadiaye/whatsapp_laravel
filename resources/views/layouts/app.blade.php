@@ -43,6 +43,11 @@
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        @auth
+            @if($bqAtVoiceReady)
+                <script defer data-at-sdk src="https://unpkg.com/africastalking-client@1.0.7/build/africastalking.js" crossorigin="anonymous"></script>
+            @endif
+        @endauth
         @livewireStyles
     </head>
     <body class="font-sans antialiased bg-gray-50">

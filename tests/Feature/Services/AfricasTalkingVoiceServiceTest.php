@@ -7,6 +7,7 @@ namespace Tests\Feature\Services;
 use App\Exceptions\ConfigurationException;
 use App\Exceptions\VoiceProviderException;
 use App\Models\Setting;
+use App\Models\User;
 use App\Services\AfricasTalkingVoiceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
@@ -41,6 +42,7 @@ class AfricasTalkingVoiceServiceTest extends TestCase
         $this->assertSame('sess_abc', $sessionId);
         Http::assertSent(function ($request) {
             $data = $request->data();
+
             return str_contains($request->url(), 'voice.africastalking.com/call')
                 && $data['username'] === 'sandbox'
                 && $data['from'] === '+2348100000000'
@@ -120,5 +122,83 @@ class AfricasTalkingVoiceServiceTest extends TestCase
         $service->endCall('sess_abc');
 
         $this->assertTrue(true);
+    }
+
+    public function test_client_name_for_user_is_deterministic(): void
+    {
+        $this->assertSame('agent_42', AfricasTalkingVoiceService::clientNameForUser(42));
+    }
+
+    public function test_request_capability_token_posts_correct_payload_and_returns_token(): void
+    {
+        $service = $this->app->make(AfricasTalkingVoiceService::class);
+
+        Http::fake([
+            'webrtc.africastalking.com/capability-token/request' => Http::response([
+                'clientName' => 'agent_7',
+                'incoming' => true,
+                'outgoing' => true,
+                'lifeTimeSec' => '86400',
+                'token' => 'ATCAPtkn_realtoken_123',
+            ], 200),
+        ]);
+
+        $token = $service->requestCapabilityToken('sandbox', 'agent_7', '+2348100000000', 'atsk_test_key');
+
+        $this->assertSame('ATCAPtkn_realtoken_123', $token);
+        Http::assertSent(function ($request) {
+            $data = $request->data();
+
+            return str_contains($request->url(), 'webrtc.africastalking.com/capability-token/request')
+                && $data['username'] === 'sandbox'
+                && $data['clientName'] === 'agent_7'
+                && $data['phoneNumber'] === '+2348100000000'
+                && $request->header('apiKey')[0] === 'atsk_test_key';
+        });
+    }
+
+    public function test_request_capability_token_throws_on_http_failure(): void
+    {
+        $service = $this->app->make(AfricasTalkingVoiceService::class);
+        Http::fake(['webrtc.africastalking.com/*' => Http::response(['error' => 'unauthorized'], 401)]);
+
+        $this->expectException(VoiceProviderException::class);
+        $service->requestCapabilityToken('sandbox', 'agent_7', '+2348100000000', 'bad_key');
+    }
+
+    public function test_request_capability_token_throws_when_token_missing(): void
+    {
+        $service = $this->app->make(AfricasTalkingVoiceService::class);
+        Http::fake([
+            'webrtc.africastalking.com/*' => Http::response(['clientName' => 'agent_7'], 200),
+        ]);
+
+        $this->expectException(VoiceProviderException::class);
+        $service->requestCapabilityToken('sandbox', 'agent_7', '+2348100000000', 'atsk_test_key');
+    }
+
+    public function test_generate_client_token_throws_configuration_exception_when_api_key_missing(): void
+    {
+        Setting::query()->where('key', 'africastalking_api_key')->delete();
+
+        $service = $this->app->make(AfricasTalkingVoiceService::class);
+        $user = User::factory()->create();
+
+        $this->expectException(ConfigurationException::class);
+        $service->generateClientToken($user);
+    }
+
+    public function test_generate_client_token_returns_deterministic_stub_in_testing(): void
+    {
+        // In the testing env generateClientToken short-circuits the AT network
+        // call (after config validation) so feature tests rendering the
+        // authenticated layout never hit the wire.
+        $service = $this->app->make(AfricasTalkingVoiceService::class);
+        $user = User::factory()->create();
+
+        $this->assertSame(
+            'test-capability-token:agent_'.$user->id,
+            $service->generateClientToken($user),
+        );
     }
 }
