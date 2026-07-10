@@ -550,27 +550,17 @@ class CampaignController extends Controller
 
             foreach ($logs as $log) {
                 fputcsv($handle, [
-                    $log->phone,
-                    $log->contact?->name ?? '',
+                    \App\Support\Csv::safe($log->phone),
+                    \App\Support\Csv::safe($log->contact?->name ?? ''),
                     $log->status,
                     $log->sent_at?->toDateTimeString(),
                     $log->delivered_at?->toDateTimeString(),
                     $log->read_at?->toDateTimeString(),
-                    $log->error_message,
+                    \App\Support\Csv::safe($log->error_message),
                 ]);
             }
 
             fclose($handle);
         }, $filename, ['Content-Type' => 'text/csv']);
-    }
-
-    private function resolveMediaType(string $extension): string
-    {
-        return match (strtolower($extension)) {
-            'jpg', 'jpeg', 'png', 'gif' => 'image',
-            'pdf' => 'document',
-            'mp3', 'ogg' => 'audio',
-            default => 'document',
-        };
     }
 }

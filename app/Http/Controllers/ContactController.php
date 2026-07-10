@@ -362,17 +362,10 @@ class ContactController extends Controller
             fputcsv($handle, ['phone', 'name']);
 
             foreach ($contacts as $contact) {
-                fputcsv($handle, [$contact->phone, $contact->name]);
+                fputcsv($handle, [\App\Support\Csv::safe($contact->phone), \App\Support\Csv::safe($contact->name)]);
             }
 
             fclose($handle);
         }, $filename, ['Content-Type' => 'text/csv']);
-    }
-
-    private function normalizePhone(string $phone): string
-    {
-        $phone = preg_replace('/[^0-9+]/', '', trim($phone));
-
-        return $phone ?: '';
     }
 }
