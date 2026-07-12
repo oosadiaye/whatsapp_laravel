@@ -66,6 +66,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | TURN relay for WebRTC (restrictive NAT traversal)
+    |--------------------------------------------------------------------------
+    | STUN can't punch through symmetric NATs (corporate WiFi, some mobile
+    | carriers) — those calls connect but have no audio ("dead air"). A TURN
+    | relay fixes that by relaying the media. Set these to your TURN provider
+    | (self-hosted coturn, or Twilio/Metered/etc.). Leave URLs empty to stay
+    | STUN-only (the previous behaviour).
+    |
+    | Credentials are exposed to the browser (TURN auth is client-side by
+    | design). Prefer short-lived/ephemeral credentials in production.
+    |   VOICE_TURN_URLS="turn:turn.example.com:3478,turns:turn.example.com:5349"
+    */
+    'turn_urls' => array_values(array_filter(
+        explode(',', (string) env('VOICE_TURN_URLS', ''))
+    )),
+    'turn_username' => env('VOICE_TURN_USERNAME'),
+    'turn_credential' => env('VOICE_TURN_CREDENTIAL'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Meta (WhatsApp Cloud) calling — OFF until GA
     |--------------------------------------------------------------------------
     | Meta's Cloud Calling API is not generally available, and the initiate /

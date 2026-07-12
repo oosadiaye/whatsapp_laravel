@@ -17,6 +17,7 @@
  */
 import { startStatsCollection, postQuality } from './call-stats-collector';
 import { createCallStateMixin } from './call-state-mixin';
+import { iceServers } from './ice-servers';
 
 window.incomingCall = (data) => ({
     ...data,
@@ -90,17 +91,11 @@ window.incomingCall = (data) => ({
             if (!this.sdpOffer || typeof this.sdpOffer !== 'string') {
                 throw new Error('Missing SDP offer on the call. The Meta calling webhook may not have included it — check whatsapp.calls webhook logs.');
             }
-            // ICE servers from Vite env (set in .env via VITE_STUN_URLS,
-            // comma-separated, mirroring config/voice.php's stun_urls).
-            // Default falls back to Google's public STUN so a fresh dev
-            // setup works without extra config.
-            const stunUrls = (import.meta.env.VITE_STUN_URLS
-                || 'stun:stun.l.google.com:19302')
-                .split(',')
-                .map(u => u.trim())
-                .filter(Boolean);
+            // ICE servers (STUN + optional TURN) from the server-rendered meta
+            // tag, so restrictive-NAT callers get a TURN relay instead of dead
+            // air. Falls back to Vite STUN / Google STUN.
             this.peer = new RTCPeerConnection({
-                iceServers: stunUrls.map(urls => ({ urls })),
+                iceServers: iceServers(),
             });
 
             // 4. Audio rendering — Meta's stream → <audio> element.

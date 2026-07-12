@@ -27,6 +27,7 @@
 
 import { startStatsCollection, postQuality } from './call-stats-collector';
 import { createCallStateMixin } from './call-state-mixin';
+import { iceServers } from './ice-servers';
 
 const AT_SDK_URL = 'https://unpkg.com/africastalking-client@1.0.7/build/africastalking.js';
 
@@ -73,7 +74,12 @@ window.bqVoiceClient = {
             return;
         }
         try {
-            this.client = new window.Africastalking.Client(token);
+            // Pass ICE servers (STUN + optional TURN) best-effort. africastalking-
+            // client@1.0.7's constructor is token-first; some builds read a second
+            // options arg for iceServers, others ignore it. Harmless either way —
+            // if honoured, restrictive-NAT callers get a TURN relay. (Verify
+            // against a live AT account whether this build actually applies it.)
+            this.client = new window.Africastalking.Client(token, { iceServers: iceServers() });
         } catch (e) {
             console.error('[BQ Voice] failed to construct AT client', e);
             return;
