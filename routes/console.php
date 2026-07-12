@@ -20,3 +20,9 @@ Schedule::command('templates:sync-status')->everyFifteenMinutes()->withoutOverla
 Schedule::command('calls:cleanup-stale')
     ->everyMinute()
     ->withoutOverlapping();
+
+// Call Workspace: delete recording audio past its retention window (no-op when
+// voice.recording_retention_days = 0). Daily is fine — retention is coarse.
+Schedule::command('calls:prune-recordings')
+    ->daily()
+    ->withoutOverlapping();

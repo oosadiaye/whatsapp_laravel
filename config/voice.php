@@ -102,4 +102,10 @@ return [
     // and keeps audio within Gemini's inline-request budget. ~25 MB default.
     'recording_max_kb' => (int) env('VOICE_RECORDING_MAX_KB', 25600),
 
+    // Retention: the calls:prune-recordings command deletes the raw audio file
+    // (keeping the transcript/summary) once it's older than this many days.
+    // 0 = keep recordings forever (retention disabled). Set a real number to
+    // honour a data-retention policy and cap storage growth.
+    'recording_retention_days' => (int) env('VOICE_RECORDING_RETENTION_DAYS', 0),
+
 ];
