@@ -10,7 +10,9 @@ use App\Events\Calling\CallTerminated;
 use App\Exceptions\ConfigurationException;
 use App\Exceptions\VoiceProviderException;
 use App\Http\Requests\StoreCallQualityRequest;
+use App\Jobs\TranscribeCallRecording;
 use App\Models\CallLog;
+use App\Models\CallNote;
 use App\Models\Conversation;
 use App\Models\Setting;
 use App\Services\AfricasTalkingVoiceService;
@@ -20,7 +22,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Cross-conversation call feed (page at /calls).
@@ -87,6 +91,42 @@ class CallController extends Controller
                 'providerCounts' => $providerCounts,
                 'providerTotal' => (int) $providerCounts->sum(),
             ],
+        ]);
+    }
+
+    /**
+     * The unified agent Call Workspace: a live-call header, the recent-call
+     * queue/history on the left, and a per-call AI + notes panel on the right.
+     *
+     * Visibility scoping matches {@see index()} — view_all sees the company's
+     * calls, view_assigned sees only calls on their assigned conversations.
+     */
+    public function workspace(Request $request): View
+    {
+        $user = $request->user();
+
+        $scope = function ($q) use ($user) {
+            if (! $user->can('conversations.view_all')) {
+                $q->whereHas('conversation', fn ($c) => $c->where('assigned_to_user_id', $user->id));
+            }
+        };
+
+        $calls = CallLog::query()->tap($scope)
+            ->with(['contact', 'conversation', 'placedBy'])
+            ->withCount('notes')
+            ->latest()
+            ->limit(50)
+            ->get();
+
+        // The right panel opens on ?call=id when it's in scope, else the newest.
+        $requestedId = (int) $request->query('call');
+        $selected = $calls->firstWhere('id', $requestedId) ?? $calls->first();
+
+        return view('calls.workspace', [
+            'calls' => $calls,
+            'selectedCallId' => $selected?->id,
+            'recordingEnabled' => (bool) config('voice.call_recording_enabled'),
+            'aiConfigured' => filled(config('services.gemini.key')),
         ]);
     }
 
@@ -327,6 +367,105 @@ class CallController extends Controller
             'ended_at' => now(),
         ]);
         CallTerminated::dispatch($call, $broadcastReason);
+    }
+
+    /**
+     * Accept the browser's recording of the call audio and kick off analysis.
+     *
+     * The mixed call audio (agent mic + remote leg) is captured client-side by
+     * call-recorder.js and POSTed here on hangup. We store it on the PRIVATE
+     * disk (never public — it's a customer conversation) and queue the Gemini
+     * transcription. Gated by voice.call_recording_enabled so the whole pipeline
+     * stays dark until consent handling is in place.
+     */
+    public function storeRecording(Request $request, CallLog $call): JsonResponse
+    {
+        $this->authorizeCallAccess($call);
+
+        if (! config('voice.call_recording_enabled')) {
+            return response()->json(['error' => 'Call recording is disabled.'], 403);
+        }
+
+        $maxKb = (int) config('voice.recording_max_kb', 25600);
+        $request->validate([
+            'audio' => ['required', 'file', "max:{$maxKb}"],
+        ]);
+
+        // store() uses the default (local) disk, rooted at storage/app/private —
+        // so the audio is never web-accessible; it streams only via download().
+        $path = $request->file('audio')->store('call-recordings');
+
+        $hasKey = filled(config('services.gemini.key'));
+
+        $call->update([
+            'recording_path' => $path,
+            'recording_mime' => $this->normaliseAudioMime($request->file('audio')->getClientMimeType()),
+            'recording_uploaded_at' => now(),
+            // Only queue analysis if Gemini is configured; otherwise the recording
+            // is kept but the panel shows "analysis unavailable".
+            'ai_status' => $hasKey ? CallLog::AI_STATUS_PENDING : CallLog::AI_STATUS_UNAVAILABLE,
+            'ai_error' => null,
+        ]);
+
+        if ($hasKey) {
+            TranscribeCallRecording::dispatch($call->id);
+        }
+
+        return response()->json(['ok' => true, 'ai_status' => $call->ai_status]);
+    }
+
+    /**
+     * Strip the codecs parameter MediaRecorder appends (e.g.
+     * "audio/webm;codecs=opus" → "audio/webm") so the stored/forwarded MIME is
+     * the bare container type Gemini expects.
+     */
+    private function normaliseAudioMime(?string $mime): string
+    {
+        $mime = trim(explode(';', (string) $mime)[0]);
+
+        return $mime !== '' ? $mime : 'audio/webm';
+    }
+
+    /**
+     * Log an agent note against a call — append-only timeline entry.
+     */
+    public function storeNote(Request $request, CallLog $call): JsonResponse
+    {
+        $this->authorizeCallAccess($call);
+
+        $validated = $request->validate([
+            'body' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $note = $call->notes()->create([
+            'user_id' => $request->user()->id,
+            'body' => $validated['body'],
+        ]);
+
+        return response()->json([
+            'id' => $note->id,
+            'body' => $note->body,
+            'author' => $request->user()->name,
+            'created_at' => $note->created_at->toIso8601String(),
+            'created_human' => $note->created_at->diffForHumans(),
+        ], 201);
+    }
+
+    /**
+     * Stream a call recording. Private-disk file, gated by the same per-call
+     * access check as every other call mutation — recordings are customer audio.
+     */
+    public function downloadRecording(Request $request, CallLog $call): StreamedResponse
+    {
+        $this->authorizeCallAccess($call);
+
+        abort_unless($call->hasRecording() && Storage::exists($call->recording_path), 404);
+
+        return Storage::download(
+            $call->recording_path,
+            'call-'.$call->id.'-recording',
+            ['Content-Type' => $call->recording_mime ?? 'application/octet-stream'],
+        );
     }
 
     /**

@@ -150,10 +150,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/conversations/messages/{message}/media', [ConversationController::class, 'downloadMedia'])->name('conversations.media');
     });
 
-    // ─── Calls feed (Phase 15) ─────────────────────────────────────────────
+    // ─── Calls feed + Workspace (Phase 15 / 20) ────────────────────────────
     Route::middleware('role_or_permission:conversations.view_all|conversations.view_assigned')->group(function () {
         Route::get('/calls', [\App\Http\Controllers\CallController::class, 'index'])
             ->name('calls.index');
+        // Unified agent Call Workspace: live call + queue/history + AI/notes panel.
+        Route::get('/workspace', [\App\Http\Controllers\CallController::class, 'workspace'])
+            ->name('calls.workspace');
+        // Stream a call recording (private disk, per-call access checked in the action).
+        Route::get('/calls/{call}/recording', [\App\Http\Controllers\CallController::class, 'downloadRecording'])
+            ->name('calls.recording.download');
     });
     Route::middleware('permission:conversations.reply')->group(function () {
         Route::post('/conversations/{conversation}/reply', [ConversationController::class, 'reply'])->name('conversations.reply');
@@ -164,6 +170,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/calls/{call}/decline', [\App\Http\Controllers\CallController::class, 'decline'])->name('calls.decline');
         Route::post('/calls/{call}/hangup', [\App\Http\Controllers\CallController::class, 'hangup'])->name('calls.hangup');
         Route::post('/calls/{call}/quality', [\App\Http\Controllers\CallController::class, 'quality'])->name('calls.quality');
+
+        // Phase 20 — Call Workspace: upload recording for AI analysis + log notes.
+        Route::post('/calls/{call}/recording', [\App\Http\Controllers\CallController::class, 'storeRecording'])->name('calls.recording.store');
+        Route::post('/calls/{call}/notes', [\App\Http\Controllers\CallController::class, 'storeNote'])->name('calls.notes.store');
     });
     Route::middleware('permission:conversations.reply')->group(function () {
         Route::post('/contacts/{contact}/chat', [ContactController::class, 'startChat'])

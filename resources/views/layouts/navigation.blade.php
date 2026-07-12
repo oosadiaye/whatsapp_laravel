@@ -73,11 +73,18 @@
                     @endcanany
 
                     @canany(['conversations.view_all', 'conversations.view_assigned'])
-                        <x-sidebar-link :href="route('calls.index')" :active="request()->routeIs('calls.*')">
+                        <x-sidebar-link :href="route('calls.workspace')" :active="request()->routeIs('calls.workspace')">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25"/>
+                            </svg>
+                            <span class="flex-1">{{ __('Call Workspace') }}</span>
+                        </x-sidebar-link>
+
+                        <x-sidebar-link :href="route('calls.index')" :active="request()->routeIs('calls.index')">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
                             </svg>
-                            <span class="flex-1">{{ __('Calls') }}</span>
+                            <span class="flex-1">{{ __('Call History') }}</span>
                             {{-- Missed-calls badge, last 24h — red to distinguish from
                                  the green inbox badge so a glance tells which kind of
                                  attention is owed. --}}
