@@ -6,6 +6,7 @@ namespace App\Jobs;
 
 use App\Exceptions\TranscriptionException;
 use App\Models\CallLog;
+use App\Services\AudioTranscoder;
 use App\Services\GeminiTranscriptionService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -34,7 +35,7 @@ class TranscribeCallRecording implements ShouldQueue
     {
     }
 
-    public function handle(GeminiTranscriptionService $gemini): void
+    public function handle(GeminiTranscriptionService $gemini, AudioTranscoder $transcoder): void
     {
         $call = CallLog::find($this->callLogId);
         if ($call === null) {
@@ -52,10 +53,21 @@ class TranscribeCallRecording implements ShouldQueue
         $call->update(['ai_status' => CallLog::AI_STATUS_PROCESSING]);
 
         try {
-            $result = $gemini->transcribeAndSummarize(
-                Storage::get($call->recording_path),
-                $call->recording_mime ?? 'audio/webm',
-            );
+            $audio = Storage::get($call->recording_path);
+            $mime = $call->recording_mime ?? 'audio/webm';
+
+            // Chrome records webm/opus, which Gemini rejects. Remux to ogg when
+            // ffmpeg is available; otherwise send as-is (Gemini may still reject
+            // it, which surfaces as a normal analysis failure below).
+            if ($transcoder->needsTranscode($mime)) {
+                $ogg = $transcoder->toOgg($audio);
+                if ($ogg !== null) {
+                    $audio = $ogg;
+                    $mime = 'audio/ogg';
+                }
+            }
+
+            $result = $gemini->transcribeAndSummarize($audio, $mime);
 
             $call->update([
                 'transcript' => $result['transcript'],

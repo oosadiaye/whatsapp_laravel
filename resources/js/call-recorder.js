@@ -16,11 +16,14 @@
  * The call's ai_status simply stays "none" (nothing to summarise).
  */
 
+// Prefer containers Gemini accepts directly (ogg / mp4) so no server-side
+// transcode is needed; fall back to webm (Chrome's only option), which the
+// TranscribeCallRecording job remuxes to ogg via ffmpeg when available.
 const PREFERRED_MIME_TYPES = [
-    'audio/webm;codecs=opus',
+    'audio/ogg;codecs=opus', // Firefox — Gemini-native
+    'audio/mp4',             // Safari — Gemini accepts mp4/aac
+    'audio/webm;codecs=opus', // Chrome — needs the server-side remux
     'audio/webm',
-    'audio/ogg;codecs=opus',
-    'audio/mp4',
 ];
 
 function recordingEnabled() {

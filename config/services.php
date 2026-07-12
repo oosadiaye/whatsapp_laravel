@@ -48,4 +48,14 @@ return [
         'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
     ],
 
+    /*
+    | ffmpeg — used only to remux browser recordings (Chrome emits webm/opus,
+    | which Gemini doesn't accept) into ogg before analysis. Entirely optional:
+    | if the binary isn't found the transcode is skipped and the original audio
+    | is sent as-is. Default resolves "ffmpeg" from PATH.
+    */
+    'ffmpeg' => [
+        'path' => env('FFMPEG_PATH', 'ffmpeg'),
+    ],
+
 ];
