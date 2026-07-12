@@ -139,6 +139,9 @@ window.bqVoiceClient = {
     hangupCall() { try { this.client?.hangup(); } catch (e) { console.warn('[BQ Voice] hangup failed', e); } },
     mute() { try { this.client?.muteAudio(); } catch (e) { console.warn('[BQ Voice] mute failed', e); } },
     unmute() { try { this.client?.unmuteAudio(); } catch (e) { console.warn('[BQ Voice] unmute failed', e); } },
+    hold() { try { this.client?.hold(); } catch (e) { console.warn('[BQ Voice] hold failed', e); } },
+    unhold() { try { this.client?.unhold(); } catch (e) { console.warn('[BQ Voice] unhold failed', e); } },
+    dtmf(digit) { try { this.client?.dtmf(String(digit)); } catch (e) { console.warn('[BQ Voice] dtmf failed', e); } },
 
     /** Best-effort access to the underlying RTCPeerConnection for telemetry. */
     peer() {
@@ -166,6 +169,8 @@ window.outgoingCall = (data) => ({
     ...createCallStateMixin(),
     state: 'calling',
     muted: false,
+    held: false,
+    keypadOpen: false,
     _statsHandle: null,
 
     init() {
@@ -213,6 +218,15 @@ window.outgoingCall = (data) => ({
         this.muted ? window.bqVoiceClient.mute() : window.bqVoiceClient.unmute();
     },
 
+    toggleHold() {
+        this.held = !this.held;
+        this.held ? window.bqVoiceClient.hold() : window.bqVoiceClient.unhold();
+    },
+
+    toggleKeypad() { this.keypadOpen = !this.keypadOpen; },
+
+    sendDtmf(digit) { window.bqVoiceClient.dtmf(digit); },
+
     async hangup() {
         try {
             await fetch(`/calls/${this.callId}/hangup`, {
@@ -243,6 +257,8 @@ window.incomingAtCall = (data) => ({
     ...createCallStateMixin(),
     state: 'ringing',
     muted: false,
+    held: false,
+    keypadOpen: false,
     _statsHandle: null,
     _incomingArrived: false,
     _answerPending: false,
@@ -355,6 +371,15 @@ window.incomingAtCall = (data) => ({
         this.muted = !this.muted;
         this.muted ? window.bqVoiceClient.mute() : window.bqVoiceClient.unmute();
     },
+
+    toggleHold() {
+        this.held = !this.held;
+        this.held ? window.bqVoiceClient.hold() : window.bqVoiceClient.unhold();
+    },
+
+    toggleKeypad() { this.keypadOpen = !this.keypadOpen; },
+
+    sendDtmf(digit) { window.bqVoiceClient.dtmf(digit); },
 
     teardown(reason) {
         window.bqStopRingtone?.();
