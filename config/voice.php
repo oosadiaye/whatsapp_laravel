@@ -128,4 +128,24 @@ return [
     // honour a data-retention policy and cap storage growth.
     'recording_retention_days' => (int) env('VOICE_RECORDING_RETENTION_DAYS', 0),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Webhook hardening
+    |--------------------------------------------------------------------------
+    | The provider webhook endpoints are unauthenticated by nature. Two extra
+    | defenses:
+    |
+    | - Rate limit (per IP/min) — abuse protection. Kept high so legitimate
+    |   status-webhook bursts during a big campaign aren't dropped.
+    | - IP allowlist — lock the endpoints to your provider's published source
+    |   ranges (Meta / Africa's Talking). Supports individual IPs and CIDR.
+    |   Empty = disabled (accept from anywhere, the previous behaviour).
+    |     VOICE_WEBHOOK_IP_ALLOWLIST="1.2.3.0/24,5.6.7.8"
+    */
+    'webhook_rate_limit' => (int) env('VOICE_WEBHOOK_RATE_LIMIT', 600),
+    'webhook_ip_allowlist' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('VOICE_WEBHOOK_IP_ALLOWLIST', '')),
+    ))),
+
 ];

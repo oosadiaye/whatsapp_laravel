@@ -17,6 +17,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminOnly::class,
+            // Optional source-IP allowlist for provider webhooks (empty = off).
+            'webhook.allowed-ips' => \App\Http\Middleware\AllowedWebhookIps::class,
             // spatie/laravel-permission middleware aliases — usage:
             //   ->middleware('role:admin')
             //   ->middleware('permission:users.create')

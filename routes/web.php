@@ -16,16 +16,23 @@ Route::get('/', function () {
     return redirect()->route('dashboard');
 });
 
-// Meta Cloud API per-instance webhook (verify GET + events POST)
-// CSRF excluded in bootstrap/app.php; SubstituteBindings still resolves {instance}.
-Route::get('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'verify'])
-    ->name('webhook.cloud.verify');
-Route::post('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'handle'])
-    ->name('webhook.cloud.handle');
+// Provider webhooks — unauthenticated by nature, so hardened with an abuse
+// rate-limit + an optional source-IP allowlist (config/voice.php). CSRF is
+// excluded in bootstrap/app.php; SubstituteBindings still resolves {instance}.
+Route::middleware([
+    'webhook.allowed-ips',
+    'throttle:'.((int) config('voice.webhook_rate_limit', 600)).',1',
+])->group(function () {
+    // Meta Cloud API per-instance webhook (verify GET + events POST).
+    Route::get('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'verify'])
+        ->name('webhook.cloud.verify');
+    Route::post('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'handle'])
+        ->name('webhook.cloud.handle');
 
-// Africa's Talking voice webhook (Phase 18). CSRF excluded in bootstrap/app.php.
-Route::post('/webhooks/africastalking/voice', [\App\Http\Controllers\AfricasTalkingWebhookController::class, 'handle'])
-    ->name('webhook.africastalking.voice');
+    // Africa's Talking voice webhook (Phase 18).
+    Route::post('/webhooks/africastalking/voice', [\App\Http\Controllers\AfricasTalkingWebhookController::class, 'handle'])
+        ->name('webhook.africastalking.voice');
+});
 
 // Authenticated routes — role/permission gates per resource group
 Route::middleware(['auth', 'verified'])->group(function () {
