@@ -10,8 +10,10 @@ use App\Models\Conversation;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
+use App\Jobs\TerminateProviderCall;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -58,6 +60,23 @@ class HangupProviderRoutingTest extends TestCase
             return str_contains($request->url(), 'graph.facebook.com')
                 || str_contains($request->url(), '/calls');
         });
+    }
+
+    public function test_hangup_ends_the_call_immediately_and_queues_provider_terminate(): void
+    {
+        // The agent-facing state must be consistent right away; the provider
+        // hangup is handed to the retried TerminateProviderCall job.
+        Bus::fake();
+        $agent = $this->makeAgent();
+        $call = $this->makeCall($agent, CallLog::PROVIDER_AFRICAS_TALKING, sessionId: 'sess_at');
+
+        $this->actingAs($agent)
+            ->postJson(route('calls.hangup', $call))
+            ->assertOk();
+
+        $this->assertSame(CallLog::STATUS_ENDED, $call->fresh()->status);
+        $this->assertNotNull($call->fresh()->ended_at);
+        Bus::assertDispatched(TerminateProviderCall::class);
     }
 
     private function makeAgent(): User

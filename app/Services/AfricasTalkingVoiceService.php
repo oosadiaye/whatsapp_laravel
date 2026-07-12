@@ -89,9 +89,14 @@ class AfricasTalkingVoiceService
     }
 
     /**
-     * Hang up an in-progress call by AT session ID. Best-effort —
-     * 4xx/5xx are logged but do not throw because the call may have
-     * already ended naturally.
+     * Hang up an in-progress call by AT session ID.
+     *
+     * Throws on failure so the caller (the retried TerminateProviderCall job)
+     * can retry — a transient failure here would otherwise orphan the customer's
+     * live leg (still connected, still billing). The job is what tolerates
+     * failure, via bounded retries; this method's job is to report it honestly.
+     *
+     * @throws VoiceProviderException
      */
     public function endCall(string $sessionId): void
     {
@@ -105,11 +110,12 @@ class AfricasTalkingVoiceService
         );
 
         if ($response->failed()) {
-            Log::warning('AT endCall failure (swallowed)', [
+            Log::warning('AT endCall failure', [
                 'session_id' => $sessionId,
                 'status' => $response->status(),
-                'body' => $response->body(),
             ]);
+
+            throw new VoiceProviderException("endCall HTTP {$response->status()}");
         }
     }
 

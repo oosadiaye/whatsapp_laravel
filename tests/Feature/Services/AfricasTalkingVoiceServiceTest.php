@@ -113,15 +113,16 @@ class AfricasTalkingVoiceServiceTest extends TestCase
         $service->placeCall('+2348011111111');
     }
 
-    public function test_end_call_swallows_4xx_without_throwing(): void
+    public function test_end_call_throws_on_failure_so_the_retry_job_can_retry(): void
     {
         $service = $this->app->make(AfricasTalkingVoiceService::class);
         Http::fake(['*' => Http::response(['error' => 'no such session'], 404)]);
 
-        // Should NOT throw — call may have ended naturally; we log + move on.
+        // endCall now reports failure by throwing — TerminateProviderCall (the
+        // caller) is what tolerates it, via bounded retries. A silent swallow
+        // here would orphan the customer's live leg.
+        $this->expectException(\App\Exceptions\VoiceProviderException::class);
         $service->endCall('sess_abc');
-
-        $this->assertTrue(true);
     }
 
     public function test_client_name_for_user_is_deterministic(): void

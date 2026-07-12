@@ -10,6 +10,7 @@ use App\Events\Calling\CallTerminated;
 use App\Exceptions\ConfigurationException;
 use App\Exceptions\VoiceProviderException;
 use App\Http\Requests\StoreCallQualityRequest;
+use App\Jobs\TerminateProviderCall;
 use App\Jobs\TranscribeCallRecording;
 use App\Models\CallLog;
 use App\Models\CallNote;
@@ -335,31 +336,27 @@ class CallController extends Controller
     /**
      * Shared terminate flow for decline + hangup.
      *
-     * Routes to the right provider terminate endpoint (Meta vs Africa's
-     * Talking), then updates local state and broadcasts CallTerminated.
-     *
-     * Provider failures are non-fatal — we still mark the call ended
-     * locally and notify other browser sessions. The customer may briefly
-     * hear silence before the natural disconnect, but the agent's UI is
-     * consistent. (Future improvement: enqueue a retry job for the
-     * provider-side terminate so the customer's side hangs up reliably.)
+     * Marks the call ended locally and broadcasts CallTerminated immediately so
+     * the agent's (and every other session's) UI is instantly consistent. The
+     * provider-side hangup is handed to {@see TerminateProviderCall}, a retried
+     * job — so a transient provider failure no longer orphans the customer's
+     * live leg the way the old best-effort inline call did.
      */
     private function terminate(CallLog $call, string $finalStatus, string $broadcastReason): void
     {
-        $context = ['call_id' => $call->id, 'reason' => $broadcastReason];
+        // Hand the provider-side hangup to a retried background job. Guard the
+        // dispatch so nothing about the provider call can fail the agent's
+        // hangup request: on a real queue this only enqueues (retries happen on
+        // the worker); on the sync queue it runs inline, so we swallow a failure
+        // here exactly as the old best-effort inline call did.
         try {
-            if ($call->provider === CallLog::PROVIDER_AFRICAS_TALKING) {
-                app(AfricasTalkingVoiceService::class)->endCall($call->provider_session_id);
-            } else {
-                app(WhatsAppCloudApiService::class)
-                    ->endCall($call->whatsappInstance, $call->meta_call_id);
-            }
+            TerminateProviderCall::dispatch($call->id);
         } catch (\Throwable $e) {
-            // Log + continue. Customer-side may not hear the hangup tone if
-            // the provider call fails, but the agent's UI must still end
-            // cleanly — letting an exception bubble would surface as a 500
-            // and leave the call_log in an in-flight state.
-            Log::warning('Provider endCall failed during terminate', $context + ['error' => $e->getMessage()]);
+            Log::warning('Provider terminate dispatch failed', [
+                'call_id' => $call->id,
+                'reason' => $broadcastReason,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         $call->update([
