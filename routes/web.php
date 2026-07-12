@@ -225,6 +225,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:team.view')->group(function () {
         Route::get('/team', [\App\Http\Controllers\TeamLoadController::class, 'index'])
             ->name('team.index');
+        // Live operations wallboard — realtime call board (Livewire Wallboard).
+        Route::view('/wallboard', 'wallboard.index')->name('wallboard');
     });
     Route::middleware('permission:users.edit')->group(function () {
         Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
