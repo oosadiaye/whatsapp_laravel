@@ -38,17 +38,30 @@ class CallController extends Controller
     {
         $user = $request->user();
 
-        $query = CallLog::query()->with(['contact', 'conversation', 'whatsappInstance', 'placedBy']);
-
         // Visibility scoping (single-tenant — fb5a398 flipped contacts/
         // conversations/campaigns to shared visibility; CallController was
         // missed in that pass):
         //   - conversations.view_all  → every call in the company
         //   - conversations.view_assigned → only calls on conversations
         //     currently assigned to me (agent workflow scope, unchanged)
-        if (! $user->can('conversations.view_all')) {
-            $query->whereHas('conversation', fn ($q) => $q->where('assigned_to_user_id', $user->id));
-        }
+        $scope = function ($q) use ($user) {
+            if (! $user->can('conversations.view_all')) {
+                $q->whereHas('conversation', fn ($c) => $c->where('assigned_to_user_id', $user->id));
+            }
+        };
+
+        // Header trend widgets — computed from real data, scoped like the list.
+        $todayCount = CallLog::query()->tap($scope)->whereDate('created_at', today())->count();
+        $avgDurationSeconds = (int) round(
+            (float) CallLog::query()->tap($scope)->where('duration_seconds', '>', 0)->avg('duration_seconds')
+        );
+        $providerCounts = CallLog::query()->tap($scope)
+            ->selectRaw('provider, count(*) as aggregate')
+            ->groupBy('provider')
+            ->pluck('aggregate', 'provider');
+
+        $query = CallLog::query()->tap($scope)
+            ->with(['contact', 'conversation', 'whatsappInstance', 'placedBy']);
 
         if ($direction = $request->query('direction')) {
             if (in_array($direction, ['inbound', 'outbound'], true)) {
@@ -62,12 +75,18 @@ class CallController extends Controller
             }
         }
 
-        $calls = $query->latest()->paginate(50);
+        $calls = $query->latest()->paginate(50)->withQueryString();
 
         return view('calls.index', [
             'calls' => $calls,
             'currentDirection' => $request->query('direction'),
             'currentStatus' => $request->query('status'),
+            'stats' => [
+                'todayCount' => $todayCount,
+                'avgDurationSeconds' => $avgDurationSeconds,
+                'providerCounts' => $providerCounts,
+                'providerTotal' => (int) $providerCounts->sum(),
+            ],
         ]);
     }
 

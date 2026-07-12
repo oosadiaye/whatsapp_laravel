@@ -119,6 +119,30 @@ class CallsPageTest extends TestCase
             ->assertViewHas('calls', fn ($calls) => count($calls) === 3);
     }
 
+    public function test_index_exposes_trend_stats(): void
+    {
+        $admin = $this->makeUser('admin');
+        $conv = Conversation::factory()->create(['user_id' => $admin->id]);
+
+        CallLog::factory()->create([
+            'conversation_id' => $conv->id, 'contact_id' => $conv->contact_id,
+            'whatsapp_instance_id' => $conv->whatsapp_instance_id,
+            'provider' => CallLog::PROVIDER_AFRICAS_TALKING, 'duration_seconds' => 60,
+        ]);
+        CallLog::factory()->create([
+            'conversation_id' => $conv->id, 'contact_id' => $conv->contact_id,
+            'whatsapp_instance_id' => $conv->whatsapp_instance_id,
+            'provider' => CallLog::PROVIDER_META_WHATSAPP, 'duration_seconds' => 120,
+        ]);
+
+        $stats = $this->actingAs($admin)->get(route('calls.index'))->viewData('stats');
+
+        $this->assertSame(2, $stats['todayCount']);
+        $this->assertSame(90, $stats['avgDurationSeconds']); // (60 + 120) / 2
+        $this->assertSame(2, $stats['providerTotal']);
+        $this->assertSame(1, $stats['providerCounts']->get(CallLog::PROVIDER_AFRICAS_TALKING));
+    }
+
     private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([
