@@ -295,44 +295,32 @@ class ContactInitiationTest extends TestCase
         $response->assertRedirect();
     }
 
-    public function test_startChat_with_multiple_active_instances_picks_via_instance_id(): void
+    public function test_startChat_uses_the_primary_instance_without_a_picker(): void
     {
+        // Single-instance app: no send-time picker. startChat resolves to the
+        // one primary WhatsApp number and creates the conversation directly.
         $admin = $this->makeUser('admin');
-        WhatsAppInstance::factory()->count(2)->create([
+        WhatsAppInstance::factory()->create([
             'user_id' => $admin->id,
             'status' => 'CONNECTED',
         ]);
         $contact = Contact::factory()->create(['user_id' => $admin->id]);
 
-        // POST without instance_id → resolveInstance returns null because firstWhere('id', 0) misses,
-        // controller flashes "Pick which WhatsApp number..." and redirects back.
         $this->actingAs($admin)
-            ->from(route('contacts.index'))
             ->post(route('contacts.startChat', $contact))
-            ->assertRedirect(route('contacts.index'))
-            ->assertSessionHas('error');
-
-        $this->assertSame(0, Conversation::count(), 'No conversation when picker not used');
-
-        // Pick the second instance via the request body — modal does this on confirm.
-        $instance2 = WhatsAppInstance::where('user_id', $admin->id)->skip(1)->first();
-        $this->actingAs($admin)
-            ->post(route('contacts.startChat', $contact), ['instance_id' => $instance2->id])
             ->assertRedirect();
 
         $conv = Conversation::first();
         $this->assertNotNull($conv);
-        $this->assertSame($instance2->id, $conv->whatsapp_instance_id);
+        $this->assertSame(WhatsAppInstance::primary()->id, $conv->whatsapp_instance_id);
     }
 
-    public function test_startChat_with_zero_connected_instances_flashes_setup_error(): void
+    public function test_startChat_with_no_instance_configured_flashes_setup_error(): void
     {
+        // Single-instance app: when WhatsApp has not been configured in Settings
+        // (no instance row at all), startChat flashes a setup error instead of
+        // creating an orphan conversation.
         $admin = $this->makeUser('admin');
-        // DISCONNECTED instance — resolveInstance filters it out, treating user as instance-less.
-        WhatsAppInstance::factory()->create([
-            'user_id' => $admin->id,
-            'status' => 'DISCONNECTED',
-        ]);
         $contact = Contact::factory()->create(['user_id' => $admin->id]);
 
         $this->actingAs($admin)

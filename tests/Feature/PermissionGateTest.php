@@ -43,9 +43,7 @@ class PermissionGateTest extends TestCase
         $this->actingAs($agent)->get(route('contacts.index'))->assertOk();
         $this->actingAs($agent)->get(route('contacts.import'))->assertOk();
 
-        // ✗ Forbidden — agent has no instance/template/settings/users access.
-        $this->actingAs($agent)->get(route('instances.index'))->assertForbidden();
-        $this->actingAs($agent)->get(route('instances.create'))->assertForbidden();
+        // ✗ Forbidden — agent has no template/settings/users access.
         $this->actingAs($agent)->get(route('templates.create'))->assertForbidden();
         $this->actingAs($agent)->get(route('settings.index'))->assertForbidden();
         $this->actingAs($agent)->get(route('users.index'))->assertForbidden();
@@ -73,21 +71,17 @@ class PermissionGateTest extends TestCase
         // ✗ User mgmt forbidden
         $this->actingAs($manager)->get(route('users.index'))->assertForbidden();
         $this->actingAs($manager)->get(route('users.create'))->assertForbidden();
-
-        // ✗ Instance create/edit forbidden (manager.instance permissions)
-        $this->actingAs($manager)->get(route('instances.create'))->assertForbidden();
     }
 
     public function test_admin_role_access_matrix(): void
     {
-        // Admin: nearly full. Can manage instances + templates + campaigns + users.view.
+        // Admin: nearly full. Can manage templates + campaigns + users.view + settings.
         // Cannot users.create / users.delete (only super_admin can).
         $admin = $this->makeUser('admin');
 
         $this->actingAs($admin)->get(route('users.index'))->assertOk();
         $this->actingAs($admin)->get(route('users.create'))->assertForbidden();  // only super_admin
         $this->actingAs($admin)->get(route('campaigns.create'))->assertOk();
-        $this->actingAs($admin)->get(route('instances.create'))->assertOk();
         $this->actingAs($admin)->get(route('settings.index'))->assertOk();
     }
 
@@ -98,8 +92,6 @@ class PermissionGateTest extends TestCase
         // Sanity check on every resource entry point.
         foreach ([
             'dashboard',
-            'instances.index',
-            'instances.create',
             'groups.index',
             'contacts.index',
             'contacts.import',
