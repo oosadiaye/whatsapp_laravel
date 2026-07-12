@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 class CallLog extends Model
@@ -15,6 +16,14 @@ class CallLog extends Model
 
     public const DIRECTION_INBOUND = 'inbound';
     public const DIRECTION_OUTBOUND = 'outbound';
+
+    /** AI/transcription pipeline states driving the Call Workspace panel. */
+    public const AI_STATUS_NONE = 'none';           // nothing captured yet
+    public const AI_STATUS_PENDING = 'pending';     // recording uploaded, queued
+    public const AI_STATUS_PROCESSING = 'processing'; // Gemini call in flight
+    public const AI_STATUS_COMPLETED = 'completed';
+    public const AI_STATUS_FAILED = 'failed';
+    public const AI_STATUS_UNAVAILABLE = 'unavailable'; // recording disabled/unsupported
 
     public const STATUS_INITIATED = 'initiated';
     public const STATUS_RINGING = 'ringing';
@@ -68,6 +77,14 @@ class CallLog extends Model
         'sdp_offer',
         'sdp_answer',
         'answered_by_session_id',
+        'recording_path',
+        'recording_mime',
+        'recording_uploaded_at',
+        'transcript',
+        'ai_summary',
+        'ai_key_points',
+        'ai_status',
+        'ai_error',
     ];
 
     protected function casts(): array
@@ -76,11 +93,23 @@ class CallLog extends Model
             'started_at' => 'datetime',
             'connected_at' => 'datetime',
             'ended_at' => 'datetime',
+            'recording_uploaded_at' => 'datetime',
             'duration_seconds' => 'integer',
             'raw_event_log' => 'array',
+            'ai_key_points' => 'array',
             'quality_metrics' => \App\Casts\PreservedJsonArray::class,
         ];
     }
+
+    /**
+     * Hide the raw recording key + WebRTC SDP blobs from accidental JSON
+     * serialization — they're internal plumbing, not client-facing.
+     */
+    protected $hidden = [
+        'recording_path',
+        'sdp_offer',
+        'sdp_answer',
+    ];
 
     public function conversation(): BelongsTo
     {
@@ -102,9 +131,19 @@ class CallLog extends Model
         return $this->belongsTo(User::class, 'placed_by_user_id');
     }
 
+    public function notes(): HasMany
+    {
+        return $this->hasMany(CallNote::class)->oldest();
+    }
+
     public function isInbound(): bool
     {
         return $this->direction === self::DIRECTION_INBOUND;
+    }
+
+    public function hasRecording(): bool
+    {
+        return filled($this->recording_path);
     }
 
     public function isInFlight(): bool

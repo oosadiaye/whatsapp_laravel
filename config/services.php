@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    /*
+    | Google Gemini — transcribes + summarises call recordings for the Call
+    | Workspace panel. Gemini is multimodal, so one request turns the audio
+    | into a transcript AND structured key points. Leave the key blank to keep
+    | the whole AI pipeline dormant (recordings just won't be analysed).
+    */
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+        // Flash is fast + cheap and accepts audio input; override per env if needed.
+        'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
+        'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
+    ],
+
 ];

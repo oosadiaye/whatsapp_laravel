@@ -82,4 +82,24 @@ return [
     */
     'meta_calling_enabled' => (bool) env('VOICE_META_CALLING_ENABLED', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Call recording + AI analysis — OFF by default (compliance)
+    |--------------------------------------------------------------------------
+    | When enabled, the browser softphone records the mixed call audio and
+    | uploads it to the private disk; a queued job sends it to Gemini for a
+    | transcript + summary + key points shown on the Call Workspace panel.
+    |
+    | Recording people's calls has legal/consent implications (a "this call may
+    | be recorded" notice + a retention policy are your responsibility), so the
+    | default is OFF. The recording upload endpoint and the client recorder both
+    | respect this flag — flip it to true in .env only once consent is handled.
+    | GEMINI_API_KEY must also be set for the analysis half to run.
+    */
+    'call_recording_enabled' => (bool) env('VOICE_CALL_RECORDING_ENABLED', false),
+
+    // Hard cap on an uploaded recording (kilobytes). Guards the upload endpoint
+    // and keeps audio within Gemini's inline-request budget. ~25 MB default.
+    'recording_max_kb' => (int) env('VOICE_RECORDING_MAX_KB', 25600),
+
 ];
