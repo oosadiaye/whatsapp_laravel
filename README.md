@@ -79,6 +79,16 @@ See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for production setup including:
 - TLS / Let's Encrypt
 - Common pitfalls (storage permissions, `APP_KEY` encryption mismatches)
 
+## Call Workspace (AI call analysis)
+
+The `/workspace` page records calls and uses Google Gemini to produce a
+transcript + summary + key points alongside an agent notes timeline. It is
+**off by default** (consent/retention obligations).
+
+See **[docs/CALL-WORKSPACE.md](docs/CALL-WORKSPACE.md)** for enabling it:
+`GEMINI_API_KEY`, `VOICE_CALL_RECORDING_ENABLED`, ffmpeg (for Chrome), retention,
+and an end-to-end verification checklist.
+
 ---
 
 ## Project structure
