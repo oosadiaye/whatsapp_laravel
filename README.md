@@ -97,8 +97,7 @@ app/
 │   ├── ContactGroupController.php           Group CRUD
 │   ├── DashboardController.php              Stats + recent activity
 │   ├── MessageTemplateController.php        Sync-from-Meta, submit-to-Meta, local CRUD
-│   ├── SettingsController.php               Sending defaults (rate, delays, country code)
-│   └── WhatsAppInstanceController.php       Instance setup with Meta credential probe
+│   └── SettingsController.php               Sending defaults + WhatsApp number credentials (single instance)
 ├── Jobs/
 │   ├── CampaignBatchDispatch.php            Fans a campaign out into per-contact send jobs
 │   ├── ProcessContactImport.php             Async CSV/XLSX import

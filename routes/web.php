@@ -10,7 +10,6 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\CloudWebhookController;
-use App\Http\Controllers\WhatsAppInstanceController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -37,23 +36,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // ─── WhatsApp Instances ────────────────────────────────────────────────
-    // Static routes first (instances/create), then parameter routes (instances/{instance}),
-    // otherwise Laravel matches /instances/create as /instances/{instance=create} and 404s.
-    Route::middleware('permission:instances.create')->group(function () {
-        Route::get('/instances/create', [WhatsAppInstanceController::class, 'create'])->name('instances.create');
-        Route::post('/instances', [WhatsAppInstanceController::class, 'store'])->name('instances.store');
-    });
-    Route::middleware('permission:instances.view')->group(function () {
-        Route::get('/instances', [WhatsAppInstanceController::class, 'index'])->name('instances.index');
-        Route::get('/instances/{instance}', [WhatsAppInstanceController::class, 'show'])->name('instances.show');
-    });
-    Route::middleware('permission:instances.edit')->group(function () {
-        Route::post('/instances/{instance}/default', [WhatsAppInstanceController::class, 'setDefault'])->name('instances.setDefault');
-    });
-    Route::middleware('permission:instances.delete')->group(function () {
-        Route::delete('/instances/{instance}', [WhatsAppInstanceController::class, 'destroy'])->name('instances.destroy');
-    });
+    // Single-instance app: the one WhatsApp number is configured on the
+    // Settings page (SettingsController::upsertWhatsAppInstance). The old
+    // multi-instance CRUD routes (/instances*) were removed in the unify.
 
     // ─── Contact Groups ────────────────────────────────────────────────────
     Route::middleware('permission:groups.view')->group(function () {

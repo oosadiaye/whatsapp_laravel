@@ -45,11 +45,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'users.edit',
             'users.delete',
 
-            // WhatsApp instances (credentials)
-            'instances.view',
-            'instances.create',
-            'instances.edit',
-            'instances.delete',
+            // Note: the WhatsApp number is single-instance now and configured
+            // on the Settings page — the old instances.* permissions were
+            // removed when the multi-instance CRUD was collapsed.
 
             // Contacts + groups
             'contacts.view',
@@ -117,24 +115,20 @@ class RolesAndPermissionsSeeder extends Seeder
         $superAdmin = Role::firstOrCreate(['name' => User::ROLE_SUPER_ADMIN, 'guard_name' => 'web']);
         $superAdmin->syncPermissions($allPermissions);
 
-        // Admin: same as super_admin minus user create/delete + instance delete.
+        // Admin: same as super_admin minus user create/delete.
         $admin = Role::firstOrCreate(['name' => User::ROLE_ADMIN, 'guard_name' => 'web']);
         $admin->syncPermissions(array_diff($allPermissions, [
             'users.create',
             'users.delete',
-            'instances.delete',
         ]));
 
-        // Manager: full operational access but no user management at all + no instance management.
+        // Manager: full operational access but no user management at all.
         $manager = Role::firstOrCreate(['name' => User::ROLE_MANAGER, 'guard_name' => 'web']);
         $manager->syncPermissions(array_diff($allPermissions, [
             'users.view',
             'users.create',
             'users.edit',
             'users.delete',
-            'instances.create',
-            'instances.edit',
-            'instances.delete',
         ]));
 
         // Agent (support staff): contacts + assigned conversations only.
