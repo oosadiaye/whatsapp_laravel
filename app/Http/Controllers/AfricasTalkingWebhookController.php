@@ -69,6 +69,14 @@ class AfricasTalkingWebhookController extends Controller
             return response('ok', 200);
         }
 
+        // AT retries callbacks, so a delayed Ringing/InProgress can arrive AFTER
+        // Completed/Failed. Without this guard, re-applying an in-flight status
+        // resurrects a finished call — flipping it back to ringing/connected and
+        // re-surfacing the banner via RealtimePulse. Terminal is terminal.
+        if (in_array($call->status, CallLog::STATUSES_TERMINAL, true)) {
+            return response('ok', 200);
+        }
+
         match ($status) {
             'Ringing' => $call->update(['status' => CallLog::STATUS_RINGING]),
             'InProgress' => $call->update([

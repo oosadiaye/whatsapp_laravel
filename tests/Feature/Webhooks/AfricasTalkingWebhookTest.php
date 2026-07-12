@@ -45,6 +45,21 @@ class AfricasTalkingWebhookTest extends TestCase
         $this->assertSame(CallLog::STATUS_RINGING, $call->fresh()->status);
     }
 
+    public function test_late_ringing_after_terminal_does_not_resurrect_call(): void
+    {
+        // AT retries callbacks; a delayed Ringing/InProgress arriving after the
+        // call already ended must not flip a terminal call back to in-flight.
+        $call = $this->makeOutboundCall(CallLog::STATUS_ENDED, 'sess_terminal_test');
+
+        $this->postWebhook([
+            'sessionId' => 'sess_terminal_test',
+            'status' => 'Ringing',
+            'direction' => 'Outbound',
+        ])->assertOk();
+
+        $this->assertSame(CallLog::STATUS_ENDED, $call->fresh()->status);
+    }
+
     public function test_completed_event_computes_cost_estimate_kobo(): void
     {
         $call = $this->makeOutboundCall(CallLog::STATUS_CONNECTED, 'sess_completed_test');
