@@ -62,9 +62,12 @@ class StoreCampaignRequest extends FormRequest
                 return;  // No template — handled by view warning, not error.
             }
 
-            $template = MessageTemplate::where('user_id', auth()->id())
-                ->where('id', $templateId)
-                ->first();
+            // Single-tenant: the create/edit forms list every template
+            // regardless of owner, so the pre-flight guards must resolve by id
+            // alone. Scoping to auth()->id() here let a teammate's template
+            // slip past the APPROVED + media-header checks (the lookup returned
+            // null and this validator bailed), sending broken campaigns.
+            $template = MessageTemplate::find($templateId);
 
             if ($template === null) {
                 return;  // exists:message_templates rule will handle it

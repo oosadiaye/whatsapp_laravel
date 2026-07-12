@@ -37,7 +37,14 @@ class SendWhatsAppMessage implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    // Exactly one attempt. Meta's send API has no idempotency key, so a
+    // job-level retry after a send that already reached Meta (a 5xx *response*
+    // after processing, or a post-send DB write that threw) would deliver a
+    // DUPLICATE message to the customer. Transient CONNECTION errors are
+    // retried safely inside WhatsAppCloudApiService::client() (which retries
+    // only ConnectionException, never a response) — so we don't lose
+    // connection resilience by not retrying the whole job. See failed().
+    public int $tries = 1;
 
     public int $backoff = 30;
 
@@ -319,7 +326,10 @@ class SendWhatsAppMessage implements ShouldQueue
         ];
 
         foreach ($hints as $code => $hint) {
-            if (str_contains($message, $code)) {
+            // PHP casts numeric-string array keys to int, so $code is an int
+            // here — str_contains() needs a string needle or it TypeErrors,
+            // which previously crashed failed() on every real send failure.
+            if (str_contains($message, (string) $code)) {
                 return $message.$hint;
             }
         }
@@ -329,6 +339,15 @@ class SendWhatsAppMessage implements ShouldQueue
 
     public function failed(Throwable $exception): void
     {
+        // Never clobber a log that already resolved. With $tries=1 a thrown send
+        // lands here, but if the send actually reached Meta (log is already
+        // SENT) and only post-send bookkeeping threw, flipping it to FAILED
+        // would corrupt state and double-count failed_count. Act only while the
+        // log is still PENDING.
+        if (($this->log->fresh()?->status) !== 'PENDING') {
+            return;
+        }
+
         // Annotate well-known Meta Cloud API error codes with a remediation
         // hint so operators can act without trawling Meta's docs. The full
         // original message is preserved; the hint is appended.

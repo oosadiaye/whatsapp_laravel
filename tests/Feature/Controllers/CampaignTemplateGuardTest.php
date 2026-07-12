@@ -85,6 +85,34 @@ class CampaignTemplateGuardTest extends TestCase
         $this->assertSame(0, Campaign::count());
     }
 
+    public function test_shared_pending_template_from_another_user_is_still_guarded(): void
+    {
+        // Single-tenant: the create form lists every template regardless of
+        // owner, so selecting a teammate's non-APPROVED template must still be
+        // blocked. The previous user_id-scoped lookup returned null for shared
+        // templates and let them slip past the guard, sending broken campaigns.
+        $admin = $this->makeAdmin();
+        $otherUser = User::factory()->create();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+        $group = ContactGroup::create(['user_id' => $admin->id, 'name' => 'Test']);
+
+        $pending = MessageTemplate::factory()->remote()->create([
+            'user_id' => $otherUser->id, // owned by a different user
+            'whatsapp_instance_id' => $instance->id,
+            'status' => MessageTemplate::STATUS_PENDING,
+        ]);
+
+        $this->actingAs($admin)->post(route('campaigns.store'), [
+            'name' => 'C',
+            'message' => 'Body',
+            'instance_id' => $instance->id,
+            'message_template_id' => $pending->id,
+            'groups' => [$group->id],
+        ])->assertSessionHasErrors('message_template_id');
+
+        $this->assertSame(0, Campaign::count());
+    }
+
     public function test_approved_template_passes_validation(): void
     {
         $user = $this->makeAdmin();

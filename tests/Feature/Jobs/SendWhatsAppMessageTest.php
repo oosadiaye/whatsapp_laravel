@@ -156,6 +156,51 @@ class SendWhatsAppMessageTest extends TestCase
         $this->assertSame($sentBefore, $campaign->fresh()->sent_count);
     }
 
+    public function test_job_runs_once_so_a_reached_send_is_never_duplicated(): void
+    {
+        $user = User::factory()->create();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
+        [$campaign, $contact, $log] = $this->setupSend($user, $instance);
+
+        // Meta's send API has no idempotency key, so a job-level retry after a
+        // send that already reached Meta (5xx *after* processing, or a post-send
+        // DB write that threw) would deliver a DUPLICATE message. $tries must be
+        // 1; transient CONNECTION errors are retried safely inside the HTTP
+        // client, not by re-running the whole job.
+        $this->assertSame(1, (new SendWhatsAppMessage($log, $campaign, $contact))->tries);
+    }
+
+    public function test_failed_handler_marks_a_pending_log_failed(): void
+    {
+        $user = User::factory()->create();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
+        [$campaign, $contact, $log] = $this->setupSend($user, $instance, ['message' => 'Hello']);
+
+        // A send that threw lands in failed() (with $tries=1, no re-run). While
+        // the log is still PENDING it must be marked FAILED so the campaign
+        // completes and failed_count is accurate.
+        (new SendWhatsAppMessage($log, $campaign, $contact))->failed(new \RuntimeException('Meta 500'));
+
+        $this->assertSame('FAILED', $log->fresh()->status);
+        $this->assertSame(1, $campaign->fresh()->failed_count);
+    }
+
+    public function test_failed_handler_does_not_clobber_an_already_sent_log(): void
+    {
+        $user = User::factory()->create();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
+        [$campaign, $contact, $log] = $this->setupSend($user, $instance, ['message' => 'Hello']);
+
+        // Send succeeded (log SENT) but post-send bookkeeping threw. The
+        // failed() handler must NOT flip a SENT log to FAILED.
+        $log->update(['status' => 'SENT', 'whatsapp_message_id' => 'wamid.ok']);
+
+        (new SendWhatsAppMessage($log, $campaign, $contact))->failed(new \RuntimeException('bookkeeping blew up'));
+
+        $this->assertSame('SENT', $log->fresh()->status);
+        $this->assertSame(0, $campaign->fresh()->failed_count);
+    }
+
     /**
      * @return array{0: Campaign, 1: Contact, 2: MessageLog}
      */
