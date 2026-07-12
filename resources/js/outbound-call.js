@@ -201,6 +201,9 @@ window.outgoingCall = (data) => ({
         this.state = 'connected';
         this.startDurationTimer();
         this._tryStats();
+        // Best-effort call recording for AI analysis (self-guards on the flag +
+        // browser support; no-ops otherwise).
+        window.bqCallRecorder?.start(this.callId);
     },
     onHangup() { this.teardown('remote'); },
     onError(err) {
@@ -241,6 +244,7 @@ window.outgoingCall = (data) => ({
 
     teardown(reason) {
         this.stopDurationTimer();
+        window.bqCallRecorder?.stop();  // flush + upload the recording, if any
         const aggregate = this._statsHandle?.stop();
         postQuality(this.callId, this.csrf, aggregate);
         this._statsHandle = null;
@@ -298,6 +302,9 @@ window.incomingAtCall = (data) => ({
         this.state = 'connected';
         this.startDurationTimer();
         this._tryStats();
+        // Best-effort call recording for AI analysis (self-guards on the flag +
+        // browser support; no-ops otherwise).
+        window.bqCallRecorder?.start(this.callId);
     },
     onHangup() { this.teardown('remote'); },
     onError(err) {
@@ -384,6 +391,7 @@ window.incomingAtCall = (data) => ({
     teardown(reason) {
         window.bqStopRingtone?.();
         this.stopDurationTimer();
+        window.bqCallRecorder?.stop();  // flush + upload the recording, if any
         const aggregate = this._statsHandle?.stop();
         postQuality(this.callId, this.csrf, aggregate);
         this._statsHandle = null;
