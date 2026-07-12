@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire;
 
+use App\Jobs\TranscribeCallRecording;
 use App\Models\CallLog;
 use Illuminate\Support\Collection;
 use Livewire\Component;
@@ -58,6 +59,31 @@ class CallInsightsPanel extends Component
         $this->noteBody = '';
     }
 
+    /**
+     * Re-run transcription on a call that has a recording — e.g. a first attempt
+     * failed (Gemini quota, or ffmpeg wasn't installed yet) and the operator has
+     * since fixed the cause. Requeues rather than making the recording a dead end.
+     */
+    public function reanalyse(): void
+    {
+        $call = $this->authorizedCall();
+        if ($call === null) {
+            return;
+        }
+
+        // Nothing to do without a recording or a configured Gemini key, and never
+        // stack a second job while one is already in flight.
+        if (! $call->hasRecording() || ! filled(config('services.gemini.key'))) {
+            return;
+        }
+        if (in_array($call->ai_status, [CallLog::AI_STATUS_PENDING, CallLog::AI_STATUS_PROCESSING], true)) {
+            return;
+        }
+
+        $call->update(['ai_status' => CallLog::AI_STATUS_PENDING, 'ai_error' => null]);
+        TranscribeCallRecording::dispatch($call->id);
+    }
+
     public function render()
     {
         $call = $this->authorizedCall(['contact', 'conversation', 'placedBy', 'notes.author']);
@@ -65,6 +91,7 @@ class CallInsightsPanel extends Component
         return view('livewire.call-insights-panel', [
             'call' => $call,
             'context' => $call ? $this->buildContext($call) : null,
+            'aiConfigured' => filled(config('services.gemini.key')),
         ]);
     }
 

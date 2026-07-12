@@ -109,6 +109,18 @@
                             @endif
                         </p>
                 @endswitch
+
+                {{-- Re-analyse: recover a recording whose analysis failed / never ran
+                     (e.g. Gemini quota, or ffmpeg installed after the fact). --}}
+                @if($aiConfigured && $call->hasRecording() && in_array($call->ai_status, [CallLog::AI_STATUS_FAILED, CallLog::AI_STATUS_UNAVAILABLE, CallLog::AI_STATUS_NONE], true))
+                    <button type="button" wire:click="reanalyse"
+                            wire:loading.attr="disabled" wire:target="reanalyse"
+                            class="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#128C7E] hover:text-[#0e6b5e] disabled:opacity-50">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992V4.356M2.985 19.644v-4.992h4.992m-4.5-4.5a7.5 7.5 0 0113.02-3.02L20.015 8m-.985 5.652a7.5 7.5 0 01-13.02 3.02L2.985 15"/></svg>
+                        <span wire:loading.remove wire:target="reanalyse">{{ __('Re-analyse call') }}</span>
+                        <span wire:loading wire:target="reanalyse">{{ __('Queuing…') }}</span>
+                    </button>
+                @endif
             </section>
 
             {{-- ── RECORDING + TRANSCRIPT ─────────────────────────────── --}}

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Livewire;
 
+use App\Jobs\TranscribeCallRecording;
 use App\Livewire\CallInsightsPanel;
 use App\Models\CallLog;
 use App\Models\Conversation;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -83,6 +85,65 @@ class CallInsightsPanelTest extends TestCase
         Livewire::actingAs($agent)
             ->test(CallInsightsPanel::class, ['callId' => $call->id])
             ->assertStatus(403);
+    }
+
+    public function test_reanalyse_requeues_a_failed_recording(): void
+    {
+        Bus::fake();
+        config(['services.gemini.key' => 'k']);
+
+        $admin = $this->makeUser('admin');
+        $call = CallLog::factory()->create([
+            'recording_path' => 'call-recordings/rec.webm',
+            'ai_status' => CallLog::AI_STATUS_FAILED,
+            'ai_error' => 'quota exceeded',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CallInsightsPanel::class, ['callId' => $call->id])
+            ->call('reanalyse');
+
+        $call->refresh();
+        $this->assertSame(CallLog::AI_STATUS_PENDING, $call->ai_status);
+        $this->assertNull($call->ai_error);
+        Bus::assertDispatched(TranscribeCallRecording::class);
+    }
+
+    public function test_reanalyse_is_a_noop_without_a_recording(): void
+    {
+        Bus::fake();
+        config(['services.gemini.key' => 'k']);
+
+        $admin = $this->makeUser('admin');
+        $call = CallLog::factory()->create([
+            'recording_path' => null,
+            'ai_status' => CallLog::AI_STATUS_NONE,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CallInsightsPanel::class, ['callId' => $call->id])
+            ->call('reanalyse');
+
+        Bus::assertNotDispatched(TranscribeCallRecording::class);
+        $this->assertSame(CallLog::AI_STATUS_NONE, $call->fresh()->ai_status);
+    }
+
+    public function test_reanalyse_is_a_noop_when_gemini_not_configured(): void
+    {
+        Bus::fake();
+        config(['services.gemini.key' => null]);
+
+        $admin = $this->makeUser('admin');
+        $call = CallLog::factory()->create([
+            'recording_path' => 'call-recordings/rec.webm',
+            'ai_status' => CallLog::AI_STATUS_UNAVAILABLE,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CallInsightsPanel::class, ['callId' => $call->id])
+            ->call('reanalyse');
+
+        Bus::assertNotDispatched(TranscribeCallRecording::class);
     }
 
     private function makeUser(string $role, ?string $email = null): User
