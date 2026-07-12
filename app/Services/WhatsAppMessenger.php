@@ -62,6 +62,18 @@ class WhatsAppMessenger
     }
 
     /**
+     * Send a read receipt to Meta for an inbound message so the customer sees
+     * blue ticks. Best-effort — callers should not let a failure here block the
+     * thread from rendering.
+     *
+     * @throws WhatsAppApiException
+     */
+    public function markAsRead(WhatsAppInstance $instance, string $messageId): void
+    {
+        $this->cloud->markAsRead($instance, $messageId);
+    }
+
+    /**
      * Send a Meta-approved template message. Required for any outreach outside
      * the 24-hour conversation window — i.e. all marketing campaigns to fresh
      * contacts.

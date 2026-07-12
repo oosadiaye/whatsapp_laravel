@@ -87,9 +87,28 @@ class ConversationController extends Controller
     {
         $this->authorizeConversationAccess($request, $conversation);
 
-        // Mark as read when opening — clears the inbox unread badge for this thread.
+        // Mark as read when opening — clears the inbox unread badge AND sends a
+        // read receipt to Meta so the customer sees blue ticks. The Meta call is
+        // best-effort: a failure must never block the thread from rendering.
         if ($conversation->unread_count > 0) {
             $conversation->update(['unread_count' => 0]);
+
+            $latestInbound = $conversation->messages()
+                ->where('direction', ConversationMessage::DIRECTION_INBOUND)
+                ->whereNotNull('whatsapp_message_id')
+                ->latest('received_at')
+                ->first();
+
+            if ($latestInbound !== null && $conversation->whatsappInstance !== null) {
+                try {
+                    $this->messenger->markAsRead($conversation->whatsappInstance, $latestInbound->whatsapp_message_id);
+                } catch (Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('markAsRead failed', [
+                        'conversation_id' => $conversation->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
         }
 
         // Eager load messages + sender info (for outbound rows showing "Sent by Alice").
@@ -244,12 +263,19 @@ class ConversationController extends Controller
         $validated = $request->validate([
             'body' => ['nullable', 'string', 'max:4096'],
             'message_template_id' => ['nullable', 'integer', 'exists:message_templates,id'],
+            // Agent attachment. Stored on the public disk so Meta can fetch it
+            // by URL (same approach as campaign header media).
+            'media' => ['nullable', 'file', 'max:16384', 'mimes:jpg,jpeg,png,gif,mp4,mov,3gp,mp3,ogg,amr,aac,m4a,pdf,doc,docx,xls,xlsx,ppt,pptx'],
         ]);
 
         $instance = $conversation->whatsappInstance;
         $phone = $conversation->contact->phone;
+        $mediaPath = null;
+        $mediaMime = null;
 
-        // Branch: template (outside window or by user choice) vs freeform text
+        // Branch: template (outside window or by choice) → media attachment →
+        // freeform text. Media and freeform text are only legal inside the 24h
+        // window; templates re-open a closed window.
         try {
             if (! empty($validated['message_template_id'])) {
                 $template = MessageTemplate::findOrFail($validated['message_template_id']);
@@ -262,6 +288,20 @@ class ConversationController extends Controller
                 );
                 $type = 'template';
                 $body = $template->content;
+            } elseif ($request->hasFile('media')) {
+                if (! $conversation->isWindowOpen()) {
+                    return redirect()->back()->with('error',
+                        'The 24-hour reply window is closed. Media can only be sent inside the window — pick an approved template instead.');
+                }
+
+                $file = $request->file('media');
+                $mediaMime = $file->getMimeType();
+                $type = $this->mediaTypeForMime($mediaMime);
+                $mediaPath = $file->store('conversation-media', 'public');
+                $caption = $validated['body'] ?? '';
+
+                $result = $this->messenger->sendMedia($instance, $phone, $caption, asset('storage/'.$mediaPath), $type);
+                $body = $caption !== '' ? $caption : null;
             } else {
                 if (! $conversation->isWindowOpen()) {
                     return redirect()->back()->with('error',
@@ -269,7 +309,7 @@ class ConversationController extends Controller
                 }
 
                 if (empty($validated['body'])) {
-                    return redirect()->back()->with('error', 'Message body is required.');
+                    return redirect()->back()->with('error', 'Type a message or attach a file.');
                 }
 
                 $result = $this->messenger->sendText($instance, $phone, $validated['body']);
@@ -289,6 +329,8 @@ class ConversationController extends Controller
             'whatsapp_message_id' => $result->messageId,
             'type' => $type,
             'body' => $body,
+            'media_path' => $mediaPath,
+            'media_mime' => $mediaMime,
             'sent_by_user_id' => $request->user()->id,
             'status' => 'SENT',
             'received_at' => Carbon::now(),
@@ -316,6 +358,22 @@ class ConversationController extends Controller
             null,
             ['Content-Type' => $message->media_mime ?? 'application/octet-stream'],
         );
+    }
+
+    /**
+     * Map an uploaded file's MIME type to the WhatsApp media category Meta
+     * expects in a media send (image / video / audio / document).
+     */
+    private function mediaTypeForMime(?string $mime): string
+    {
+        $mime = (string) $mime;
+
+        return match (true) {
+            str_starts_with($mime, 'image/') => 'image',
+            str_starts_with($mime, 'video/') => 'video',
+            str_starts_with($mime, 'audio/') => 'audio',
+            default => 'document',
+        };
     }
 
     /**

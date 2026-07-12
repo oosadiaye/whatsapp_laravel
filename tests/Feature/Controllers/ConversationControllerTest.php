@@ -9,7 +9,9 @@ use App\Models\ConversationMessage;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -151,6 +153,68 @@ class ConversationControllerTest extends TestCase
         $this->assertSame('Thanks for reaching out!', $msg->body);
         $this->assertSame('wamid.outbound_1', $msg->whatsapp_message_id);
         $this->assertSame($admin->id, $msg->sent_by_user_id);
+    }
+
+    public function test_reply_with_media_stores_and_sends_it(): void
+    {
+        Storage::fake('public');
+        $admin = $this->makeUser('admin');
+        $conv = Conversation::factory()->create([
+            'user_id' => $admin->id,
+            'last_inbound_at' => now()->subHours(2), // window open
+        ]);
+
+        Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.media_1']]], 200)]);
+
+        $this->actingAs($admin)
+            ->post(route('conversations.reply', $conv), [
+                'media' => UploadedFile::fake()->image('photo.jpg'),
+                'body' => 'here you go',
+            ])
+            ->assertRedirect(route('conversations.show', $conv));
+
+        $msg = ConversationMessage::where('conversation_id', $conv->id)->where('direction', 'outbound')->firstOrFail();
+        $this->assertSame('image', $msg->type);
+        $this->assertSame('here you go', $msg->body);
+        $this->assertNotNull($msg->media_path);
+        $this->assertStringStartsWith('image/', (string) $msg->media_mime);
+        Storage::disk('public')->assertExists($msg->media_path);
+        Http::assertSent(fn ($r) => $r['type'] === 'image');
+    }
+
+    public function test_media_reply_blocked_outside_window(): void
+    {
+        $admin = $this->makeUser('admin');
+        $conv = Conversation::factory()->windowClosed()->create(['user_id' => $admin->id]);
+        Http::fake();
+
+        $this->actingAs($admin)
+            ->post(route('conversations.reply', $conv), ['media' => UploadedFile::fake()->image('x.jpg')])
+            ->assertSessionHas('error');
+
+        Http::assertNothingSent();
+        $this->assertSame(0, ConversationMessage::count());
+    }
+
+    public function test_opening_thread_sends_read_receipt_to_meta(): void
+    {
+        $admin = $this->makeUser('admin');
+        $conv = Conversation::factory()->create(['user_id' => $admin->id, 'unread_count' => 2]);
+        ConversationMessage::create([
+            'conversation_id' => $conv->id,
+            'direction' => ConversationMessage::DIRECTION_INBOUND,
+            'whatsapp_message_id' => 'wamid.inbound_x',
+            'type' => 'text',
+            'body' => 'hi',
+            'received_at' => now(),
+        ]);
+
+        Http::fake(['graph.facebook.com/*' => Http::response(['success' => true], 200)]);
+
+        $this->actingAs($admin)->get(route('conversations.show', $conv))->assertOk();
+
+        Http::assertSent(fn ($r) => ($r['status'] ?? null) === 'read' && ($r['message_id'] ?? null) === 'wamid.inbound_x');
+        $this->assertSame(0, $conv->fresh()->unread_count);
     }
 
     public function test_reply_outside_window_without_template_is_blocked(): void

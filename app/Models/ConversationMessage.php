@@ -56,4 +56,22 @@ class ConversationMessage extends Model
     {
         return $this->media_path !== null;
     }
+
+    /**
+     * URL the thread view renders media from.
+     *
+     * Inbound media lives on the private disk and streams through a
+     * permission-checked route. Outbound media (an agent's attachment) lives on
+     * the public disk — Meta fetched it by URL — so it links directly.
+     */
+    public function displayMediaUrl(): ?string
+    {
+        if ($this->media_path === null) {
+            return null;
+        }
+
+        return $this->isInbound()
+            ? route('conversations.media', $this)
+            : asset('storage/'.$this->media_path);
+    }
 }

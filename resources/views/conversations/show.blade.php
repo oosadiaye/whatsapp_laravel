@@ -187,71 +187,30 @@
                 <div class="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-800">{{ session('error') }}</div>
             @endif
 
-            {{-- Chat thread (WhatsApp-style bubbles) --}}
-            <div class="bg-[#e5ddd5] rounded-xl p-4 space-y-3" style="min-height: 60vh;">
-                @forelse($timeline as $item)
-                    @if($item instanceof \App\Models\CallLog)
-                        @include('conversations._call_card', ['call' => $item])
-                    @else
-                        @php /** @var \App\Models\ConversationMessage $message */ $message = $item; @endphp
-                        <div class="flex {{ $message->isInbound() ? 'justify-start' : 'justify-end' }}">
-                            <div class="max-w-md rounded-lg p-3 shadow {{ $message->isInbound() ? 'bg-white' : 'bg-[#dcf8c6]' }}">
-
-                                {{-- Media --}}
-                                @if($message->hasMedia())
-                                    @php $mime = $message->media_mime ?? ''; @endphp
-                                    @if(str_starts_with($mime, 'image/'))
-                                        <a href="{{ route('conversations.media', $message) }}" target="_blank" class="block mb-2">
-                                            <img src="{{ route('conversations.media', $message) }}" alt="" class="rounded max-w-full max-h-64">
-                                        </a>
-                                    @elseif(str_starts_with($mime, 'audio/'))
-                                        <audio controls class="w-full mb-2">
-                                            <source src="{{ route('conversations.media', $message) }}" type="{{ $mime }}">
-                                        </audio>
-                                    @elseif(str_starts_with($mime, 'video/'))
-                                        <video controls class="w-full max-h-64 mb-2 rounded">
-                                            <source src="{{ route('conversations.media', $message) }}" type="{{ $mime }}">
-                                        </video>
-                                    @else
-                                        <a href="{{ route('conversations.media', $message) }}" target="_blank"
-                                           class="flex items-center gap-2 text-sm text-blue-600 hover:underline mb-2">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                            {{ __('Download') }} ({{ round(($message->media_size_bytes ?? 0) / 1024) }}KB)
-                                        </a>
-                                    @endif
-                                @endif
-
-                                {{-- Body / caption --}}
-                                @if($message->body)
-                                    <p class="text-sm text-gray-800 whitespace-pre-wrap break-words">{{ $message->body }}</p>
-                                @endif
-
-                                {{-- Footer (timestamp + sender for outbound) --}}
-                                <div class="flex items-center justify-end gap-1 mt-1 text-xs text-gray-500">
-                                    @if(! $message->isInbound() && $message->sentBy)
-                                        <span class="text-gray-400">{{ $message->sentBy->name }} ·</span>
-                                    @endif
-                                    <span>{{ $message->created_at->format('H:i') }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    @endif
-                @empty
-                    <p class="text-center text-gray-500 text-sm py-12">{{ __('No messages or calls yet.') }}</p>
-                @endforelse
-            </div>
+            {{-- Chat thread — live-updating via Livewire poll (inbound replies
+                 appear without a manual refresh). --}}
+            @livewire('conversation-thread', ['conversationId' => $conversation->id])
 
             {{-- Reply form --}}
             @can('conversations.reply')
                 <div class="bg-white rounded-xl shadow-sm p-4">
                     @if($conversation->isWindowOpen())
                         {{-- Freeform reply (within 24h window) --}}
-                        <form method="POST" action="{{ route('conversations.reply', $conversation) }}" class="space-y-3">
+                        <form method="POST" action="{{ route('conversations.reply', $conversation) }}"
+                              enctype="multipart/form-data" class="space-y-3"
+                              x-data="{ fileName: '' }">
                             @csrf
-                            <textarea name="body" rows="3" required
-                                      placeholder="{{ __('Type your reply...') }}"
+                            <textarea name="body" rows="3"
+                                      placeholder="{{ __('Type your reply, or attach a file…') }}"
                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]"></textarea>
-                            <div class="flex justify-end">
+                            <div class="flex items-center justify-between gap-3">
+                                <label class="inline-flex items-center gap-2 text-sm text-gray-600 cursor-pointer hover:text-gray-900">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                                    <span x-text="fileName || '{{ __('Attach') }}'" class="truncate max-w-[16rem]"></span>
+                                    <input type="file" name="media" class="hidden"
+                                           accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                                           x-on:change="fileName = $event.target.files[0]?.name || ''">
+                                </label>
                                 <button type="submit"
                                         class="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366] text-white text-sm font-semibold rounded-lg hover:bg-[#1da851]">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>

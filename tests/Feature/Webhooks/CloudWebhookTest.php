@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Webhooks;
 
 use App\Models\Campaign;
+use App\Models\Conversation;
+use App\Models\ConversationMessage;
 use App\Models\MessageLog;
 use App\Models\WhatsAppInstance;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -149,6 +151,34 @@ class CloudWebhookTest extends TestCase
 
         // No exception, no DB record created. Just acknowledged.
         $this->assertSame(0, MessageLog::count());
+    }
+
+    public function test_status_webhook_advances_conversation_message_ticks(): void
+    {
+        // A wamid belongs to either a MessageLog (campaign) or a
+        // ConversationMessage (inbox reply). Status webhooks must drive the
+        // inbox reply's sent → delivered → read ticks, and never regress.
+        $instance = WhatsAppInstance::factory()->create(['app_secret' => 'S']);
+        $conversation = Conversation::factory()->create();
+        $message = ConversationMessage::create([
+            'conversation_id' => $conversation->id,
+            'direction' => ConversationMessage::DIRECTION_OUTBOUND,
+            'whatsapp_message_id' => 'wamid.reply_1',
+            'type' => 'text',
+            'body' => 'hi',
+            'status' => 'SENT',
+            'received_at' => now(),
+        ]);
+
+        $this->postWithSignature($instance, $this->statusPayload('wamid.reply_1', 'delivered'), 'S')->assertOk();
+        $this->assertSame('DELIVERED', $message->fresh()->status);
+
+        $this->postWithSignature($instance, $this->statusPayload('wamid.reply_1', 'read'), 'S')->assertOk();
+        $this->assertSame('READ', $message->fresh()->status);
+
+        // A late/duplicate DELIVERED must not regress the READ tick.
+        $this->postWithSignature($instance, $this->statusPayload('wamid.reply_1', 'delivered'), 'S')->assertOk();
+        $this->assertSame('READ', $message->fresh()->status);
     }
 
     // ──────────────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Campaign;
+use App\Models\ConversationMessage;
 use App\Models\MessageLog;
 use App\Models\WhatsAppInstance;
 use App\Services\InboundMessageProcessor;
@@ -123,11 +124,13 @@ class CloudWebhookController extends Controller
                 continue;
             }
 
+            $mappedStatus = $this->mapStatus($rawStatus);
+
             // Serialize concurrent redeliveries of the SAME message. Meta retries
             // on non-2xx, and two deliveries landing at once could both read
             // "not yet delivered" and double-bump the campaign counter. The row
             // lock makes the read-then-increment below atomic per message.
-            \Illuminate\Support\Facades\DB::transaction(function () use ($messageId, $rawStatus, $status): void {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($messageId, $mappedStatus, $status): void {
                 $log = MessageLog::where('whatsapp_message_id', $messageId)
                     ->lockForUpdate()
                     ->first();
@@ -135,8 +138,6 @@ class CloudWebhookController extends Controller
                 if ($log === null) {
                     return;
                 }
-
-                $mappedStatus = $this->mapStatus($rawStatus);
 
                 // Capture prior state BEFORE the update so we only bump the
                 // campaign counters once per real transition.
@@ -163,6 +164,42 @@ class CloudWebhookController extends Controller
 
                 $this->updateCampaignCounters($log->campaign, $mappedStatus, $alreadyDelivered, $alreadyRead, $alreadyFailed);
             });
+
+            // Inbox reply receipts: a wamid belongs to either a MessageLog
+            // (campaign) or a ConversationMessage (inbox reply). Advance the
+            // outbound conversation message's status so the thread shows the
+            // sent → delivered → read progression.
+            $this->updateConversationMessageStatus($messageId, $mappedStatus);
+        }
+    }
+
+    /**
+     * Advance an outbound conversation message's delivery status. Status only
+     * ever moves forward (sent → delivered → read); FAILED is terminal. This
+     * guards against out-of-order / duplicate webhooks regressing the ticks.
+     */
+    private function updateConversationMessageStatus(string $messageId, string $mappedStatus): void
+    {
+        $message = ConversationMessage::where('whatsapp_message_id', $messageId)
+            ->where('direction', ConversationMessage::DIRECTION_OUTBOUND)
+            ->first();
+
+        if ($message === null) {
+            return;
+        }
+
+        if ($mappedStatus === 'FAILED') {
+            $message->update(['status' => 'FAILED']);
+
+            return;
+        }
+
+        $rank = ['SENT' => 1, 'DELIVERED' => 2, 'READ' => 3];
+        $incoming = $rank[$mappedStatus] ?? 0;
+        $current = $rank[(string) $message->status] ?? 0;
+
+        if ($incoming > $current) {
+            $message->update(['status' => $mappedStatus]);
         }
     }
 
