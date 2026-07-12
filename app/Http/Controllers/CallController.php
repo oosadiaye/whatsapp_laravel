@@ -65,6 +65,23 @@ class CallController extends Controller
             ->groupBy('provider')
             ->pluck('aggregate', 'provider');
 
+        // Richer observability metrics — today, same visibility scope. One fetch
+        // so the answer-rate / time-to-answer / MOS / failure-breakdown tiles
+        // don't each cost a query.
+        $todayCalls = CallLog::query()->tap($scope)
+            ->whereDate('created_at', today())
+            ->get(['status', 'connected_at', 'started_at', 'quality_metrics']);
+
+        $answered = $todayCalls->whereNotNull('connected_at')->count();
+        $missed = $todayCalls->where('status', CallLog::STATUS_MISSED)->count();
+        $decisive = $answered + $missed;
+
+        $timeToAnswer = $todayCalls
+            ->filter(fn (CallLog $c) => $c->connected_at !== null && $c->started_at !== null)
+            ->map(fn (CallLog $c) => max(0, $c->connected_at->getTimestamp() - $c->started_at->getTimestamp()));
+
+        $mos = $todayCalls->map(fn (CallLog $c) => $c->quality_metrics['mos'] ?? null)->filter();
+
         $query = CallLog::query()->tap($scope)
             ->with(['contact', 'conversation', 'whatsappInstance', 'placedBy']);
 
@@ -91,6 +108,13 @@ class CallController extends Controller
                 'avgDurationSeconds' => $avgDurationSeconds,
                 'providerCounts' => $providerCounts,
                 'providerTotal' => (int) $providerCounts->sum(),
+                // Observability (today, scoped).
+                'answered' => $answered,
+                'missed' => $missed,
+                'answerRate' => $decisive > 0 ? (int) round($answered / $decisive * 100) : null,
+                'avgTimeToAnswerSeconds' => $timeToAnswer->isNotEmpty() ? (int) round($timeToAnswer->avg()) : null,
+                'avgMos' => $mos->isNotEmpty() ? round((float) $mos->avg(), 1) : null,
+                'statusBreakdown' => $todayCalls->groupBy('status')->map->count(),
             ],
         ]);
     }

@@ -224,5 +224,37 @@
                 @endif
             </div>
         </div>
+
+        {{-- Observability metrics (today, visibility-scoped) --}}
+        <div class="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Answer rate') }}</span>
+                <div class="mt-3 text-3xl font-bold text-gray-900 tabular-nums">{{ $stats['answerRate'] === null ? '—' : $stats['answerRate'].'%' }}</div>
+                <div class="text-xs text-gray-400 mt-1">{{ $stats['answered'] }} {{ __('answered') }} · {{ $stats['missed'] }} {{ __('missed') }}</div>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Avg. time to answer') }}</span>
+                <div class="mt-3 text-3xl font-bold text-gray-900 font-mono tabular-nums">{{ $stats['avgTimeToAnswerSeconds'] === null ? '—' : gmdate('i:s', $stats['avgTimeToAnswerSeconds']) }}</div>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Avg. MOS') }}</span>
+                <div class="mt-3 text-3xl font-bold tabular-nums {{ $stats['avgMos'] === null ? 'text-gray-900' : ($stats['avgMos'] >= 4 ? 'text-emerald-600' : ($stats['avgMos'] >= 3 ? 'text-amber-600' : 'text-red-600')) }}">{{ $stats['avgMos'] ?? '—' }}</div>
+                <div class="text-xs text-gray-400 mt-1">{{ __('call quality (1–5)') }}</div>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __("Today's outcomes") }}</span>
+                <div class="mt-3 space-y-1 text-sm">
+                    @foreach(['ended' => 'Ended', 'missed' => 'Missed', 'declined' => 'Declined', 'failed' => 'Failed'] as $k => $label)
+                        @php $c = (int) ($stats['statusBreakdown'][$k] ?? 0); @endphp
+                        @if($c > 0)
+                            <div class="flex justify-between"><span class="text-gray-500">{{ __($label) }}</span><span class="font-bold tabular-nums {{ in_array($k, ['missed', 'failed']) ? 'text-red-600' : 'text-gray-800' }}">{{ $c }}</span></div>
+                        @endif
+                    @endforeach
+                    @if($stats['statusBreakdown']->sum() === 0)
+                        <span class="text-gray-400">—</span>
+                    @endif
+                </div>
+            </div>
+        </div>
     </div>
 </x-app-layout>
