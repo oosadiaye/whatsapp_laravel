@@ -8,7 +8,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('campaigns:dispatch-scheduled')->everyMinute();
+Schedule::command('campaigns:dispatch-scheduled')->everyMinute()->withoutOverlapping();
 
 // Pull fresh template state from Meta so PENDING → APPROVED transitions
 // surface in the UI without manual re-syncing. Cheap call, well below

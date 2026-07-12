@@ -116,6 +116,19 @@ class CampaignController extends Controller
                 }
             }
 
+            // "Schedule for Later": a future scheduled_at defers the send.
+            // Mark it QUEUED but do NOT dispatch now — the
+            // campaigns:dispatch-scheduled cron launches it once the time
+            // passes. Previously this path always launched immediately, so the
+            // scheduler was dead code and "Schedule for Later" sent right away.
+            if ($campaign->scheduled_at !== null && $campaign->scheduled_at->isFuture()) {
+                $this->campaignService->schedule($campaign);
+
+                return redirect()
+                    ->route('campaigns.show', $campaign)
+                    ->with('success', 'Campaign scheduled for '.$campaign->scheduled_at->format('M j, Y g:i A').'.');
+            }
+
             $this->campaignService->launch($campaign);
 
             return redirect()

@@ -29,6 +29,21 @@ class CampaignService
     }
 
     /**
+     * Queue a campaign for DEFERRED dispatch at its scheduled_at time.
+     *
+     * Unlike launch() this does NOT dispatch the batch job or set started_at —
+     * it just marks the campaign QUEUED. The campaigns:dispatch-scheduled cron
+     * selects QUEUED campaigns whose scheduled_at has passed and calls launch()
+     * then. (Immediately-launched campaigns have scheduled_at = null, which the
+     * cron's `scheduled_at <= now` predicate never matches, so they are not
+     * double-dispatched.)
+     */
+    public function schedule(Campaign $campaign): void
+    {
+        $campaign->update(['status' => 'QUEUED']);
+    }
+
+    /**
      * Pause a running campaign.
      */
     public function pause(Campaign $campaign): void
