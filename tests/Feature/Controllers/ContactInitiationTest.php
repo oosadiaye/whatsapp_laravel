@@ -73,8 +73,11 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(0, Conversation::count());
     }
 
-    public function test_startChat_blocks_cross_account_contact(): void
+    public function test_startChat_is_not_blocked_by_contact_ownership_in_single_tenant(): void
     {
+        // Single-tenant: contacts are shared. An admin can start a chat for a
+        // contact owned by another user — the old per-user ownership 403 is
+        // gone (route permission gating still applies).
         $userA = $this->makeUser('admin');
         $userB = $this->makeUser('admin', 'b@example.com');
         $contactOfB = Contact::factory()->create(['user_id' => $userB->id]);
@@ -82,9 +85,9 @@ class ContactInitiationTest extends TestCase
 
         $this->actingAs($userA)
             ->post(route('contacts.startChat', $contactOfB))
-            ->assertForbidden();
+            ->assertRedirect(); // not 403
 
-        $this->assertSame(0, Conversation::count());
+        $this->assertSame(1, Conversation::count());
     }
 
     public function test_startCall_blocked_when_contact_has_no_engagement(): void
@@ -254,16 +257,22 @@ class ContactInitiationTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_startCall_blocks_cross_account_contact(): void
+    public function test_startCall_is_not_blocked_by_contact_ownership_in_single_tenant(): void
     {
+        // Single-tenant: contacts are shared, so the old per-user ownership 403
+        // is gone. An admin acting on another user's (not-yet-engaged) contact
+        // is NOT forbidden — it proceeds and stops at the engagement gate,
+        // redirecting back with an error rather than a 403.
         $userA = $this->makeUser('admin');
         $userB = $this->makeUser('admin', 'b@example.com');
         WhatsAppInstance::factory()->create(['user_id' => $userA->id, 'status' => 'CONNECTED']);
         $contactOfB = Contact::factory()->create(['user_id' => $userB->id]);
 
-        $this->actingAs($userA)
-            ->post(route('contacts.startCall', $contactOfB))
-            ->assertForbidden();
+        $response = $this->actingAs($userA)
+            ->post(route('contacts.startCall', $contactOfB));
+
+        $this->assertFalse($response->isForbidden(), 'ownership must not 403 in single-tenant');
+        $response->assertRedirect();
     }
 
     public function test_startChat_with_multiple_active_instances_picks_via_instance_id(): void

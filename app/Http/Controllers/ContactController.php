@@ -82,8 +82,6 @@ class ContactController extends Controller
      */
     public function startChat(Request $request, Contact $contact): RedirectResponse
     {
-        $this->authorizeContactAccess($request, $contact);
-
         ['instance' => $instance, 'error' => $instanceError] = $this->resolveInstanceOrError($request);
         if ($instance === null) {
             return back()->with('error', $instanceError);
@@ -113,8 +111,6 @@ class ContactController extends Controller
         Contact $contact,
         OutboundCallService $outboundCallService,
     ): RedirectResponse {
-        $this->authorizeContactAccess($request, $contact);
-
         if (! $contact->isEngaged()) {
             return back()->with(
                 'error',
@@ -154,15 +150,6 @@ class ContactController extends Controller
         return redirect()
             ->route('conversations.show', $conversation)
             ->with('success', "Calling {$contact->name}...");
-    }
-
-    /**
-     * Same-account ownership guard. Mirrors the pattern from
-     * ConversationController::authorizeConversationAccess.
-     */
-    private function authorizeContactAccess(Request $request, Contact $contact): void
-    {
-        abort_unless($contact->user_id === $request->user()->id, 403);
     }
 
     /**

@@ -55,15 +55,26 @@ class ContactImportService
                     $customFields['custom_field_2'] = $row[$columnMap['custom_field_2']];
                 }
 
+                // Only write name/custom_fields when the incoming row actually
+                // carries a value. Blank cells (a phone-only re-import) must NOT
+                // overwrite a contact's existing name/custom fields with ''/null
+                // — that was silent data loss. Omitting the key leaves the stored
+                // value untouched on update, and falls back to the column default
+                // on create.
+                $attributes = [];
+                if ($name !== null && trim((string) $name) !== '') {
+                    $attributes['name'] = $name;
+                }
+                if ($customFields !== []) {
+                    $attributes['custom_fields'] = $customFields;
+                }
+
                 $contact = Contact::updateOrCreate(
                     [
                         'user_id' => $userId,
                         'phone' => $phone,
                     ],
-                    [
-                        'name' => $name,
-                        'custom_fields' => $customFields ?: null,
-                    ],
+                    $attributes,
                 );
 
                 if ($contact->wasRecentlyCreated) {

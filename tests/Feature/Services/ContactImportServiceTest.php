@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Services;
 
+use App\Models\Contact;
 use App\Models\ContactGroup;
 use App\Models\User;
 use App\Services\ContactImportService;
@@ -100,5 +101,27 @@ class ContactImportServiceTest extends TestCase
         } finally {
             @unlink($absolute);
         }
+    }
+
+    public function test_reimport_with_blank_name_preserves_existing_name(): void
+    {
+        // Data-loss regression: re-importing a phone-only list (blank name
+        // cell) must NOT overwrite a contact's previously stored name.
+        Storage::fake('local');
+
+        $admin = User::factory()->create(['is_active' => true]);
+        $group = ContactGroup::create(['user_id' => $admin->id, 'name' => 'Targets']);
+        $service = new ContactImportService();
+        $map = ['phone' => 'phone', 'name' => 'name'];
+
+        $key1 = UploadedFile::fake()->createWithContent('c1.csv', "phone,name\n2348012345678,Alice\n")->store('imports');
+        $service->importFromFile($key1, $group->id, $map, $admin->id);
+        $this->assertSame('Alice', Contact::where('phone', '2348012345678')->firstOrFail()->name);
+
+        // Second import: same phone, blank name cell.
+        $key2 = UploadedFile::fake()->createWithContent('c2.csv', "phone,name\n2348012345678,\n")->store('imports');
+        $service->importFromFile($key2, $group->id, $map, $admin->id);
+
+        $this->assertSame('Alice', Contact::where('phone', '2348012345678')->firstOrFail()->name);
     }
 }
