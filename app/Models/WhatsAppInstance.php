@@ -63,6 +63,22 @@ class WhatsAppInstance extends Model
         ];
     }
 
+    /**
+     * The single WhatsApp number this app sends/receives on.
+     *
+     * The app is single-instance: one Meta number, configured on the Settings
+     * page. Prefer the row flagged default, then the oldest — so if legacy data
+     * ever held more than one row, behaviour is deterministic. Returns null
+     * until WhatsApp is configured.
+     */
+    public static function primary(): ?self
+    {
+        return static::query()
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->first();
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

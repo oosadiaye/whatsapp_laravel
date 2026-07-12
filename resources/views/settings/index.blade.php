@@ -17,6 +17,18 @@
         $check = fn (bool $ok) => $ok
             ? '<span class="text-emerald-600">&#10003;</span>'
             : '<span class="text-gray-300">&#10007;</span>';
+
+        // WhatsApp (single instance) health.
+        $waReady = $instance !== null && $instance->isReady();
+        $waStarted = $instance !== null;
+        $waHealth = $waReady
+            ? ['dot' => 'bg-emerald-500', 'text' => 'text-emerald-600', 'label' => __('Connected')]
+            : ($waStarted
+                ? ['dot' => 'bg-amber-500', 'text' => 'text-amber-600', 'label' => __('Incomplete')]
+                : ['dot' => 'bg-gray-400', 'text' => 'text-gray-500', 'label' => __('Not set')]);
+        $webhookUrl = $instance ? route('webhook.cloud.handle', $instance) : null;
+        $waTokenSet = $instance && filled($instance->getRawOriginal('access_token'));
+        $waSecretSet = $instance && filled($instance->getRawOriginal('app_secret'));
     @endphp
 
     <div class="py-6 max-w-6xl mx-auto sm:px-6 lg:px-8">
@@ -39,6 +51,75 @@
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 {{-- Main column --}}
                 <div class="lg:col-span-2 space-y-6">
+                    {{-- WhatsApp (Cloud API) — the single instance --}}
+                    <div x-data="{ showToken: false }" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                        <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
+                            <span class="grid place-items-center w-9 h-9 rounded-lg bg-[#25D366]/10 text-[#128C7E]">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                            </span>
+                            <div>
+                                <h3 class="text-base font-bold text-gray-900">{{ __('WhatsApp (Cloud API)') }}</h3>
+                                <p class="text-xs text-gray-500">{{ __('Your single Meta WhatsApp Business number. More numbers = a separate account.') }}</p>
+                            </div>
+                            <span class="ml-auto inline-flex items-center gap-1.5 text-sm font-semibold {{ $waHealth['text'] }}">
+                                <span class="w-2 h-2 rounded-full {{ $waHealth['dot'] }}"></span>{{ $waHealth['label'] }}
+                            </span>
+                        </div>
+                        <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Display Name') }}</label>
+                                <input type="text" name="wa_display_name" value="{{ old('wa_display_name', $instance->display_name ?? '') }}"
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Phone Number ID') }}</label>
+                                <input type="text" name="wa_phone_number_id" value="{{ old('wa_phone_number_id', $instance->phone_number_id ?? '') }}"
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-mono focus:border-[#25D366] focus:ring-[#25D366]">
+                                @error('wa_phone_number_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('WABA ID') }}</label>
+                                <input type="text" name="wa_waba_id" value="{{ old('wa_waba_id', $instance->waba_id ?? '') }}"
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-mono focus:border-[#25D366] focus:ring-[#25D366]">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Webhook Verify Token') }}</label>
+                                <input type="text" name="wa_webhook_verify_token" value="{{ old('wa_webhook_verify_token', $instance->webhook_verify_token ?? '') }}"
+                                       placeholder="{{ __('auto-generated if blank') }}"
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-mono focus:border-[#25D366] focus:ring-[#25D366]">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Access Token') }}</label>
+                                <div class="relative">
+                                    <input :type="showToken ? 'text' : 'password'" name="wa_access_token"
+                                           placeholder="{{ $waTokenSet ? '••••••••••••••••' : __('Meta system-user token') }}"
+                                           class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 focus:border-[#25D366] focus:ring-[#25D366]">
+                                    <button type="button" @click="showToken = !showToken" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600">
+                                        <svg x-show="!showToken" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                        <svg x-show="showToken" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
+                                    </button>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">{{ __('Leave blank to keep existing. Encrypted at rest.') }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('App Secret') }}</label>
+                                <input type="password" name="wa_app_secret"
+                                       placeholder="{{ $waSecretSet ? '••••••••••••••••' : __('Meta app secret') }}"
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                <p class="mt-1 text-xs text-gray-500">{{ __('Verifies inbound webhook signatures. Leave blank to keep.') }}</p>
+                            </div>
+                        </div>
+                        {{-- Webhook URL to paste into Meta --}}
+                        <div class="px-6 pb-6 border-t border-gray-100 pt-4">
+                            @if($webhookUrl)
+                                <p class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Webhook URL (paste into Meta → WhatsApp → Configuration)') }}</p>
+                                <code class="block w-full rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-xs font-mono text-gray-700 break-all">{{ $webhookUrl }}</code>
+                            @else
+                                <p class="text-xs text-gray-500">{{ __('Save your credentials to generate the webhook URL for Meta.') }}</p>
+                            @endif
+                        </div>
+                    </div>
+
                     {{-- Africa's Talking credentials --}}
                     <div x-data="{ showKey: false }" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                         <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
@@ -206,19 +287,39 @@
                         </div>
                     </div>
 
-                    {{-- WhatsApp (per-instance) --}}
-                    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-                        <div class="flex items-center gap-3 mb-2">
+                    {{-- WhatsApp connection status --}}
+                    <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                        <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
                             <span class="grid place-items-center w-9 h-9 rounded-lg bg-[#25D366]/10 text-[#128C7E]">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
                             </span>
-                            <h3 class="text-base font-bold text-gray-900">{{ __('WhatsApp') }}</h3>
+                            <h3 class="text-base font-bold text-gray-900">{{ __('WhatsApp connection') }}</h3>
                         </div>
-                        <p class="text-sm text-gray-500">{{ __('Meta access token, app secret, and webhook config live per number.') }}</p>
-                        <a href="{{ route('instances.index') }}" class="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#128C7E] hover:underline">
-                            {{ __('Manage instances') }}
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
-                        </a>
+                        <div class="p-6 space-y-4">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium text-gray-700">{{ __('Status') }}</span>
+                                <span class="inline-flex items-center gap-1.5 text-sm font-semibold {{ $waHealth['text'] }}">
+                                    <span class="w-2 h-2 rounded-full {{ $waHealth['dot'] }}"></span>{{ $waHealth['label'] }}
+                                </span>
+                            </div>
+                            <ul class="text-sm text-gray-600 space-y-1.5">
+                                <li class="flex items-center justify-between"><span>{{ __('Phone number ID') }}</span><span>{!! $check($instance && filled($instance->phone_number_id)) !!}</span></li>
+                                <li class="flex items-center justify-between"><span>{{ __('WABA ID') }}</span><span>{!! $check($instance && filled($instance->waba_id)) !!}</span></li>
+                                <li class="flex items-center justify-between"><span>{{ __('Access token') }}</span><span>{!! $check($waTokenSet) !!}</span></li>
+                                <li class="flex items-center justify-between"><span>{{ __('App secret') }}</span><span>{!! $check($waSecretSet) !!}</span></li>
+                            </ul>
+                            @if($instance && $instance->quality_rating)
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-500">{{ __('Quality') }}</span>
+                                    <span class="font-semibold text-gray-800">{{ $instance->quality_rating }}</span>
+                                </div>
+                            @endif
+                            @unless($waReady)
+                                <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                    {{ __('Add Phone Number ID, WABA ID and Access Token to start sending.') }}
+                                </p>
+                            @endunless
+                        </div>
                     </div>
 
                     <div class="hidden lg:block">
