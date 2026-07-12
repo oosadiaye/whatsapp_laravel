@@ -20,6 +20,26 @@ class OutboundCallTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolesAndPermissionsSeeder::class);
+        // These tests exercise the Meta-calling path, which is off by default
+        // until Meta Cloud Calling is GA. Enable it for this suite.
+        config(['voice.meta_calling_enabled' => true]);
+    }
+
+    public function test_initiate_call_is_disabled_when_meta_calling_is_off(): void
+    {
+        config(['voice.meta_calling_enabled' => false]);
+
+        $admin = $this->makeUser('admin');
+        $conv = Conversation::factory()->create(['user_id' => $admin->id]);
+        Http::fake();
+
+        $this->actingAs($admin)
+            ->post(route('conversations.initiateCall', $conv))
+            ->assertRedirect(route('conversations.show', $conv))
+            ->assertSessionHas('error');
+
+        Http::assertNothingSent();
+        $this->assertSame(0, CallLog::count());
     }
 
     public function test_admin_can_initiate_call(): void

@@ -200,6 +200,15 @@ class ConversationController extends Controller
     {
         $this->authorizeConversationAccess($request, $conversation);
 
+        // Meta Cloud Calling is not GA and cannot connect the agent's audio.
+        // Disabled until it ships; the in-chat call button uses Africa's Talking
+        // (calls.outbound), which is the working path.
+        if (! config('voice.meta_calling_enabled')) {
+            return redirect()
+                ->route('conversations.show', $conversation)
+                ->with('error', 'Meta calling is not available in this build. Use the in-chat call button (Africa\'s Talking) instead.');
+        }
+
         try {
             $this->outboundCalls->initiate($conversation, $request->user());
         } catch (WhatsAppApiException $e) {

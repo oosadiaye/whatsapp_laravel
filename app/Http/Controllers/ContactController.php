@@ -111,6 +111,14 @@ class ContactController extends Controller
         Contact $contact,
         OutboundCallService $outboundCallService,
     ): RedirectResponse {
+        // Meta Cloud Calling is not GA and cannot connect the agent's audio;
+        // this contact-initiated path is disabled until the feature ships.
+        // The working call path is the in-chat button (Africa's Talking).
+        if (! config('voice.meta_calling_enabled')) {
+            return back()->with('error',
+                'Contact-initiated calling is disabled (Meta Cloud Calling is not available in this build). Open the conversation and use the in-chat call button instead.');
+        }
+
         if (! $contact->isEngaged()) {
             return back()->with(
                 'error',

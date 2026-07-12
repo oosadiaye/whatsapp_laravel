@@ -64,4 +64,22 @@ return [
         explode(',', (string) env('VOICE_STUN_URLS', 'stun:stun.l.google.com:19302'))
     )),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Meta (WhatsApp Cloud) calling — OFF until GA
+    |--------------------------------------------------------------------------
+    | Meta's Cloud Calling API is not generally available, and the initiate /
+    | accept / terminate request shapes in WhatsAppCloudApiService are
+    | doc-guessed and unverified. Contact-initiated calls (ContactController::
+    | startCall, ConversationController::initiateCall) route through
+    | OutboundCallService → Meta and cannot currently connect the agent's audio.
+    |
+    | Keep this OFF (the default). The working outbound path is Africa's Talking
+    | (calls.outbound / CallController::placeOutbound, driven by the in-chat call
+    | button), which is unaffected by this flag. Flip to true only once Meta
+    | Calling is GA and the request shapes have been verified against a live
+    | account.
+    */
+    'meta_calling_enabled' => (bool) env('VOICE_META_CALLING_ENABLED', false),
+
 ];

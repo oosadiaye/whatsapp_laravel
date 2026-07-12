@@ -20,6 +20,26 @@ class ContactInitiationTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolesAndPermissionsSeeder::class);
+        // startCall routes through the Meta-calling path, off by default until
+        // Meta Cloud Calling is GA. Enable it so the engagement/flow tests run;
+        // the disabled behaviour has its own test below.
+        config(['voice.meta_calling_enabled' => true]);
+    }
+
+    public function test_startCall_is_disabled_when_meta_calling_is_off(): void
+    {
+        config(['voice.meta_calling_enabled' => false]);
+
+        $admin = $this->makeUser('admin');
+        WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create(['user_id' => $admin->id]);
+
+        $this->actingAs($admin)
+            ->post(route('contacts.startCall', $contact))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, \App\Models\CallLog::count());
     }
 
     public function test_startChat_creates_conversation_for_new_contact(): void
