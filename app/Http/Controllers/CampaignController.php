@@ -36,18 +36,13 @@ class CampaignController extends Controller
 
     public function create(): View
     {
-        $userId = auth()->id();
-
         return view('campaigns.create', [
-            // Shared: every group visible across the company, same rationale
-            // as `instances` and `templates` below.
+            // Shared: every group visible across the company.
             'groups' => ContactGroup::all(),
-            // Single-tenant: instances + templates are shared, so the dropdown
-            // shows every connected WhatsApp number, not just ones this user
-            // first set up. Groups remain user-scoped (each user curates their
-            // own contact lists). The route is already permission-gated by
-            // campaigns.create.
-            'instances' => WhatsAppInstance::all(),
+            // Single-instance app: one WhatsApp number, shown read-only. The
+            // send-time number picker is gone — store() resolves the FK to the
+            // primary instance.
+            'instance' => WhatsAppInstance::primary(),
             // Only APPROVED remote templates are eligible for live campaign sends.
             // Local templates remain available to manually populate the message body.
             'templates' => MessageTemplate::query()
@@ -72,7 +67,9 @@ class CampaignController extends Controller
             'user_id' => auth()->id(),
             'name' => $request->validated('name'),
             'message' => $request->validated('message'),
-            'instance_id' => $request->validated('instance_id'),
+            // Single-instance app: no picker in the form, so fall back to the
+            // one primary number when the request doesn't carry an instance_id.
+            'instance_id' => $request->validated('instance_id') ?: WhatsAppInstance::primary()?->id,
             'message_template_id' => $request->validated('message_template_id'),
             'template_language' => $request->validated('template_language'),
             'header_media_url' => $this->storeHeaderMedia($request->file('header_media')),
@@ -264,10 +261,8 @@ class CampaignController extends Controller
 
     public function edit(string $id): View
     {
-        // $userId kept for symmetry with the create() flow but no longer
-        // scopes campaign lookup — single-tenant means any campaigns.edit
-        // user can edit any campaign.
-        $userId = auth()->id();
+        // Single-tenant: any campaigns.edit user can edit any campaign; the
+        // route permission is the only gate.
         $campaign = Campaign::with('contactGroups')->findOrFail($id);
 
         // Defense in depth: views hide the Edit button for non-editable statuses,
@@ -280,11 +275,10 @@ class CampaignController extends Controller
 
         return view('campaigns.edit', [
             'campaign' => $campaign,
-            // Shared: every group visible across the company, same rationale
-            // as `instances` and `templates` below.
+            // Shared: every group visible across the company.
             'groups' => ContactGroup::all(),
-            // Single-tenant: see create() for rationale on shared instances/templates.
-            'instances' => WhatsAppInstance::all(),
+            // Single-instance app: one number, shown read-only (no picker).
+            'instance' => WhatsAppInstance::primary(),
             'templates' => MessageTemplate::all(),
         ]);
     }
@@ -310,7 +304,9 @@ class CampaignController extends Controller
         $campaign->update([
             'name' => $request->validated('name'),
             'message' => $request->validated('message'),
-            'instance_id' => $request->validated('instance_id'),
+            // Single-instance app: keep the campaign's existing number; only the
+            // primary is available. Picker was removed from the edit form.
+            'instance_id' => $campaign->instance_id ?: WhatsAppInstance::primary()?->id,
             'message_template_id' => $request->validated('message_template_id'),
             'template_language' => $request->validated('template_language'),
             'header_media_url' => $newHeaderUrl,

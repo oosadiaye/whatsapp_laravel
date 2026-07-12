@@ -58,19 +58,8 @@ class ContactController extends Controller
             return $c;
         });
 
-        // Single source of truth for which instances the picker modal can show.
-        // Computed in the controller (not the view) so tests can assert on it
-        // and so the view stays a thin presenter. Single-tenant — every user
-        // sees every connected instance.
-        $activeInstances = WhatsAppInstance::query()
-            ->where('status', WhatsAppInstance::STATUS_CONNECTED)
-            ->orderBy('display_name')
-            ->get(['id', 'display_name', 'instance_name', 'business_phone_number']);
-
         return view('contacts.index', [
             'contacts' => $contacts,
-            'activeInstances' => $activeInstances,
-            'needsInstancePicker' => $activeInstances->count() > 1,
         ]);
     }
 
@@ -80,9 +69,9 @@ class ContactController extends Controller
      * Chat twice never creates duplicate rows). Pure navigation: no message
      * is sent. The thread view enforces the 24h freeform/template policy.
      */
-    public function startChat(Request $request, Contact $contact): RedirectResponse
+    public function startChat(Contact $contact): RedirectResponse
     {
-        ['instance' => $instance, 'error' => $instanceError] = $this->resolveInstanceOrError($request);
+        ['instance' => $instance, 'error' => $instanceError] = $this->resolveInstanceOrError();
         if ($instance === null) {
             return back()->with('error', $instanceError);
         }
@@ -127,7 +116,7 @@ class ContactController extends Controller
             );
         }
 
-        ['instance' => $instance, 'error' => $instanceError] = $this->resolveInstanceOrError($request);
+        ['instance' => $instance, 'error' => $instanceError] = $this->resolveInstanceOrError();
         if ($instance === null) {
             return back()->with('error', $instanceError);
         }
@@ -161,39 +150,22 @@ class ContactController extends Controller
     }
 
     /**
-     * Resolve which WhatsApp instance to use for a contact-initiated action.
-     * Returns either the picked instance, or null + an error message — caller
-     * uses the message in a flash redirect.
+     * Resolve the WhatsApp instance for a contact-initiated action.
+     *
+     * Single-instance app: there is exactly one WhatsApp number, configured on
+     * the Settings page — no send-time picker. Returns the primary instance, or
+     * null + an error message the caller flashes on redirect.
      *
      * @return array{instance: ?\App\Models\WhatsAppInstance, error: ?string}
      */
-    private function resolveInstanceOrError(Request $request): array
+    private function resolveInstanceOrError(): array
     {
-        // Single-tenant: all connected instances are eligible for initiation,
-        // not just ones the current user first set up.
-        $instances = WhatsAppInstance::query()
-            ->where('status', WhatsAppInstance::STATUS_CONNECTED)
-            ->get();
-
-        if ($instances->count() === 0) {
-            return [
-                'instance' => null,
-                'error' => 'Set up a WhatsApp instance before starting conversations.',
-            ];
-        }
-
-        if ($instances->count() === 1) {
-            return ['instance' => $instances->first(), 'error' => null];
-        }
-
-        // 2+ instances: require explicit pick from the request body.
-        $picked = (int) $request->input('instance_id', 0);
-        $instance = $instances->firstWhere('id', $picked);
+        $instance = WhatsAppInstance::primary();
 
         if ($instance === null) {
             return [
                 'instance' => null,
-                'error' => 'Pick which WhatsApp number to use from the picker.',
+                'error' => 'Configure your WhatsApp number in Settings before starting conversations.',
             ];
         }
 

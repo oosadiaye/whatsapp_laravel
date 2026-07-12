@@ -9,7 +9,7 @@
                 // Auto-jump to the first tab containing a validation error so the user
                 // sees what's wrong instead of landing on Basic with nothing visible.
                 $tabFieldMap = [
-                    'basic' => ['name', 'instance_id'],
+                    'basic' => ['name'],
                     'recipients' => ['groups', 'groups.*'],
                     'message' => ['message', 'message_template_id', 'template_language', 'header_media'],
                     'schedule' => ['scheduled_at', 'rate_per_minute', 'delay_min', 'delay_max'],
@@ -107,16 +107,22 @@
                                    class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
                             @error('name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
+                        {{-- Single-instance app: the sending number is fixed (configured in
+                             Settings). Shown read-only so the operator knows what will send;
+                             the controller resolves instance_id to the primary number. --}}
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">WhatsApp Instance</label>
-                            <select name="instance_id" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
-                                <option value="">Select instance...</option>
-                                @foreach($instances as $instance)
-                                <option value="{{ $instance->id }}" {{ old('instance_id') == $instance->id ? 'selected' : '' }}>
-                                    {{ $instance->display_name ?? $instance->instance_name }} ({{ $instance->status }})
-                                </option>
-                                @endforeach
-                            </select>
+                            <label class="block text-sm font-medium text-gray-700">Sending WhatsApp Number</label>
+                            @if($instance)
+                                <div class="mt-1 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                                    <span class="w-2 h-2 rounded-full {{ $instance->isReady() ? 'bg-emerald-500' : 'bg-amber-500' }}"></span>
+                                    {{ $instance->display_name ?? $instance->instance_name }}
+                                    @if($instance->business_phone_number)<span class="text-gray-400">·</span><span class="font-mono">{{ $instance->business_phone_number }}</span>@endif
+                                </div>
+                            @else
+                                <p class="mt-1 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                    No WhatsApp number configured. <a href="{{ route('settings.index') }}" class="font-semibold underline">Add it in Settings</a> before sending.
+                                </p>
+                            @endif
                         </div>
                     </div>
                 </div>

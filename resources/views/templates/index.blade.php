@@ -4,40 +4,30 @@
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
                 {{ __('Message Templates') }}
             </h2>
-            <div class="flex items-center gap-2" x-data="{ syncOpen: false }">
-                {{-- Sync from WhatsApp --}}
-                <div class="relative">
-                    <button type="button"
-                            @click="syncOpen = !syncOpen"
-                            @click.outside="syncOpen = false"
-                            class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 transition ease-in-out duration-150"
-                            @if($instances->isEmpty()) disabled title="{{ __('Connect a WhatsApp instance first') }}" @endif>
+            <div class="flex items-center gap-2">
+                {{-- Sync from WhatsApp — single-instance app: fetches the one
+                     configured number's approved templates from Meta. --}}
+                @if($instance)
+                    <form method="POST" action="{{ route('templates.sync') }}">
+                        @csrf
+                        <input type="hidden" name="whatsapp_instance_id" value="{{ $instance->id }}">
+                        <button type="submit"
+                                class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 transition ease-in-out duration-150">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            {{ __('Sync from WhatsApp') }}
+                        </button>
+                    </form>
+                @else
+                    <button type="button" disabled title="{{ __('Configure your WhatsApp number in Settings first') }}"
+                            class="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md font-semibold text-xs text-gray-400 uppercase tracking-widest cursor-not-allowed">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
                         {{ __('Sync from WhatsApp') }}
                     </button>
-
-                    @if($instances->isNotEmpty())
-                        <div x-show="syncOpen"
-                             x-transition
-                             class="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-20 p-3"
-                             style="display: none;">
-                            <p class="text-xs text-gray-500 mb-2">{{ __('Pick an instance to fetch its approved templates from Meta:') }}</p>
-                            @foreach($instances as $inst)
-                                <form method="POST" action="{{ route('templates.sync') }}" class="mb-1 last:mb-0">
-                                    @csrf
-                                    <input type="hidden" name="whatsapp_instance_id" value="{{ $inst->id }}">
-                                    <button type="submit"
-                                            class="w-full text-left px-3 py-2 rounded hover:bg-gray-50 flex items-center justify-between">
-                                        <span class="text-sm text-gray-800">{{ $inst->instance_name }}</span>
-                                        <span class="text-xs text-gray-400">{{ $inst->phone_number ?? $inst->status }}</span>
-                                    </button>
-                                </form>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
+                @endif
 
                 <a href="{{ route('templates.create') }}"
                    class="inline-flex items-center px-4 py-2 bg-[#25D366] border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-[#1da851] focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 transition ease-in-out duration-150">
@@ -145,30 +135,17 @@
                                     {{ __('Preview') }}
                                 </button>
 
-                                @if(! $template->isRemote() && $instances->isNotEmpty())
-                                    {{-- Local template + at least one Cloud instance available — offer Meta submission --}}
-                                    <div class="relative" x-data="{ open: false }">
-                                        <button type="button"
-                                                @click="open = !open"
-                                                @click.outside="open = false"
+                                @if(! $template->isRemote() && $instance)
+                                    {{-- Local template + a configured Cloud number — offer Meta submission.
+                                         Single-instance app: submits via the one primary number. --}}
+                                    <form method="POST" action="{{ route('templates.submit', $template) }}">
+                                        @csrf
+                                        <input type="hidden" name="whatsapp_instance_id" value="{{ $instance->id }}">
+                                        <button type="submit"
                                                 class="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors duration-150">
                                             {{ __('Submit to Meta') }}
                                         </button>
-                                        <div x-show="open" x-transition x-cloak
-                                             class="absolute right-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-20 p-2">
-                                            <p class="text-xs text-gray-500 px-2 mb-1">{{ __('Submit via:') }}</p>
-                                            @foreach($instances as $inst)
-                                                <form method="POST" action="{{ route('templates.submit', $template) }}">
-                                                    @csrf
-                                                    <input type="hidden" name="whatsapp_instance_id" value="{{ $inst->id }}">
-                                                    <button type="submit"
-                                                            class="w-full text-left px-2 py-1.5 rounded hover:bg-gray-50 text-sm text-gray-800">
-                                                        {{ $inst->instance_name }}
-                                                    </button>
-                                                </form>
-                                            @endforeach
-                                        </div>
-                                    </div>
+                                    </form>
                                 @endif
 
                                 @unless($template->isRemote())

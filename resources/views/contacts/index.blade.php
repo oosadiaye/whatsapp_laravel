@@ -98,55 +98,32 @@
                                         <div class="flex items-center justify-end gap-2"
                                              x-data="{
                                                  openCallConfirm: false,
-                                                 openInstancePicker: false,
                                                  action: null,
-                                                 instanceId: null,
                                                  submit() {
                                                      const form = document.getElementById('contact-action-form-{{ $contact->id }}');
                                                      form.action = this.action;
-                                                     if (this.instanceId) {
-                                                         let hidden = form.querySelector('[name=instance_id]');
-                                                         if (!hidden) {
-                                                             hidden = document.createElement('input');
-                                                             hidden.type = 'hidden';
-                                                             hidden.name = 'instance_id';
-                                                             form.appendChild(hidden);
-                                                         }
-                                                         hidden.value = this.instanceId;
-                                                     }
                                                      form.submit();
                                                  }
                                              }">
 
-                                            {{-- Hidden form, submitted by Alpine after picker/confirm flows resolve. --}}
+                                            {{-- Hidden form, submitted by Alpine after the call-confirm flow resolves. --}}
                                             <form id="contact-action-form-{{ $contact->id }}" method="POST" action="" class="hidden">
                                                 @csrf
                                             </form>
 
-                                            {{-- CHAT button — always shown for users with conversations.reply --}}
+                                            {{-- CHAT button — single-instance app: always a plain POST, no picker.
+                                                 The sending number is the one configured in Settings. --}}
                                             @can('conversations.reply')
-                                                @if($needsInstancePicker)
-                                                    <button type="button"
-                                                            @click="action = '{{ route('contacts.startChat', $contact) }}'; openInstancePicker = true"
+                                                <form method="POST" action="{{ route('contacts.startChat', $contact) }}" class="inline">
+                                                    @csrf
+                                                    <button type="submit"
                                                             class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition"
                                                             title="Chat with {{ $contact->name ?? $contact->phone }}">
                                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                                                         </svg>
                                                     </button>
-                                                @else
-                                                    {{-- Single-instance fast path: no picker, just submit. --}}
-                                                    <form method="POST" action="{{ route('contacts.startChat', $contact) }}" class="inline">
-                                                        @csrf
-                                                        <button type="submit"
-                                                                class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition"
-                                                                title="Chat with {{ $contact->name ?? $contact->phone }}">
-                                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                                                            </svg>
-                                                        </button>
-                                                    </form>
-                                                @endif
+                                                </form>
                                             @endcan
 
                                             {{-- CALL button — gated by the Meta-calling feature flag (off until
@@ -156,7 +133,7 @@
                                             @can('conversations.call')
                                                 @if($contact->is_engaged ?? false)
                                                     <button type="button"
-                                                            @click="action = '{{ route('contacts.startCall', $contact) }}'; @if($needsInstancePicker) openInstancePicker = true @else openCallConfirm = true @endif"
+                                                            @click="action = '{{ route('contacts.startCall', $contact) }}'; openCallConfirm = true"
                                                             class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition"
                                                             title="Call {{ $contact->name ?? $contact->phone }}">
                                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -182,33 +159,6 @@
                                                 @method('DELETE')
                                                 <button type="submit" class="text-red-600 hover:text-red-800 font-medium">{{ __('Delete') }}</button>
                                             </form>
-
-                                            {{-- INSTANCE PICKER MODAL — only renders for multi-instance users --}}
-                                            @if($needsInstancePicker)
-                                                <template x-teleport="body">
-                                                    <div x-show="openInstancePicker" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="openInstancePicker = false">
-                                                        <div class="absolute inset-0 bg-black/50"></div>
-                                                        <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-                                                            <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ __('Pick a WhatsApp number') }}</h3>
-                                                            <p class="text-sm text-gray-500 mb-4">{{ __('Which of your numbers should this conversation use?') }}</p>
-                                                            <select x-model="instanceId" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500">
-                                                                <option value="">{{ __('-- Select --') }}</option>
-                                                                @foreach($activeInstances as $inst)
-                                                                    <option value="{{ $inst->id }}">{{ $inst->display_name ?? $inst->instance_name }} · {{ $inst->business_phone_number }}</option>
-                                                                @endforeach
-                                                            </select>
-                                                            <div class="flex justify-end gap-2 mt-5">
-                                                                <button type="button" @click="openInstancePicker = false" class="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">{{ __('Cancel') }}</button>
-                                                                <button type="button"
-                                                                        @click="if (!instanceId) return; openInstancePicker = false; if (action.includes('/call')) { openCallConfirm = true } else { submit() }"
-                                                                        class="px-5 py-2 text-sm text-white bg-emerald-600 rounded-md hover:bg-emerald-700">
-                                                                    {{ __('Continue') }}
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </template>
-                                            @endif
 
                                             {{-- CALL CONFIRMATION MODAL — same pattern as Voice Phase A's chat-header call button --}}
                                             <template x-teleport="body">

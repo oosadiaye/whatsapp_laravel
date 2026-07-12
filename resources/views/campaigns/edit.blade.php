@@ -23,16 +23,21 @@
                         <input type="text" name="name" value="{{ old('name', $campaign->name) }}" required
                                class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
                     </div>
+                    {{-- Single-instance app: sending number is fixed (see Settings).
+                         Shown read-only; the controller keeps instance_id on the primary. --}}
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">WhatsApp Instance</label>
-                        <select name="instance_id" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm">
-                            <option value="">Select instance...</option>
-                            @foreach($instances as $instance)
-                            <option value="{{ $instance->id }}" {{ old('instance_id', $campaign->instance_id) == $instance->id ? 'selected' : '' }}>
+                        <label class="block text-sm font-medium text-gray-700">Sending WhatsApp Number</label>
+                        @if($instance)
+                            <div class="mt-1 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                                <span class="w-2 h-2 rounded-full {{ $instance->isReady() ? 'bg-emerald-500' : 'bg-amber-500' }}"></span>
                                 {{ $instance->display_name ?? $instance->instance_name }}
-                            </option>
-                            @endforeach
-                        </select>
+                                @if($instance->business_phone_number)<span class="text-gray-400">·</span><span class="font-mono">{{ $instance->business_phone_number }}</span>@endif
+                            </div>
+                        @else
+                            <p class="mt-1 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                No WhatsApp number configured. <a href="{{ route('settings.index') }}" class="font-semibold underline">Add it in Settings</a>.
+                            </p>
+                        @endif
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Contact Groups *</label>

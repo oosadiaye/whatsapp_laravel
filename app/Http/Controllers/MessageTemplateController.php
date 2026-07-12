@@ -39,20 +39,17 @@ class MessageTemplateController extends Controller
 
     public function index(): View
     {
-        // Single-tenant — templates + instances are shared. The route is
-        // permission-gated by templates.view; that's the only required gate.
+        // Single-tenant — templates are shared. The route is permission-gated
+        // by templates.view; that's the only required gate.
         $templates = MessageTemplate::with('whatsappInstance')
             ->latest()
             ->get();
 
-        $instances = WhatsAppInstance::query()
-            ->orderBy('is_default', 'desc')
-            ->orderBy('instance_name')
-            ->get(['id', 'instance_name', 'business_phone_number', 'phone_number', 'status']);
-
         return view('templates.index', [
             'templates' => $templates,
-            'instances' => $instances,
+            // Single-instance app: sync/submit always target the one configured
+            // WhatsApp number — no instance picker. Null until it's set up.
+            'instance' => WhatsAppInstance::primary(),
         ]);
     }
 
