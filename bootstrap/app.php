@@ -12,6 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Log out users deactivated mid-session on their next request.
+        $middleware->appendToGroup('web', \App\Http\Middleware\EnsureUserIsActive::class);
+
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminOnly::class,
             // spatie/laravel-permission middleware aliases — usage:

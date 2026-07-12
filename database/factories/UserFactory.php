@@ -30,6 +30,12 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            // Mirror the DB default explicitly so the in-memory model instance
+            // carries is_active=true (a freshly created model does NOT pick up
+            // the column default until refresh()). Without this, actingAs()
+            // users read is_active=null and the EnsureUserIsActive middleware
+            // logs them out. Tests needing an inactive user override this state.
+            'is_active' => true,
         ];
     }
 
