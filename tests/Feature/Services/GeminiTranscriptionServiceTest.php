@@ -69,11 +69,30 @@ class GeminiTranscriptionServiceTest extends TestCase
             $part = $body['contents'][0]['parts'][1]['inline_data'] ?? null;
 
             return str_contains($request->url(), 'models/gemini-2.0-flash:generateContent')
-                && str_contains($request->url(), 'key=test-gemini-key')
+                // Key travels in the header, never the URL query string.
+                && ! str_contains($request->url(), 'test-gemini-key')
+                && $request->hasHeader('x-goog-api-key', 'test-gemini-key')
                 && $part !== null
                 && $part['mime_type'] === 'audio/ogg'
                 && $part['data'] === base64_encode('raw-bytes');
         });
+    }
+
+    public function test_transport_failure_message_does_not_leak_the_api_key(): void
+    {
+        // Simulate a connection error whose message embeds the key (as cURL
+        // errors sometimes do) — the thrown exception must NOT carry it.
+        Http::fake(function () {
+            throw new \Illuminate\Http\Client\ConnectionException('cURL error 7: connect failed key=test-gemini-key');
+        });
+
+        try {
+            app(GeminiTranscriptionService::class)->transcribeAndSummarize('bytes', 'audio/webm');
+            $this->fail('Expected TranscriptionException.');
+        } catch (TranscriptionException $e) {
+            $this->assertStringNotContainsString('test-gemini-key', $e->getMessage());
+            $this->assertSame('Could not reach Gemini.', $e->getMessage());
+        }
     }
 
     public function test_throws_when_api_key_is_missing(): void

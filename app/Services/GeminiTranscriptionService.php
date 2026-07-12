@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Exceptions\TranscriptionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -43,15 +44,21 @@ TXT;
 
         $model = (string) config('services.gemini.model', 'gemini-2.0-flash');
         $baseUrl = rtrim((string) config('services.gemini.base_url'), '/');
-        $url = "{$baseUrl}/models/{$model}:generateContent?key={$key}";
+        // Key goes in a header, NOT the query string — so it can never appear in
+        // a transport exception message, a log, or the ai_error we persist/show.
+        $url = "{$baseUrl}/models/{$model}:generateContent";
 
         try {
-            $response = Http::timeout(120)
+            $response = Http::withHeaders(['x-goog-api-key' => $key])
+                ->timeout(120)
                 ->acceptJson()
                 ->post($url, $this->payload($audioContents, $mimeType));
         } catch (Throwable $e) {
-            // Network/transport failure — never include the URL (carries the key).
-            throw new TranscriptionException('Could not reach Gemini: '.$e->getMessage(), 0, $e);
+            // Log the underlying cause server-side only; surface a generic message
+            // so no transport detail reaches ai_error / the UI.
+            Log::debug('Gemini transport failure', ['error' => $e->getMessage()]);
+
+            throw new TranscriptionException('Could not reach Gemini.', 0, $e);
         }
 
         if ($response->failed()) {
