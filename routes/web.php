@@ -29,8 +29,10 @@ Route::middleware([
     Route::post('/webhooks/whatsapp/{instance}', [CloudWebhookController::class, 'handle'])
         ->name('webhook.cloud.handle');
 
-    // Africa's Talking voice webhook (Phase 18).
-    Route::post('/webhooks/africastalking/voice', [\App\Http\Controllers\AfricasTalkingWebhookController::class, 'handle'])
+    // Africa's Talking voice webhook (Phase 18). The optional {secret} path
+    // segment authenticates the callback (AT voice callbacks are unsigned) —
+    // see config voice.at_webhook_secret.
+    Route::post('/webhooks/africastalking/voice/{secret?}', [\App\Http\Controllers\AfricasTalkingWebhookController::class, 'handle'])
         ->name('webhook.africastalking.voice');
 });
 

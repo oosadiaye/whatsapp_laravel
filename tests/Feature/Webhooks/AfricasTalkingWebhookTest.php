@@ -30,6 +30,8 @@ class AfricasTalkingWebhookTest extends TestCase
         Setting::set('africastalking_api_key', Crypt::encryptString('atsk_test_key'));
         Setting::set('africastalking_virtual_number', '+2348100000000');
         Setting::set('africastalking_rate_per_minute_kobo', '600');
+        // The webhook authenticates on an unguessable secret path segment.
+        config(['voice.at_webhook_secret' => 'test-secret']);
     }
 
     public function test_outbound_ringing_event_updates_call_log_status(): void
@@ -243,28 +245,27 @@ class AfricasTalkingWebhookTest extends TestCase
         $response->assertSee('<Reject', false);
     }
 
-    public function test_invalid_signature_is_rejected_and_does_not_mutate(): void
+    public function test_wrong_secret_is_rejected_and_does_not_mutate(): void
     {
-        $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_badsig');
+        $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_badsecret');
 
-        // Correct payload but a forged signature — an attacker could otherwise
-        // fabricate a Completed event to inflate cost, or hijack call-control.
-        $this->postJson(route('webhook.africastalking.voice'), [
-            'sessionId' => 'sess_badsig',
+        // Correct payload but the wrong secret segment — an attacker guessing the
+        // URL could otherwise fabricate a Completed event or hijack call-control.
+        $this->post(route('webhook.africastalking.voice', ['secret' => 'wrong-secret']), [
+            'sessionId' => 'sess_badsecret',
             'status' => 'Completed',
             'direction' => 'Outbound',
             'durationInSeconds' => '90',
-        ], ['X-Africastalking-Signature' => 'deadbeefdeadbeef'])
-            ->assertStatus(401);
+        ])->assertStatus(401);
 
-        // The call must be untouched.
         $this->assertSame(CallLog::STATUS_RINGING, $call->fresh()->status);
     }
 
-    public function test_missing_signature_is_rejected(): void
+    public function test_missing_secret_is_rejected(): void
     {
-        $this->postJson(route('webhook.africastalking.voice'), [
-            'sessionId' => 'sess_nosig',
+        // Bare URL with no secret segment, while a secret is configured.
+        $this->post(route('webhook.africastalking.voice'), [
+            'sessionId' => 'sess_nosecret',
             'status' => 'Completed',
             'direction' => 'Outbound',
         ])->assertStatus(401);
@@ -272,16 +273,12 @@ class AfricasTalkingWebhookTest extends TestCase
 
     private function postWebhook(array $payload)
     {
-        // The controller verifies the HMAC-SHA256 of the raw body against the
-        // configured API key in every environment (no test bypass), so tests
-        // must sign their payloads. Posting as JSON and signing json_encode()
-        // keeps getContent() in lock-step with the computed signature.
-        $key = Crypt::decryptString(Setting::get('africastalking_api_key'));
-        $signature = hash_hmac('sha256', json_encode($payload), $key);
-
-        return $this->postJson(route('webhook.africastalking.voice'), $payload, [
-            'X-Africastalking-Signature' => $signature,
-        ]);
+        // AT posts form-encoded callbacks to the URL carrying the secret path
+        // segment — no signature header.
+        return $this->post(
+            route('webhook.africastalking.voice', ['secret' => 'test-secret']),
+            $payload,
+        );
     }
 
     private function makeOutboundCall(string $status, string $sessionId): CallLog

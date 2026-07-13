@@ -32,10 +32,10 @@ class AfricasTalkingWebhookController extends Controller
         private readonly RoundRobinAssigner $assigner,
     ) {}
 
-    public function handle(Request $request): Response
+    public function handle(Request $request, ?string $secret = null): Response
     {
-        if (! $this->verifySignature($request)) {
-            return response('invalid signature', 401);
+        if (! $this->verifyWebhookAuth($secret)) {
+            return response('unauthorized', 401);
         }
 
         $event = $request->all();
@@ -254,32 +254,26 @@ class AfricasTalkingWebhookController extends Controller
     }
 
     /**
-     * Verify HMAC signature on incoming AT webhook.
+     * Authenticate an incoming AT voice callback.
      *
-     * Verifies HMAC-SHA256 of the raw request body against the AT API key
-     * (shared secret) in constant time, in EVERY environment. There is no
-     * test-environment bypass: feature tests sign their payloads with the
-     * same key (setEncrypted in setUp), so production and test paths are
-     * identical and an accidental APP_ENV=local/staging deploy can never
-     * leave the webhook unauthenticated.
+     * AT voice callbacks are unsigned, form-encoded POSTs — there is no HMAC to
+     * verify (the previous signature scheme could never have worked). Instead
+     * the callback URL carries an unguessable secret path segment that we
+     * compare in constant time; combined with the route's IP-allowlist + rate
+     * limit, that is AT's practical authentication story.
      *
-     * Exact header name per AT docs — verify at deploy time.
+     * When no secret is configured we accept the bare path and rely on the IP
+     * allowlist / rate limit alone — so a fresh install still works, and locking
+     * it down is a deliberate opt-in.
      */
-    private function verifySignature(Request $request): bool
+    private function verifyWebhookAuth(?string $secret): bool
     {
-        $signature = $request->header('X-Africastalking-Signature');
-        if ($signature === null) {
-            return false;
+        $configured = (string) config('voice.at_webhook_secret', '');
+
+        if ($configured === '') {
+            return true; // secret auth disabled
         }
 
-        $apiKey = Setting::getEncrypted('africastalking_api_key', '');
-        if ($apiKey === '') {
-            // No key configured → fail closed (but only in prod-like envs a
-            // key should exist; tests always set one).
-            return false;
-        }
-        $expected = hash_hmac('sha256', $request->getContent(), $apiKey);
-
-        return hash_equals($expected, $signature);
+        return hash_equals($configured, (string) $secret);
     }
 }
