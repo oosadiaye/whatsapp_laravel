@@ -245,6 +245,47 @@ class AfricasTalkingWebhookTest extends TestCase
         $response->assertSee('<Reject', false);
     }
 
+    public function test_inbound_call_control_returns_ivr_menu_when_enabled(): void
+    {
+        config(['voice.ivr_enabled' => true, 'voice.ivr.prompt' => 'Press one for sales']);
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
+        $admin->assignRole(User::ROLE_ADMIN);
+        WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+        $agent = User::factory()->create(['role' => User::ROLE_AGENT, 'is_active' => true, 'last_seen_at' => now()]);
+        $agent->assignRole(User::ROLE_AGENT);
+
+        $response = $this->postWebhook([
+            'isActive' => '1',
+            'sessionId' => 'sess_ivr',
+            'direction' => 'Inbound',
+            'callerNumber' => '+2348033333333',
+            'destinationNumber' => '+2348100000000',
+        ]);
+
+        $response->assertOk();
+        $response->assertSee('<GetDigits', false);
+        $response->assertSee('Press one for sales', false);
+        $response->assertDontSee('<Dial', false);
+    }
+
+    public function test_recording_url_callback_stores_a_voicemail(): void
+    {
+        $this->postWebhook([
+            'sessionId' => 'sess_vm',
+            'direction' => 'Inbound',
+            'callerNumber' => '+2348044444444',
+            'recordingUrl' => 'https://voice.at/recordings/abc.mp3',
+            'durationInSeconds' => '15',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('voicemails', [
+            'from_phone' => '+2348044444444',
+            'recording_url' => 'https://voice.at/recordings/abc.mp3',
+            'duration_seconds' => 15,
+        ]);
+    }
+
     public function test_wrong_secret_is_rejected_and_does_not_mutate(): void
     {
         $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_badsecret');

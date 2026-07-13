@@ -10,8 +10,10 @@ use App\Models\CallLog;
 use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Setting;
+use App\Models\Voicemail;
 use App\Models\WhatsAppInstance;
 use App\Services\AfricasTalkingVoiceService;
+use App\Services\CallFlowRouter;
 use App\Services\RoundRobinAssigner;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -30,6 +32,7 @@ class AfricasTalkingWebhookController extends Controller
 {
     public function __construct(
         private readonly RoundRobinAssigner $assigner,
+        private readonly CallFlowRouter $flow,
     ) {}
 
     public function handle(Request $request, ?string $secret = null): Response
@@ -42,6 +45,14 @@ class AfricasTalkingWebhookController extends Controller
         $sessionId = $event['sessionId'] ?? null;
         $direction = strtolower($event['direction'] ?? '');
         $status = $event['status'] ?? null;
+
+        // Voicemail: AT posts the recordingUrl once a <Record> finishes. Catch it
+        // regardless of the isActive flag and store the message.
+        if (! empty($event['recordingUrl'])) {
+            $this->storeVoicemail($event);
+
+            return response('ok', 200);
+        }
 
         // ── Call-control phase ──────────────────────────────────────────
         // When AT has a LIVE call and needs to know what to do with it, it
@@ -178,6 +189,25 @@ class AfricasTalkingWebhookController extends Controller
     }
 
     /**
+     * Persist a voicemail from a completed <Record>. Links to the call chain
+     * when the session is known; always keeps the caller number + audio URL.
+     */
+    private function storeVoicemail(array $event): void
+    {
+        $sessionId = $event['sessionId'] ?? null;
+        $call = $sessionId ? CallLog::where('provider_session_id', $sessionId)->first() : null;
+
+        Voicemail::create([
+            'call_log_id' => $call?->id,
+            'conversation_id' => $call?->conversation_id,
+            'contact_id' => $call?->contact_id,
+            'from_phone' => $event['callerNumber'] ?? $call?->from_phone,
+            'recording_url' => $event['recordingUrl'],
+            'duration_seconds' => isset($event['durationInSeconds']) ? (int) $event['durationInSeconds'] : null,
+        ]);
+    }
+
+    /**
      * Respond to an Africa's Talking call-control request (isActive=1) with
      * Voice XML that bridges the live call to the right agent's browser
      * softphone.
@@ -203,20 +233,20 @@ class AfricasTalkingWebhookController extends Controller
                 $call = CallLog::where('provider_session_id', $sessionId)->first();
             }
 
-            $agentId = $call?->conversation?->assigned_to_user_id;
-            if ($agentId === null) {
-                // Nobody to route to — say so and let AT end the call.
+            if ($call === null) {
                 return $this->xmlResponse(
-                    '<?xml version="1.0" encoding="UTF-8"?><Response>'
-                    .'<Say>All our agents are currently busy. Please call again later.</Say>'
-                    .'</Response>'
+                    '<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>'
                 );
             }
 
-            return $this->xmlResponse($this->dialClientXml(
-                AfricasTalkingVoiceService::clientNameForUser((int) $agentId),
-                $event['callerNumber'] ?? null,
-            ));
+            // IVR digit press → route by the chosen option; otherwise the entry
+            // flow (business hours → IVR menu → agent/queue/voicemail).
+            $digits = (string) ($event['dtmfDigits'] ?? '');
+
+            return ($digits !== ''
+                ? $this->flow->digitSelectionXml($call, $digits)
+                : $this->flow->entryXml($call)
+            )->toResponse();
         }
 
         // Outbound bridge.

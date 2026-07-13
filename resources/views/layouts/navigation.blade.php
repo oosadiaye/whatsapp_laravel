@@ -93,6 +93,13 @@
                                   class="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-xs font-semibold"
                                   style="display:none"></span>
                         </x-sidebar-link>
+
+                        <x-sidebar-link :href="route('voicemails.index')" :active="request()->routeIs('voicemails.*')">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/>
+                            </svg>
+                            <span class="flex-1">{{ __('Voicemail') }}</span>
+                        </x-sidebar-link>
                     @endcanany
                 </div>
             </div>

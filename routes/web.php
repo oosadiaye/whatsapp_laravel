@@ -169,6 +169,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Stream a call recording (private disk, per-call access checked in the action).
         Route::get('/calls/{call}/recording', [\App\Http\Controllers\CallController::class, 'downloadRecording'])
             ->name('calls.recording.download');
+        // Voicemail inbox (inbound callers who left a message).
+        Route::get('/voicemails', [\App\Http\Controllers\VoicemailController::class, 'index'])
+            ->name('voicemails.index');
+        Route::post('/voicemails/{voicemail}/heard', [\App\Http\Controllers\VoicemailController::class, 'markHeard'])
+            ->name('voicemails.markHeard');
     });
     Route::middleware('permission:conversations.reply')->group(function () {
         Route::post('/conversations/{conversation}/reply', [ConversationController::class, 'reply'])->name('conversations.reply');
