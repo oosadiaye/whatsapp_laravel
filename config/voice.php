@@ -148,4 +148,77 @@ return [
         explode(',', (string) env('VOICE_WEBHOOK_IP_ALLOWLIST', '')),
     ))),
 
+    /*
+    | Africa's Talking voice-webhook shared secret. AT voice callbacks are
+    | unsigned form-encoded POSTs, so the speculative HMAC scheme couldn't work.
+    | Instead the callback URL carries an unguessable secret path segment
+    | (/webhooks/africastalking/voice/{secret}) that we compare in constant time.
+    | Set this + point AT's callback at the /{secret} URL. Empty = accept the
+    | bare path (rely on the IP allowlist + rate limit only).
+    */
+    'at_webhook_secret' => env('AT_VOICE_WEBHOOK_SECRET', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Inbound call-flow engine (all OFF by default — verify on live AT first)
+    |--------------------------------------------------------------------------
+    | These shape the Voice XML we return when a customer calls the virtual
+    | number. Each is dark behind its own flag; with all off, inbound behaves
+    | exactly as before (ring the assigned agent, else "agents busy").
+    |
+    | Order the engine applies them: business hours → IVR menu → destination
+    | (agent / queue / voicemail).
+    */
+    'business_hours_enabled' => (bool) env('VOICE_BUSINESS_HOURS_ENABLED', false),
+    'ivr_enabled' => (bool) env('VOICE_IVR_ENABLED', false),
+    'queue_enabled' => (bool) env('VOICE_QUEUE_ENABLED', false),
+    'voicemail_enabled' => (bool) env('VOICE_VOICEMAIL_ENABLED', false),
+    'transfer_enabled' => (bool) env('VOICE_TRANSFER_ENABLED', false),
+
+    // Business hours (used when business_hours_enabled). Times are HH:MM in this
+    // timezone; a day absent/empty means closed all day. Overridable via a
+    // Setting later; config is the simple start.
+    'business_hours' => [
+        'timezone' => env('VOICE_BUSINESS_TZ', 'Africa/Lagos'),
+        'week' => [
+            'mon' => ['09:00', '17:00'],
+            'tue' => ['09:00', '17:00'],
+            'wed' => ['09:00', '17:00'],
+            'thu' => ['09:00', '17:00'],
+            'fri' => ['09:00', '17:00'],
+            'sat' => null,
+            'sun' => null,
+        ],
+        'closed_message' => env('VOICE_CLOSED_MESSAGE',
+            'Thank you for calling. Our office is currently closed. Please leave a message after the tone, or call back during business hours.'),
+    ],
+
+    // IVR menu (used when ivr_enabled). Each option maps a pressed digit to a
+    // destination: agent (round-robin), queue (name), or voicemail.
+    'ivr' => [
+        'prompt' => env('VOICE_IVR_PROMPT',
+            'Welcome. For sales, press 1. For support, press 2. To leave a voicemail, press 3.'),
+        'timeout' => (int) env('VOICE_IVR_TIMEOUT', 15),
+        'options' => [
+            '1' => ['type' => 'agent',     'label' => 'Sales'],
+            '2' => ['type' => 'queue',     'label' => 'Support', 'queue' => 'support'],
+            '3' => ['type' => 'voicemail', 'label' => 'Voicemail'],
+        ],
+        'invalid_message' => 'Sorry, that is not a valid option.',
+    ],
+
+    // Queue (used when queue_enabled). holdMusic is a public URL AT can fetch.
+    'queue' => [
+        'default_name' => env('VOICE_QUEUE_NAME', 'support'),
+        'hold_music_url' => env('VOICE_QUEUE_HOLD_MUSIC', ''),
+        'timeout_seconds' => (int) env('VOICE_QUEUE_TIMEOUT', 300),
+    ],
+
+    // Voicemail (used when voicemail_enabled).
+    'voicemail' => [
+        'greeting' => env('VOICE_VOICEMAIL_GREETING',
+            'Please leave your message after the tone. Press the hash key when you are done.'),
+        'max_length_seconds' => (int) env('VOICE_VOICEMAIL_MAX_LENGTH', 120),
+    ],
+
 ];
