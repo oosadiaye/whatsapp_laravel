@@ -110,6 +110,32 @@
         </div>
     </div>
 
+    {{-- Transfer (blind) — flag-gated. Hands the live call to another number;
+         the agent's own leg drops after the server records the target. --}}
+    @if(config('voice.transfer_enabled'))
+        <div class="px-6 pb-1" x-show="!keypadOpen">
+            <button type="button" @click="toggleTransfer()"
+                    class="w-full flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 py-2.5 text-sm font-semibold text-gray-700 transition active:scale-[.99]"
+                    :class="transferOpen && 'ring-2 ring-[#25D366]/40'">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+                {{ __('Transfer') }}
+            </button>
+            <div x-show="transferOpen" x-cloak class="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">{{ __('Transfer to number') }}</label>
+                <div class="flex gap-2">
+                    <input type="tel" x-model="transferNumber" placeholder="+2348000000000"
+                           class="flex-1 rounded-lg border-gray-300 text-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                    <button type="button" @click="transferToNumber()" :disabled="transferBusy"
+                            class="px-4 rounded-lg bg-[#25D366] text-white text-sm font-semibold hover:bg-[#1da851] disabled:opacity-50">
+                        <span x-show="!transferBusy">{{ __('Send') }}</span>
+                        <span x-show="transferBusy" x-cloak>…</span>
+                    </button>
+                </div>
+                <p class="mt-1.5 text-[11px] text-gray-400">{{ __('The call moves to this number and your line drops.') }}</p>
+            </div>
+        </div>
+    @endif
+
     {{-- Drop --}}
     <div class="px-6 pb-6 pt-1">
         <button type="button" @click="hangup()"

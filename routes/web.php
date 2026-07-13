@@ -188,6 +188,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Phase 20 — Call Workspace: upload recording for AI analysis + log notes.
         Route::post('/calls/{call}/recording', [\App\Http\Controllers\CallController::class, 'storeRecording'])->name('calls.recording.store');
         Route::post('/calls/{call}/notes', [\App\Http\Controllers\CallController::class, 'storeNote'])->name('calls.notes.store');
+        // Blind transfer to another agent or a PSTN number.
+        Route::post('/calls/{call}/transfer', [\App\Http\Controllers\CallController::class, 'transfer'])->name('calls.transfer');
     });
     Route::middleware('permission:conversations.reply')->group(function () {
         Route::post('/contacts/{contact}/chat', [ContactController::class, 'startChat'])

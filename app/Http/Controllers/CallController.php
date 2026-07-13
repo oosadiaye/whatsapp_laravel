@@ -448,6 +448,55 @@ class CallController extends Controller
     }
 
     /**
+     * Blind-transfer a live call to another agent or a PSTN number.
+     *
+     * Records the destination on the call; the next AT call-control request
+     * routes the customer leg there (see AfricasTalkingWebhookController::
+     * handleCallControl). For an agent target we also reassign the conversation
+     * and ring their softphone. The agent's own leg drops client-side after this
+     * returns, prompting AT to re-request control — verify that re-request
+     * behaviour on a live account before enabling.
+     */
+    public function transfer(Request $request, CallLog $call): JsonResponse
+    {
+        $this->authorizeCallAccess($call);
+
+        if (! config('voice.transfer_enabled')) {
+            return response()->json(['error' => 'Call transfer is disabled.'], 403);
+        }
+
+        $validated = $request->validate([
+            'target_type' => ['required', 'in:agent,number'],
+            'target_user_id' => ['nullable', 'required_if:target_type,agent', 'integer', 'exists:users,id'],
+            'target_number' => ['nullable', 'required_if:target_type,number', 'string', 'max:32'],
+        ]);
+
+        if ($validated['target_type'] === 'agent') {
+            $targetId = (int) $validated['target_user_id'];
+
+            $call->update([
+                'transfer_target' => AfricasTalkingVoiceService::clientNameForUser($targetId),
+                'transferred_to_user_id' => $targetId,
+                'transfer_type' => 'blind',
+                'transferred_at' => now(),
+            ]);
+
+            // Reassign + ring the target agent's softphone so their banner shows
+            // when AT bridges the transferred leg.
+            $call->conversation?->update(['assigned_to_user_id' => $targetId]);
+            CallRinging::dispatch($call->fresh());
+        } else {
+            $call->update([
+                'transfer_target' => $validated['target_number'],
+                'transfer_type' => 'blind',
+                'transferred_at' => now(),
+            ]);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
      * Log an agent note against a call — append-only timeline entry.
      */
     public function storeNote(Request $request, CallLog $call): JsonResponse

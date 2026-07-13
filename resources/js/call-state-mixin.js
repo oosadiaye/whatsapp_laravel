@@ -38,7 +38,47 @@ export function createCallStateMixin() {
         // opening DevTools. Reset on retry.
         errorMessage: '',
 
+        // Blind-transfer UI state.
+        transferOpen: false,
+        transferNumber: '',
+        transferBusy: false,
+
         // ─── Shared methods ───────────────────────────────────────
+
+        toggleTransfer() { this.transferOpen = !this.transferOpen; },
+
+        transferToNumber() {
+            const n = (this.transferNumber || '').trim();
+            if (n) this._doTransfer({ target_type: 'number', target_number: n });
+        },
+
+        transferToAgent(userId) {
+            this._doTransfer({ target_type: 'agent', target_user_id: userId });
+        },
+
+        /**
+         * Blind transfer: tell the server the destination, then drop our own leg
+         * so AT re-requests call-control and bridges the customer to the target.
+         */
+        async _doTransfer(payload) {
+            if (this.transferBusy) return;
+            this.transferBusy = true;
+            try {
+                const res = await this.post(`/calls/${this.callId}/transfer`, payload);
+                if (!res.ok) {
+                    const body = await this.safeReadJson(res);
+                    this.errorMessage = body?.error || `Transfer failed (${res.status})`;
+                    this.transferBusy = false;
+                    return;
+                }
+                try { window.bqVoiceClient?.hangupCall?.(); } catch (_) { /* SDK gone */ }
+                this.transferOpen = false;
+                this.teardown?.('transferred');
+            } catch (_) {
+                this.errorMessage = 'Transfer failed (network).';
+                this.transferBusy = false;
+            }
+        },
 
         /**
          * POST helper. Sends JSON with the CSRF token and same-origin

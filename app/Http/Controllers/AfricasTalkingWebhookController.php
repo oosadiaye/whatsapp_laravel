@@ -15,6 +15,7 @@ use App\Models\WhatsAppInstance;
 use App\Services\AfricasTalkingVoiceService;
 use App\Services\CallFlowRouter;
 use App\Services\RoundRobinAssigner;
+use App\Support\VoiceXml;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
@@ -222,6 +223,21 @@ class AfricasTalkingWebhookController extends Controller
      */
     private function handleCallControl(array $event, ?string $sessionId, string $direction): Response
     {
+        // A pending blind transfer routes the live customer leg to its target
+        // (agent client or PSTN number), regardless of the original direction.
+        // Clear it once the Dial is issued so a re-request doesn't loop.
+        $pending = CallLog::where('provider_session_id', $sessionId)
+            ->whereNotNull('transfer_target')
+            ->first();
+        if ($pending !== null) {
+            $target = (string) $pending->transfer_target;
+            $pending->update(['transfer_target' => null]);
+
+            return VoiceXml::make()
+                ->dial($target, ['callerId' => ($event['callerNumber'] ?? $pending->from_phone) ?: null])
+                ->toResponse();
+        }
+
         if ($direction === 'inbound') {
             $call = CallLog::where('provider_session_id', $sessionId)->first();
             if ($call === null) {
