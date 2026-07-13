@@ -33,9 +33,11 @@ class AllowedWebhookIps
             return $next($request);
         }
 
+        // Log the route NAME, not the path — the AT voice callback URL carries a
+        // secret path segment we must never write to logs.
         Log::warning('Webhook rejected: source IP not allowlisted', [
             'ip' => $request->ip(),
-            'path' => $request->path(),
+            'route' => $request->route()?->getName(),
         ]);
 
         abort(403);

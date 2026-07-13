@@ -26,12 +26,31 @@ class WebhookIpAllowlistTest extends TestCase
         );
     }
 
-    public function test_allowlist_disabled_lets_the_request_through(): void
+    public function test_allowlist_middleware_passes_when_disabled(): void
     {
         config(['voice.webhook_ip_allowlist' => []]);
 
-        // The controller may 401/whatever on an empty body — the point is the
-        // middleware did NOT block it (no 403).
+        // The point here is the IP middleware did NOT block (no 403). The
+        // controller separately fails closed on missing auth — see below.
+        $this->assertNotSame(403, $this->postWebhookFrom('198.51.100.7')->status());
+    }
+
+    public function test_webhook_fails_closed_when_no_auth_gate_is_configured(): void
+    {
+        // Neither a secret nor an IP allowlist → the AT voice webhook must reject
+        // (an open, unauthenticated call webhook is a spam/cost-manipulation risk).
+        config(['voice.at_webhook_secret' => '', 'voice.webhook_ip_allowlist' => []]);
+
+        $this->postWebhookFrom('198.51.100.7')->assertStatus(401);
+    }
+
+    public function test_ip_allowlist_alone_authenticates_when_no_secret(): void
+    {
+        // With an allowlist enforced, an allowlisted caller is accepted even
+        // without a secret (the middleware is the auth gate).
+        config(['voice.at_webhook_secret' => '', 'voice.webhook_ip_allowlist' => ['198.51.100.0/24']]);
+
+        $this->assertNotSame(401, $this->postWebhookFrom('198.51.100.7')->status());
         $this->assertNotSame(403, $this->postWebhookFrom('198.51.100.7')->status());
     }
 

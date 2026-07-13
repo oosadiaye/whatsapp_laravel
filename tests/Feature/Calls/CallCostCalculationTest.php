@@ -32,13 +32,15 @@ class CallCostCalculationTest extends TestCase
         Setting::set('africastalking_api_key', Crypt::encryptString('atsk_test'));
         Setting::set('africastalking_virtual_number', '+2348100000000');
         Setting::set('africastalking_rate_per_minute_kobo', '600');  // ₦6/min
+        config(['voice.at_webhook_secret' => 'test-secret']);
     }
 
     private function postWebhook(array $payload)
     {
-        // No at_webhook_secret configured here → the webhook accepts the bare
-        // path (auth relies on the IP allowlist / rate limit in that mode).
-        return $this->post(route('webhook.africastalking.voice'), $payload);
+        return $this->post(
+            route('webhook.africastalking.voice', ['secret' => 'test-secret']),
+            $payload,
+        );
     }
 
     public function test_ninety_seconds_at_six_naira_per_minute_costs_900_kobo(): void

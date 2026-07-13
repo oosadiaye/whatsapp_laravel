@@ -262,18 +262,22 @@ class AfricasTalkingWebhookController extends Controller
      * compare in constant time; combined with the route's IP-allowlist + rate
      * limit, that is AT's practical authentication story.
      *
-     * When no secret is configured we accept the bare path and rely on the IP
-     * allowlist / rate limit alone — so a fresh install still works, and locking
-     * it down is a deliberate opt-in.
+     * Fail closed: a request is accepted only if it clears an auth gate. When a
+     * secret is configured it must match. When no secret is set, the request is
+     * accepted ONLY if an IP allowlist is enforced (the AllowedWebhookIps
+     * middleware already ran and restricted the caller). With neither configured
+     * the webhook rejects — an unauthenticated public voice webhook could be used
+     * to spam call state, inflate cost estimates, or fire spurious agent alerts.
      */
     private function verifyWebhookAuth(?string $secret): bool
     {
         $configured = (string) config('voice.at_webhook_secret', '');
 
-        if ($configured === '') {
-            return true; // secret auth disabled
+        if ($configured !== '') {
+            return hash_equals($configured, (string) $secret);
         }
 
-        return hash_equals($configured, (string) $secret);
+        // No secret → require the IP allowlist to be the active gate.
+        return ! empty(config('voice.webhook_ip_allowlist', []));
     }
 }
