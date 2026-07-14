@@ -52,7 +52,7 @@ class SendCampaignEmail implements ShouldQueue
 
         try {
             Mail::to($log->email)->send(
-                new CampaignEmail($campaign, $log->email, $log->contact?->name),
+                new CampaignEmail($campaign, $log->email, $log->contact?->name, $log->id),
             );
 
             $log->update(['status' => EmailLog::STATUS_SENT, 'sent_at' => now(), 'error' => null]);

@@ -30,6 +30,7 @@ class CampaignEmail extends Mailable
         public readonly EmailCampaign $campaign,
         public readonly string $recipientEmail,
         public readonly ?string $recipientName = null,
+        public readonly ?int $logId = null,
     ) {}
 
     public function envelope(): Envelope
@@ -77,7 +78,22 @@ class CampaignEmail extends Mailable
             .'<a href="'.e($this->unsubscribeUrl()).'" style="color:#6b7280">Unsubscribe</a>.'
             .'</p>';
 
-        return $body.$footer;
+        return $body.$footer.$this->trackingPixel();
+    }
+
+    /**
+     * A 1x1 open-tracking pixel for this recipient (only when we have a log to
+     * attribute the open to).
+     */
+    private function trackingPixel(): string
+    {
+        if ($this->logId === null) {
+            return '';
+        }
+
+        $url = URL::signedRoute('email.open', ['log' => $this->logId]);
+
+        return '<img src="'.e($url).'" width="1" height="1" alt="" style="display:none">';
     }
 
     private function unsubscribeUrl(): string

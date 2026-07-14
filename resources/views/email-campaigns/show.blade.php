@@ -62,10 +62,12 @@
         </div>
 
         {{-- Stats --}}
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        @php $openRate = $campaign->sent_count > 0 ? round($campaign->opened_count / $campaign->sent_count * 100) : null; @endphp
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             @foreach ([
                 ['label' => __('Recipients'), 'value' => $campaign->status === 'draft' || $campaign->status === 'scheduled' ? $recipientCount : $campaign->total_recipients],
                 ['label' => __('Sent'), 'value' => $campaign->sent_count, 'accent' => 'text-emerald-600'],
+                ['label' => __('Opened'), 'value' => $campaign->opened_count.($openRate !== null ? " · {$openRate}%" : ''), 'accent' => 'text-indigo-600'],
                 ['label' => __('Failed'), 'value' => $campaign->failed_count, 'accent' => $campaign->failed_count > 0 ? 'text-red-600' : 'text-gray-900'],
                 ['label' => __('Groups'), 'value' => $campaign->contactGroups->count()],
             ] as $tile)

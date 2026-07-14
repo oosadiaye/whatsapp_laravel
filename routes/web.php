@@ -44,6 +44,12 @@ Route::match(['get', 'post'], '/email/unsubscribe', [\App\Http\Controllers\Unsub
     ->middleware('signed')
     ->name('email.unsubscribe');
 
+// Open-tracking pixel (signed per-recipient). Returns a 1x1 GIF and records the
+// open. No auth — recipients aren't users.
+Route::get('/email/open/{log}', [\App\Http\Controllers\EmailTrackingController::class, 'open'])
+    ->middleware('signed')
+    ->name('email.open');
+
 // Authenticated routes — role/permission gates per resource group
 Route::middleware(['auth', 'verified'])->group(function () {
 
