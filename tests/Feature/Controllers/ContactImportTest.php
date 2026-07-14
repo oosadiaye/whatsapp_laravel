@@ -110,8 +110,8 @@ class ContactImportTest extends TestCase
         $body = $response->streamedContent();
         // BOM so Excel opens UTF-8 cleanly.
         $this->assertSame("\xEF\xBB\xBF", substr($body, 0, 3));
-        // The four columns the import service consumes.
-        $this->assertStringContainsString('phone,name,custom_field_1,custom_field_2', $body);
+        // The columns the import service consumes (email added for email campaigns).
+        $this->assertStringContainsString('phone,email,name,custom_field_1,custom_field_2', $body);
         // At least one realistic sample row so operators have a visual pattern.
         $this->assertStringContainsString('+2348012345678', $body);
     }

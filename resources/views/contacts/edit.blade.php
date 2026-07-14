@@ -41,6 +41,21 @@
                         @enderror
                     </div>
 
+                    {{-- Email (used by email campaigns) --}}
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700 mb-1">{{ __('Email') }}</label>
+                        <input type="email"
+                               id="email"
+                               name="email"
+                               value="{{ old('email', $contact->email) }}"
+                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm"
+                               placeholder="name@example.com">
+                        <p class="mt-1 text-xs text-gray-400">{{ __('Used for email campaigns. Leave blank for WhatsApp-only contacts.') }}</p>
+                        @error('email')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
                     {{-- Custom Field 1 --}}
                     <div>
                         <label for="custom_field_1" class="block text-sm font-medium text-gray-700 mb-1">{{ __('Custom Field 1') }}</label>

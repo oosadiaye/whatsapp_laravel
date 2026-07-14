@@ -37,10 +37,15 @@ class ContactImportService
 
         foreach ($chunks as $chunk) {
             foreach ($chunk as $row) {
-                $rawPhone = $row[$columnMap['phone']] ?? '';
+                $rawPhone = isset($columnMap['phone']) ? ($row[$columnMap['phone']] ?? '') : '';
                 $phone = $this->normalizePhone((string) $rawPhone);
 
-                if ($phone === null) {
+                $rawEmail = isset($columnMap['email']) ? trim((string) ($row[$columnMap['email']] ?? '')) : '';
+                $email = filter_var($rawEmail, FILTER_VALIDATE_EMAIL) ? strtolower($rawEmail) : null;
+
+                // A row needs at least a valid phone OR a valid email to be a
+                // contact (email-only prospects are allowed now).
+                if ($phone === null && $email === null) {
                     $invalid++;
                     continue;
                 }
@@ -68,14 +73,16 @@ class ContactImportService
                 if ($customFields !== []) {
                     $attributes['custom_fields'] = $customFields;
                 }
+                if ($email !== null) {
+                    $attributes['email'] = $email;
+                }
 
-                $contact = Contact::updateOrCreate(
-                    [
-                        'user_id' => $userId,
-                        'phone' => $phone,
-                    ],
-                    $attributes,
-                );
+                // Upsert on phone when present, else on email (email-only rows).
+                $key = $phone !== null
+                    ? ['user_id' => $userId, 'phone' => $phone]
+                    : ['user_id' => $userId, 'email' => $email];
+
+                $contact = Contact::updateOrCreate($key, $attributes);
 
                 if ($contact->wasRecentlyCreated) {
                     $imported++;

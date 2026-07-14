@@ -206,13 +206,14 @@ class ContactController extends Controller
             // without it, accented Latin or Yoruba diacritics render as
             // "Olu Adu00e9báyò" — a frequent operator complaint.
             fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['phone', 'name', 'custom_field_1', 'custom_field_2']);
+            fputcsv($out, ['phone', 'email', 'name', 'custom_field_1', 'custom_field_2']);
             // Sample rows. Three rows give the operator a clear visual
             // pattern (header + 1 = "is this how I fill it?"; +2-3 confirms
-            // delimiters and column count).
-            fputcsv($out, ['+2348012345678', 'Adebayo Okonkwo',  'Lagos',  'VIP']);
-            fputcsv($out, ['+2347098765432', 'Chiamaka Nwosu',   'Abuja',  '']);
-            fputcsv($out, ['08056781234',    'Tunde Bello',      'Ibadan', 'NewLead']);
+            // delimiters and column count). The last row is email-only — a
+            // prospect with no phone (valid now that phone is optional).
+            fputcsv($out, ['+2348012345678', 'adebayo@example.com', 'Adebayo Okonkwo',  'Lagos',  'VIP']);
+            fputcsv($out, ['+2347098765432', '',                    'Chiamaka Nwosu',   'Abuja',  '']);
+            fputcsv($out, ['',               'tunde@example.com',   'Tunde Bello',      'Ibadan', 'NewLead']);
             fclose($out);
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
@@ -299,12 +300,17 @@ class ContactController extends Controller
     public function update(Request $request, string $id): RedirectResponse
     {
         $validated = $request->validate([
-            'phone' => ['required', 'string', 'max:20'],
+            'phone' => ['nullable', 'string', 'max:20', 'required_without:email'],
+            'email' => ['nullable', 'email', 'max:255', 'required_without:phone'],
             'name' => ['nullable', 'string', 'max:255'],
         ]);
 
         $contact = Contact::findOrFail($id);
-        $contact->update($validated);
+        // Phone is read-only in the form; keep the existing value regardless.
+        $contact->update([
+            'email' => $validated['email'] ?? null,
+            'name' => $validated['name'] ?? $contact->name,
+        ]);
 
         return redirect()->back()->with('success', 'Contact updated successfully.');
     }

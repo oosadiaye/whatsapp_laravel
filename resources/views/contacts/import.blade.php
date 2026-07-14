@@ -45,6 +45,7 @@
                     @csrf
                     <input type="hidden" name="group_id" :value="groupId">
                     <input type="hidden" name="column_map[phone]" :value="columnMap.phone">
+                    <input type="hidden" name="column_map[email]" :value="columnMap.email">
                     <input type="hidden" name="column_map[name]" :value="columnMap.name">
                     <input type="hidden" name="column_map[custom_field_1]" :value="columnMap.custom_field_1">
                     <input type="hidden" name="column_map[custom_field_2]" :value="columnMap.custom_field_2">
@@ -163,14 +164,25 @@
                             <template x-if="csvHeaders.length > 0">
                                 <div class="space-y-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Phone Column') }} <span class="text-red-500">*</span></label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Phone Column') }}</label>
                                         <select x-model="columnMap.phone"
                                                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
-                                            <option value="">{{ __('-- Select column --') }}</option>
+                                            <option value="">{{ __('-- None --') }}</option>
                                             <template x-for="(header, idx) in csvHeaders" :key="idx">
                                                 <option :value="header" x-text="header"></option>
                                             </template>
                                         </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Email Column') }}</label>
+                                        <select x-model="columnMap.email"
+                                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
+                                            <option value="">{{ __('-- None --') }}</option>
+                                            <template x-for="(header, idx) in csvHeaders" :key="idx">
+                                                <option :value="header" x-text="header"></option>
+                                            </template>
+                                        </select>
+                                        <p class="mt-1 text-xs text-gray-400">{{ __('Map a phone, an email, or both. Each row needs at least one.') }}</p>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Name Column') }}</label>
@@ -328,6 +340,7 @@
                 totalRows: 0,
                 columnMap: {
                     phone: '',
+                    email: '',
                     name: '',
                     custom_field_1: '',
                     custom_field_2: '',
@@ -338,7 +351,8 @@
                         return this.inputMode === 'file' ? !!this.fileName : this.manualInput.trim().length > 0;
                     }
                     if (this.step === 2) {
-                        return this.columnMap.phone !== '';
+                        // A phone OR an email column must be mapped.
+                        return this.columnMap.phone !== '' || this.columnMap.email !== '';
                     }
                     return true;
                 },
@@ -414,11 +428,14 @@
                     }
                     this.totalRows = this.csvRows.length;
 
-                    // Auto-detect phone and name columns
+                    // Auto-detect phone, email and name columns
                     this.csvHeaders.forEach((header, idx) => {
                         const h = header.toLowerCase().trim();
                         if (h.includes('phone') || h.includes('number') || h.includes('wa') || h.includes('mobile')) {
                             this.columnMap.phone = header;
+                        }
+                        if (h.includes('email') || h.includes('e-mail') || h === 'mail') {
+                            this.columnMap.email = header;
                         }
                         if (h.includes('name') && !h.includes('last') && !h.includes('first')) {
                             this.columnMap.name = header;
