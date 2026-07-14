@@ -10,9 +10,25 @@ feature rides the **Africa's Talking Voice API** (Voice XML actions:
 ## The gate
 > **Nothing in Phase 1–4 ships to production before Phase 0 is green.** Every
 > feature here assumes the AT integration actually works end-to-end. Today it is
-> *unverified* (webhook signature scheme, hangup mechanism, and callback field
-> names are doc-guesses — see `docs/AFRICASTALKING-VERIFICATION.md`). Building
-> IVR/recording/transfer on an unproven base means debugging two layers at once.
+> *unverified* (hangup mechanism + callback field names are doc-guesses — see
+> `docs/AFRICASTALKING-VERIFICATION.md`). Building IVR/recording/transfer on an
+> unproven base means debugging two layers at once.
+
+## Build status (2026-07 — code done, live-unverified)
+Most of Phase 1–4 is now **built to spec and flag-gated OFF**, pending live
+verification (checklist §11 + `docs/CALL-FLOW.md`):
+- **P0 hardening:** webhook auth rebuilt (secret path segment, fail-closed) +
+  throttle + IP allowlist; `provider_session_id` now unique; reliable hangup via
+  a retried job (endpoint still unverified); TURN wired.
+- **P1 recording:** done — browser records → Gemini transcript/summary (see
+  `docs/CALL-WORKSPACE.md`), with retention pruning.
+- **P2 transfer:** **blind** transfer built (flag-gated). Attended not built.
+- **P3 IVR + voicemail + business hours:** built (flag-gated) via `CallFlowRouter`.
+- **P4 wallboard:** basic wallboard built (`/wallboard`).
+- **Queue:** `<Enqueue>` built; dequeue/agent-pull not built.
+
+The remaining work is **live verification** (flip each flag, walk the checklist)
+plus the explicitly-unbuilt pieces above — not net-new construction.
 
 ## Dependency graph
 ```

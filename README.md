@@ -89,6 +89,17 @@ See **[docs/CALL-WORKSPACE.md](docs/CALL-WORKSPACE.md)** for enabling it:
 `GEMINI_API_KEY`, `VOICE_CALL_RECORDING_ENABLED`, ffmpeg (for Chrome), retention,
 and an end-to-end verification checklist.
 
+## Voice / telephony (Africa's Talking)
+
+Inbound call-flow — **business hours → IVR → agent / queue / voicemail** — plus
+blind call transfer and a live wallboard. All **off by default** and pending
+live verification against a real AT number.
+
+- **[docs/CALL-FLOW.md](docs/CALL-FLOW.md)** — enable each feature (flags + config).
+- **[docs/AFRICASTALKING-VERIFICATION.md](docs/AFRICASTALKING-VERIFICATION.md)** —
+  the live-verification checklist (walk it before turning anything on).
+- **[docs/VOICE-ROADMAP.md](docs/VOICE-ROADMAP.md)** — build status + what's left.
+
 ---
 
 ## Project structure
