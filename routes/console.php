@@ -10,6 +10,10 @@ Artisan::command('inspire', function () {
 
 Schedule::command('campaigns:dispatch-scheduled')->everyMinute()->withoutOverlapping();
 
+// Automated email schedules: launch due scheduled email campaigns + re-arm
+// recurring ones (daily/weekly/monthly).
+Schedule::command('email:dispatch-scheduled')->everyMinute()->withoutOverlapping();
+
 // Pull fresh template state from Meta so PENDING → APPROVED transitions
 // surface in the UI without manual re-syncing. Cheap call, well below
 // Meta's 200/hour rate limit per WABA.
