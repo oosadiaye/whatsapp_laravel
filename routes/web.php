@@ -36,6 +36,12 @@ Route::middleware([
         ->name('webhook.africastalking.voice');
 });
 
+// Public one-click email unsubscribe. Signed URL (tamper-proof); every campaign
+// email footer links here. No auth — recipients aren't users.
+Route::get('/email/unsubscribe', [\App\Http\Controllers\UnsubscribeController::class, 'show'])
+    ->middleware('signed')
+    ->name('email.unsubscribe');
+
 // Authenticated routes — role/permission gates per resource group
 Route::middleware(['auth', 'verified'])->group(function () {
 

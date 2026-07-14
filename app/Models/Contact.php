@@ -32,6 +32,7 @@ class Contact extends Model
     protected $fillable = [
         'user_id',
         'phone',
+        'email',
         'name',
         'custom_fields',
         'is_active',
