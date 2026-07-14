@@ -34,6 +34,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'webhooks/whatsapp/*',
             'webhooks/africastalking/*',
+            // RFC 8058 one-click unsubscribe POSTs here; it's protected by the
+            // signed-URL middleware instead of a CSRF token.
+            'email/unsubscribe',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

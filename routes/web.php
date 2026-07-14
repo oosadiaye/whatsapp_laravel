@@ -37,8 +37,10 @@ Route::middleware([
 });
 
 // Public one-click email unsubscribe. Signed URL (tamper-proof); every campaign
-// email footer links here. No auth — recipients aren't users.
-Route::get('/email/unsubscribe', [\App\Http\Controllers\UnsubscribeController::class, 'show'])
+// email footer links here + a List-Unsubscribe header. GET for the footer link,
+// POST for RFC 8058 one-click (CSRF-exempt in bootstrap/app.php). No auth —
+// recipients aren't users.
+Route::match(['get', 'post'], '/email/unsubscribe', [\App\Http\Controllers\UnsubscribeController::class, 'show'])
     ->middleware('signed')
     ->name('email.unsubscribe');
 
