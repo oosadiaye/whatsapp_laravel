@@ -76,6 +76,13 @@ class RolesAndPermissionsSeeder extends Seeder
             'campaigns.launch',
             'campaigns.cancel',
 
+            // Email campaigns (bulk email to prospects)
+            'email.view',
+            'email.create',
+            'email.edit',
+            'email.delete',
+            'email.send',
+
             // Conversations / chat (Phases 13-14)
             'conversations.view_all',     // see everyone's chats
             'conversations.view_assigned', // see only assigned-to-me

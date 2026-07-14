@@ -105,7 +105,7 @@
             </div>
 
             {{-- Section: Messaging --}}
-            @canany(['campaigns.view', 'templates.view'])
+            @canany(['campaigns.view', 'email.view', 'templates.view'])
                 <div>
                     <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('Messaging') }}</h3>
                     <div class="space-y-1">
@@ -115,6 +115,15 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46"/>
                                 </svg>
                                 {{ __('Campaigns') }}
+                            </x-sidebar-link>
+                        @endcan
+
+                        @can('email.view')
+                            <x-sidebar-link :href="route('email-campaigns.index')" :active="request()->routeIs('email-campaigns.*')">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/>
+                                </svg>
+                                {{ __('Email') }}
                             </x-sidebar-link>
                         @endcan
 

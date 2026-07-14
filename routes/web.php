@@ -160,6 +160,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/campaigns/{campaign}', [CampaignController::class, 'destroy'])->name('campaigns.destroy');
     });
 
+    // ─── Email Campaigns (bulk email to prospects) ─────────────────────────
+    // Static routes before {emailCampaign} wildcards.
+    Route::middleware('permission:email.create')->group(function () {
+        Route::get('/email-campaigns/create', [\App\Http\Controllers\EmailCampaignController::class, 'create'])->name('email-campaigns.create');
+        Route::post('/email-campaigns', [\App\Http\Controllers\EmailCampaignController::class, 'store'])->name('email-campaigns.store');
+    });
+    Route::middleware('permission:email.view')->group(function () {
+        Route::get('/email-campaigns', [\App\Http\Controllers\EmailCampaignController::class, 'index'])->name('email-campaigns.index');
+        Route::get('/email-campaigns/{emailCampaign}', [\App\Http\Controllers\EmailCampaignController::class, 'show'])->name('email-campaigns.show');
+    });
+    Route::middleware('permission:email.edit')->group(function () {
+        Route::get('/email-campaigns/{emailCampaign}/edit', [\App\Http\Controllers\EmailCampaignController::class, 'edit'])->name('email-campaigns.edit');
+        Route::put('/email-campaigns/{emailCampaign}', [\App\Http\Controllers\EmailCampaignController::class, 'update'])->name('email-campaigns.update');
+    });
+    Route::middleware('permission:email.send')->group(function () {
+        Route::post('/email-campaigns/{emailCampaign}/launch', [\App\Http\Controllers\EmailCampaignController::class, 'launch'])->name('email-campaigns.launch');
+        Route::post('/email-campaigns/{emailCampaign}/cancel', [\App\Http\Controllers\EmailCampaignController::class, 'cancel'])->name('email-campaigns.cancel');
+    });
+    Route::middleware('permission:email.delete')->group(function () {
+        Route::delete('/email-campaigns/{emailCampaign}', [\App\Http\Controllers\EmailCampaignController::class, 'destroy'])->name('email-campaigns.destroy');
+    });
+
     // ─── Conversations / Chat (Phase 13/14) ────────────────────────────────
     Route::middleware('role_or_permission:conversations.view_all|conversations.view_assigned')->group(function () {
         Route::get('/conversations', [ConversationController::class, 'index'])->name('conversations.index');
