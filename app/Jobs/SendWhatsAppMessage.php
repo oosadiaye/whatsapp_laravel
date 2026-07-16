@@ -277,26 +277,14 @@ class SendWhatsAppMessage implements ShouldQueue
     }
 
     /**
-     * Map a positional template variable ({{1}}, {{2}}, ...) to a contact field.
-     * Mirrors the existing personalization order — name, phone, first_name,
-     * custom_field_1, then a sane default.
+     * Map a positional template variable ({{1}}, {{2}}, ...) to a contact field
+     * via the shared, config-driven {@see \App\Support\Personalizer} — the same
+     * resolver the freeform path uses, so the two can't drift. Order lives in
+     * config/personalization.php.
      */
     private function resolveTemplateVariable(int $position): string
     {
-        return match ($position) {
-            1 => $this->contact->name ?? $this->contact->phone,
-            2 => $this->contact->phone,
-            3 => $this->firstName($this->contact->name ?? ''),
-            4 => (string) ($this->contact->custom_fields['custom_field_1'] ?? ''),
-            default => '',
-        };
-    }
-
-    private function firstName(string $fullName): string
-    {
-        $parts = preg_split('/\s+/', trim($fullName));
-
-        return $parts[0] ?? '';
+        return (new \App\Support\Personalizer())->positional($this->contact, $position);
     }
 
     /**

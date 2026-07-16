@@ -145,25 +145,14 @@ class ContactImportService
     }
 
     /**
-     * Replace personalization tokens in a message template with contact data.
+     * Replace named personalization tokens in a freeform message with contact
+     * data. Delegates to the shared {@see \App\Support\Personalizer} so the field
+     * resolution matches the WhatsApp-template path. Kept as a method for
+     * backward-compatible call sites.
      */
     public function personalizeMessage(string $template, Contact $contact, string $campaignName = ''): string
     {
-        $name = $contact->name ?? 'Friend';
-        $firstName = explode(' ', $name)[0];
-        $customFields = $contact->custom_fields ?? [];
-
-        $replacements = [
-            '{{name}}' => $name,
-            '{{phone}}' => $contact->phone,
-            '{{first_name}}' => $firstName,
-            '{{custom_field_1}}' => $customFields['custom_field_1'] ?? '',
-            '{{custom_field_2}}' => $customFields['custom_field_2'] ?? '',
-            '{{date}}' => now()->format('d F Y'),
-            '{{campaign_name}}' => $campaignName,
-        ];
-
-        return str_replace(array_keys($replacements), array_values($replacements), $template);
+        return (new \App\Support\Personalizer())->named($contact, $template, $campaignName);
     }
 
     /**
