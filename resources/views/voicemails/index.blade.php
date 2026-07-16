@@ -32,7 +32,7 @@
                             </p>
                         </div>
                         @if($vm->recording_url)
-                            <audio controls preload="none" class="h-9 max-w-[220px]" src="{{ $vm->recording_url }}"></audio>
+                            <audio controls preload="none" class="h-9 max-w-[220px]" src="{{ route('voicemails.download', $vm) }}"></audio>
                         @endif
                         @unless($vm->is_heard)
                             <form method="POST" action="{{ route('voicemails.markHeard', $vm) }}">

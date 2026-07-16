@@ -27,10 +27,13 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
      */
     protected function gate(): void
     {
-        Gate::define('viewHorizon', function ($user = null) {
-            return in_array(optional($user)->email, [
-                //
-            ]);
+        // Role-based, not an email allowlist. The empty allowlist previously
+        // 403'd EVERYONE in production (Horizon's dashboard was unreachable);
+        // super_admins/admins are the operators who need it.
+        Gate::define('viewHorizon', function ($user = null): bool {
+            return $user !== null
+                && method_exists($user, 'hasAnyRole')
+                && $user->hasAnyRole([\App\Models\User::ROLE_SUPER_ADMIN, \App\Models\User::ROLE_ADMIN]);
         });
     }
 }

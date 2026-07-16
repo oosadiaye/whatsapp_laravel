@@ -272,10 +272,18 @@ class ContactController extends Controller
                 continue;
             }
 
-            $contact = Contact::updateOrCreate(
-                ['user_id' => $userId, 'phone' => $phone],
-                ['name' => trim($parts[1] ?? ''), 'is_active' => true],
-            );
+            // Preserve an existing contact's is_active on re-import — a manual
+            // re-paste must NOT silently re-activate someone who was opted out /
+            // deactivated. Only default is_active=true for genuinely new rows.
+            $contact = Contact::firstOrNew(['user_id' => $userId, 'phone' => $phone]);
+            if (! $contact->exists) {
+                $contact->is_active = true;
+            }
+            $name = trim($parts[1] ?? '');
+            if ($name !== '') {
+                $contact->name = $name;
+            }
+            $contact->save();
 
             $group->contacts()->syncWithoutDetaching([$contact->id]);
             $imported++;

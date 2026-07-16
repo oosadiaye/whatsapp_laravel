@@ -208,6 +208,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Voicemail inbox (inbound callers who left a message).
         Route::get('/voicemails', [\App\Http\Controllers\VoicemailController::class, 'index'])
             ->name('voicemails.index');
+        // Auth-gated recording proxy — never exposes the raw AT URL to the browser.
+        Route::get('/voicemails/{voicemail}/recording', [\App\Http\Controllers\VoicemailController::class, 'download'])
+            ->name('voicemails.download');
         Route::post('/voicemails/{voicemail}/heard', [\App\Http\Controllers\VoicemailController::class, 'markHeard'])
             ->name('voicemails.markHeard');
     });

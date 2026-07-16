@@ -92,13 +92,26 @@ class WhatsAppInstance extends Model
     }
 
     /**
-     * True when the instance has every credential needed to talk to Meta.
-     * False during the brief window between create and credential validation.
+     * True when the instance can SEND via the Cloud API. Sending needs only the
+     * access token (+ ids) — deliberately NOT app_secret, since app_secret is a
+     * webhook-signing concern; requiring it here would block a send-only setup.
      */
     public function isReady(): bool
     {
         return filled($this->waba_id)
             && filled($this->phone_number_id)
             && filled($this->access_token);
+    }
+
+    /**
+     * True when the instance can also RECEIVE: inbound messages, delivery
+     * receipts, and call webhooks are HMAC-signed with app_secret, and
+     * CloudWebhookController fails closed (HTTP 403) without it. An instance
+     * that isReady() but not this one sends fine but silently drops everything
+     * inbound — the settings page warns about exactly this.
+     */
+    public function isWebhookReady(): bool
+    {
+        return $this->isReady() && filled($this->app_secret);
     }
 }

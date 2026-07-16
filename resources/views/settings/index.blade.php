@@ -18,8 +18,11 @@
             ? '<span class="text-emerald-600">&#10003;</span>'
             : '<span class="text-gray-300">&#10007;</span>';
 
-        // WhatsApp (single instance) health.
-        $waReady = $instance !== null && $instance->isReady();
+        // WhatsApp (single instance) health. "Connected" requires webhook-
+        // readiness (all four creds) so the badge doesn't claim green while
+        // inbound is silently broken for want of the App Secret.
+        $waSendReady = $instance !== null && $instance->isReady();
+        $waReady = $instance !== null && $instance->isWebhookReady();
         $waStarted = $instance !== null;
         $waHealth = $waReady
             ? ['dot' => 'bg-emerald-500', 'text' => 'text-emerald-600', 'label' => __('Connected')]
@@ -29,6 +32,8 @@
         $webhookUrl = $instance ? route('webhook.cloud.handle', $instance) : null;
         $waTokenSet = $instance && filled($instance->getRawOriginal('access_token'));
         $waSecretSet = $instance && filled($instance->getRawOriginal('app_secret'));
+        // Send-ready but no app secret → inbound webhooks will 403 silently.
+        $waSecretMissing = $waSendReady && ! $waSecretSet;
     @endphp
 
     <div class="py-6 max-w-6xl mx-auto sm:px-6 lg:px-8">
@@ -109,6 +114,15 @@
                                 <p class="mt-1 text-xs text-gray-500">{{ __('Verifies inbound webhook signatures. Leave blank to keep.') }}</p>
                             </div>
                         </div>
+                        @if($waSecretMissing)
+                            <div class="px-6 pb-4">
+                                <div class="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-xs text-red-700">
+                                    <span class="font-bold">{{ __('App Secret missing.') }}</span>
+                                    {{ __('Sending works, but every inbound webhook (delivery receipts, replies, calls) is rejected with HTTP 403 until you add it. Message statuses and the inbox will not update.') }}
+                                </div>
+                            </div>
+                        @endif
+
                         {{-- Webhook URL to paste into Meta --}}
                         <div class="px-6 pb-6 border-t border-gray-100 pt-4">
                             @if($webhookUrl)
