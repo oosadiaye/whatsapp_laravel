@@ -194,7 +194,7 @@ class AfricasTalkingVoiceService
             'apiKey' => $apiKey,
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
-        ])->post(self::WEBRTC_TOKEN_URL, [
+        ])->timeout(10)->connectTimeout(5)->post(self::WEBRTC_TOKEN_URL, [
             'username' => $username,
             'clientName' => $clientName,
             'phoneNumber' => $phoneNumber,
@@ -244,9 +244,11 @@ class AfricasTalkingVoiceService
             throw new ConfigurationException("Africa's Talking API key not configured.");
         }
 
+        // Audit L8: cap outbound AT REST latency so a slow/hung endpoint can't
+        // stall a web request or tie up a queue worker indefinitely.
         return Http::withHeaders([
             'apiKey' => $apiKey,
             'Accept' => 'application/json',
-        ]);
+        ])->timeout(10)->connectTimeout(5);
     }
 }

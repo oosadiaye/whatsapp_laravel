@@ -82,7 +82,16 @@ return [
                     'scheme' => env('REVERB_SCHEME', 'https'),
                     'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
                 ],
-                'allowed_origins' => ['*'],
+                // Audit M9: don't accept WebSocket upgrades from any origin.
+                // Defaults to the app's own host; override with a comma-separated
+                // REVERB_ALLOWED_ORIGINS list (use "*" only for local dev).
+                'allowed_origins' => array_values(array_filter(array_map(
+                    'trim',
+                    explode(',', (string) env(
+                        'REVERB_ALLOWED_ORIGINS',
+                        parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST) ?: 'localhost',
+                    )),
+                ))),
                 'ping_interval' => env('REVERB_APP_PING_INTERVAL', 60),
                 'activity_timeout' => env('REVERB_APP_ACTIVITY_TIMEOUT', 30),
                 'max_connections' => env('REVERB_APP_MAX_CONNECTIONS'),

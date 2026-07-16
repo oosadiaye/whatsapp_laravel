@@ -95,7 +95,7 @@ class CampaignController extends Controller
             // show page without re-creating the campaign.
             if ($campaign->header_media_url) {
                 try {
-                    $response = Http::timeout(5)->withOptions(['verify' => false])->head($campaign->header_media_url);
+                    $response = Http::timeout(5)->head($campaign->header_media_url);
                     if ($response->failed()) {
                         return redirect()
                             ->route('campaigns.show', $campaign)
@@ -204,7 +204,6 @@ class CampaignController extends Controller
     {
         try {
             $response = Http::timeout(3)
-                ->withOptions(['verify' => false])
                 ->head($url);
 
             if ($response->failed()) {
@@ -327,7 +326,7 @@ class CampaignController extends Controller
         if ($request->validated('status') === 'QUEUED' && $campaign->status === 'DRAFT') {
             if ($campaign->header_media_url) {
                 try {
-                    $response = Http::timeout(5)->withOptions(['verify' => false])->head($campaign->header_media_url);
+                    $response = Http::timeout(5)->head($campaign->header_media_url);
                     if ($response->failed()) {
                         return redirect()
                             ->route('campaigns.show', $campaign)
@@ -444,7 +443,6 @@ class CampaignController extends Controller
         if ($campaign->header_media_url && ! app()->runningUnitTests()) {
             try {
                 $response = Http::timeout(5)
-                    ->withOptions(['verify' => false])
                     ->head($campaign->header_media_url);
 
                 if ($response->failed()) {

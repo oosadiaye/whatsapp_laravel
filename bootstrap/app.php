@@ -12,6 +12,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Behind nginx / a load balancer the app only ever sees the proxy's IP
+        // and scheme. Trust the proxy so the client's real IP + scheme are
+        // restored — required for the webhook source-IP allowlist
+        // (AllowedWebhookIps), correct HTTPS detection (secure cookies, HSTS,
+        // generated URLs), and IP-keyed login throttling (audit H5). The app is
+        // only reachable through the proxy in the documented topology, so trust
+        // all; pin to the LB CIDR here if that ever changes.
+        $middleware->trustProxies(at: '*');
+
         // Log out users deactivated mid-session on their next request.
         $middleware->appendToGroup('web', \App\Http\Middleware\EnsureUserIsActive::class);
 
