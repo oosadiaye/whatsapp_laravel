@@ -275,7 +275,10 @@ class ContactController extends Controller
             // Preserve an existing contact's is_active on re-import — a manual
             // re-paste must NOT silently re-activate someone who was opted out /
             // deactivated. Only default is_active=true for genuinely new rows.
-            $contact = Contact::firstOrNew(['user_id' => $userId, 'phone' => $phone]);
+            // IncludingTrashed revives a soft-deleted match rather than hitting
+            // the unversioned unique index (see Contact::firstOrNewIncludingTrashed);
+            // a revived row is `exists`, so its is_active is left untouched.
+            $contact = Contact::firstOrNewIncludingTrashed(['user_id' => $userId, 'phone' => $phone]);
             if (! $contact->exists) {
                 $contact->is_active = true;
             }

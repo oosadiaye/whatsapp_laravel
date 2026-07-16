@@ -228,7 +228,9 @@ class InboundCallProcessor
         string $phone,
         ?string $whatsappProfileName,
     ): Contact {
-        return Contact::firstOrCreate(
+        // IncludingTrashed: revive a soft-deleted contact rather than crash on
+        // the unversioned unique index (see Contact::firstOrNewIncludingTrashed).
+        return Contact::firstOrCreateIncludingTrashed(
             ['user_id' => $instance->user_id, 'phone' => $phone],
             ['name' => $whatsappProfileName ?? $phone, 'is_active' => true],
         );

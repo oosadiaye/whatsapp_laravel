@@ -73,6 +73,42 @@ class ContactImportServiceTest extends TestCase
         $this->assertSame(0, $result['invalid']);
     }
 
+    public function test_reimporting_a_soft_deleted_contact_revives_it_instead_of_crashing(): void
+    {
+        // Production-Audit blocker B1: a plain updateOrCreate on a soft-deleted
+        // (user_id, phone) used to throw a QueryException on the unversioned
+        // unique index, killing the import mid-batch. It must revive + update.
+        Storage::fake('local');
+
+        $admin = User::factory()->create(['is_active' => true]);
+        $group = ContactGroup::create(['user_id' => $admin->id, 'name' => 'Targets']);
+
+        $deleted = Contact::create([
+            'user_id' => $admin->id,
+            'phone' => '2348012345678',
+            'name' => 'Before Delete',
+        ]);
+        $deleted->delete();
+
+        $csv = "phone,name\n+2348012345678,After Reimport\n";
+        $diskKey = UploadedFile::fake()->createWithContent('contacts.csv', $csv)->store('imports');
+
+        $result = (new ContactImportService())->importFromFile(
+            $diskKey,
+            $group->id,
+            ['phone' => 'phone', 'name' => 'name'],
+            $admin->id,
+        );
+
+        // Row revived + updated, not duplicated, and the batch completed.
+        $this->assertSame(1, Contact::withTrashed()->where('phone', '2348012345678')->count());
+        $revived = Contact::where('phone', '2348012345678')->first();
+        $this->assertNotNull($revived);
+        $this->assertSame($deleted->id, $revived->id);
+        $this->assertSame('After Reimport', $revived->name);
+        $this->assertTrue($group->contacts()->where('contact_id', $revived->id)->exists());
+    }
+
     public function test_import_still_accepts_absolute_path_for_backward_compat(): void
     {
         // Existing callers (and direct CLI usage) may already be passing

@@ -47,6 +47,72 @@ class Contact extends Model
     }
 
     /**
+     * Soft-delete-safe analogue of firstOrNew(): resolve a contact by its
+     * unique key, transparently reviving a soft-deleted match.
+     *
+     * WHY THIS EXISTS: `contacts` combines softDeletes() with a plain
+     * unique(user_id, phone) index. Eloquent's SoftDeletes global scope hides
+     * trashed rows from an ordinary lookup, but the DATABASE unique constraint
+     * is NOT scoped to deleted_at — so a plain firstOrCreate/updateOrCreate/
+     * firstOrNew would miss a trashed row and then hit the unique constraint on
+     * insert, throwing an uncaught QueryException. In the inbound webhook paths
+     * that 500s the request and silently loses the message/call. Because the
+     * unique index counts trashed rows, at most one row can match a key, so we
+     * always look WITH trashed and restore it if needed.
+     *
+     * @param  array<string, mixed>  $attributes  the unique lookup key
+     */
+    public static function firstOrNewIncludingTrashed(array $attributes): self
+    {
+        $contact = static::withTrashed()->where($attributes)->first();
+
+        if ($contact === null) {
+            return new static($attributes);
+        }
+
+        if ($contact->trashed()) {
+            $contact->restore();
+        }
+
+        return $contact;
+    }
+
+    /**
+     * Soft-delete-safe firstOrCreate(): values are applied only when creating a
+     * new row (an existing/revived contact is returned untouched), matching
+     * Eloquent's firstOrCreate semantics. See {@see firstOrNewIncludingTrashed}.
+     *
+     * @param  array<string, mixed>  $attributes  the unique lookup key
+     * @param  array<string, mixed>  $values      applied only on create
+     */
+    public static function firstOrCreateIncludingTrashed(array $attributes, array $values = []): self
+    {
+        $contact = static::firstOrNewIncludingTrashed($attributes);
+
+        if (! $contact->exists) {
+            $contact->fill($values)->save();
+        }
+
+        return $contact;
+    }
+
+    /**
+     * Soft-delete-safe updateOrCreate(): values are always applied (revived rows
+     * are updated), matching Eloquent's updateOrCreate semantics.
+     * See {@see firstOrNewIncludingTrashed}.
+     *
+     * @param  array<string, mixed>  $attributes  the unique lookup key
+     * @param  array<string, mixed>  $values      applied on both create and update
+     */
+    public static function updateOrCreateIncludingTrashed(array $attributes, array $values = []): self
+    {
+        $contact = static::firstOrNewIncludingTrashed($attributes);
+        $contact->fill($values)->save();
+
+        return $contact;
+    }
+
+    /**
      * Display name fallback chain: explicit name → phone number.
      *
      * Why this isn't just `$contact->name ?? $contact->phone` everywhere:

@@ -167,6 +167,37 @@ class InboundMessageProcessingTest extends TestCase
         $this->assertSame('Already Known', $existingContact->fresh()->name);
     }
 
+    public function test_inbound_message_from_soft_deleted_contact_revives_it_without_crashing(): void
+    {
+        // Production-Audit blocker B1: a previously-deleted number messaging in
+        // again used to 500 the webhook (uncaught QueryException on the
+        // unversioned unique index), silently losing the inbound message.
+        $instance = WhatsAppInstance::factory()->create(['app_secret' => 'SECRET']);
+        $contact = Contact::create([
+            'user_id' => $instance->user_id,
+            'phone' => '2348088888888',
+            'name' => 'Deleted Person',
+        ]);
+        $contact->delete();
+        $this->assertSoftDeleted('contacts', ['id' => $contact->id]);
+
+        $this->postWithSignature($instance, $this->messagePayload($instance->phone_number_id, [[
+            'from' => '2348088888888',
+            'id' => 'wamid.after_delete',
+            'timestamp' => '1714000000',
+            'type' => 'text',
+            'text' => ['body' => 'I am back'],
+        ]]), 'SECRET')->assertOk();
+
+        // Same row revived (not duplicated), and the message was not lost.
+        $this->assertSame(1, Contact::withTrashed()->where('phone', '2348088888888')->count());
+        $revived = Contact::where('phone', '2348088888888')->first();
+        $this->assertNotNull($revived, 'the soft-deleted contact must be revived, not left trashed');
+        $this->assertSame($contact->id, $revived->id);
+        $this->assertNull($revived->deleted_at);
+        $this->assertSame('I am back', ConversationMessage::first()->body);
+    }
+
     public function test_message_without_id_is_silently_skipped(): void
     {
         // Defensive: malformed Meta payloads shouldn't crash the webhook.

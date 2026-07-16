@@ -136,7 +136,10 @@ class InboundMessageProcessor
     ): Contact {
         // user_id of the contact = owner of the instance. Each customer's
         // contacts are siloed by user_id throughout the rest of the app.
-        return Contact::firstOrCreate(
+        // IncludingTrashed: a previously-deleted number messaging in again must
+        // revive its row, not crash on the unversioned unique index (see
+        // Contact::firstOrNewIncludingTrashed).
+        return Contact::firstOrCreateIncludingTrashed(
             ['user_id' => $instance->user_id, 'phone' => $phone],
             ['name' => $whatsappProfileName ?? $phone, 'is_active' => true],
         );

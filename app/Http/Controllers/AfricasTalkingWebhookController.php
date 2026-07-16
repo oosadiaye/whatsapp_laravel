@@ -127,7 +127,10 @@ class AfricasTalkingWebhookController extends Controller
         // per ContactImportService::normalizePhone convention).
         $phoneDigits = ltrim($callerPhone, '+');
 
-        $contact = Contact::firstOrCreate(
+        // IncludingTrashed: an inbound call from a previously-deleted number
+        // must revive the contact, not 500 on the unversioned unique index
+        // (see Contact::firstOrNewIncludingTrashed).
+        $contact = Contact::firstOrCreateIncludingTrashed(
             [
                 'user_id' => $instance->user_id,
                 'phone' => $phoneDigits,

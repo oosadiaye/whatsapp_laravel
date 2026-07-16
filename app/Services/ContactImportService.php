@@ -82,7 +82,10 @@ class ContactImportService
                     ? ['user_id' => $userId, 'phone' => $phone]
                     : ['user_id' => $userId, 'email' => $email];
 
-                $contact = Contact::updateOrCreate($key, $attributes);
+                // IncludingTrashed: re-importing a previously-deleted contact
+                // revives + updates it instead of dying on the unversioned
+                // unique index mid-batch (see Contact::firstOrNewIncludingTrashed).
+                $contact = Contact::updateOrCreateIncludingTrashed($key, $attributes);
 
                 if ($contact->wasRecentlyCreated) {
                     $imported++;
