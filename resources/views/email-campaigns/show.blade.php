@@ -50,6 +50,18 @@
                                 <button type="submit" class="px-4 py-1.5 text-sm rounded-lg bg-[#4f46e5] text-white font-semibold hover:bg-[#4338ca]">{{ __('Send now') }}</button>
                             </form>
                         @endif
+                        @if($campaign->status === 'scheduled')
+                            <form method="POST" action="{{ route('email-campaigns.pause', $campaign) }}">
+                                @csrf
+                                <button type="submit" class="px-3 py-1.5 text-sm rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50">{{ __('Pause') }}</button>
+                            </form>
+                        @endif
+                        @if($campaign->status === 'paused')
+                            <form method="POST" action="{{ route('email-campaigns.resume', $campaign) }}">
+                                @csrf
+                                <button type="submit" class="px-3 py-1.5 text-sm rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50">{{ __('Resume') }}</button>
+                            </form>
+                        @endif
                         @if(in_array($campaign->status, ['scheduled','queued','sending']))
                             <form method="POST" action="{{ route('email-campaigns.cancel', $campaign) }}" onsubmit="return confirm('Cancel this campaign?')">
                                 @csrf

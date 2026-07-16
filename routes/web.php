@@ -173,8 +173,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/email-campaigns', [\App\Http\Controllers\EmailCampaignController::class, 'store'])->name('email-campaigns.store');
     });
     Route::middleware('permission:email.view')->group(function () {
+        // Suppression list — before the {emailCampaign} wildcard.
+        Route::get('/email-campaigns/suppressions', [\App\Http\Controllers\EmailSuppressionController::class, 'index'])->name('email-suppressions.index');
         Route::get('/email-campaigns', [\App\Http\Controllers\EmailCampaignController::class, 'index'])->name('email-campaigns.index');
         Route::get('/email-campaigns/{emailCampaign}', [\App\Http\Controllers\EmailCampaignController::class, 'show'])->name('email-campaigns.show');
+    });
+    Route::middleware('permission:email.edit')->group(function () {
+        Route::post('/email-campaigns/suppressions', [\App\Http\Controllers\EmailSuppressionController::class, 'store'])->name('email-suppressions.store');
+        Route::delete('/email-campaigns/suppressions/{suppression}', [\App\Http\Controllers\EmailSuppressionController::class, 'destroy'])->name('email-suppressions.destroy');
     });
     Route::middleware('permission:email.edit')->group(function () {
         Route::get('/email-campaigns/{emailCampaign}/edit', [\App\Http\Controllers\EmailCampaignController::class, 'edit'])->name('email-campaigns.edit');
@@ -182,6 +188,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::middleware('permission:email.send')->group(function () {
         Route::post('/email-campaigns/{emailCampaign}/launch', [\App\Http\Controllers\EmailCampaignController::class, 'launch'])->name('email-campaigns.launch');
+        Route::post('/email-campaigns/{emailCampaign}/pause', [\App\Http\Controllers\EmailCampaignController::class, 'pause'])->name('email-campaigns.pause');
+        Route::post('/email-campaigns/{emailCampaign}/resume', [\App\Http\Controllers\EmailCampaignController::class, 'resume'])->name('email-campaigns.resume');
         Route::post('/email-campaigns/{emailCampaign}/cancel', [\App\Http\Controllers\EmailCampaignController::class, 'cancel'])->name('email-campaigns.cancel');
     });
     Route::middleware('permission:email.delete')->group(function () {

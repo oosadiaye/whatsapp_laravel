@@ -121,6 +121,38 @@ class EmailCampaignController extends Controller
         return redirect()->route('email-campaigns.show', $campaign)->with('success', 'Email campaign is sending.');
     }
 
+    public function pause(string $id): RedirectResponse
+    {
+        $campaign = EmailCampaign::findOrFail($id);
+
+        abort_unless(
+            $campaign->status === EmailCampaign::STATUS_SCHEDULED,
+            403,
+            'Only a scheduled campaign can be paused.',
+        );
+
+        $campaign->update(['status' => EmailCampaign::STATUS_PAUSED]);
+
+        return redirect()->route('email-campaigns.show', $campaign)->with('success', 'Email campaign paused.');
+    }
+
+    public function resume(string $id): RedirectResponse
+    {
+        $campaign = EmailCampaign::findOrFail($id);
+
+        abort_unless(
+            $campaign->status === EmailCampaign::STATUS_PAUSED,
+            403,
+            'Only a paused campaign can be resumed.',
+        );
+
+        // Back to scheduled; the cron picks it up (immediately if the time has
+        // already passed).
+        $campaign->update(['status' => EmailCampaign::STATUS_SCHEDULED]);
+
+        return redirect()->route('email-campaigns.show', $campaign)->with('success', 'Email campaign resumed.');
+    }
+
     public function cancel(string $id): RedirectResponse
     {
         $campaign = EmailCampaign::findOrFail($id);

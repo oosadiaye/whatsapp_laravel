@@ -2,6 +2,8 @@
     <x-slot name="header">
         <div class="flex items-center justify-between gap-3 flex-wrap">
             <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('Email Campaigns') }}</h2>
+            <div class="flex items-center gap-2">
+            <a href="{{ route('email-suppressions.index') }}" class="text-sm font-medium text-gray-500 hover:text-gray-700">{{ __('Suppression list') }}</a>
             @can('email.create')
                 <a href="{{ route('email-campaigns.create') }}"
                    class="inline-flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg text-sm font-semibold hover:bg-[#4338ca] transition">
@@ -9,6 +11,7 @@
                     {{ __('New Email Campaign') }}
                 </a>
             @endcan
+            </div>
         </div>
     </x-slot>
 

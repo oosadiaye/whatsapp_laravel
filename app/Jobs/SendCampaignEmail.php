@@ -73,8 +73,15 @@ class SendCampaignEmail implements ShouldQueue
             return;
         }
 
+        $campaign->refresh();
+
+        // A run where nothing sent and at least one failed is a failed run.
+        $status = ($campaign->sent_count === 0 && $campaign->failed_count > 0)
+            ? EmailCampaign::STATUS_FAILED
+            : EmailCampaign::STATUS_SENT;
+
         $campaign->update([
-            'status' => EmailCampaign::STATUS_SENT,
+            'status' => $status,
             'completed_at' => now(),
             'last_run_at' => now(),
         ]);

@@ -25,9 +25,10 @@ class DispatchScheduledEmailCampaigns extends Command
 
     public function handle(EmailCampaignService $service): int
     {
-        // 1. Re-arm finished recurring campaigns for their next run.
+        // 1. Re-arm finished recurring campaigns for their next run. A failed run
+        //    still re-arms — a transient bad run shouldn't kill the schedule.
         EmailCampaign::query()
-            ->where('status', EmailCampaign::STATUS_SENT)
+            ->whereIn('status', [EmailCampaign::STATUS_SENT, EmailCampaign::STATUS_FAILED])
             ->where('recurrence', '!=', EmailCampaign::RECURRENCE_NONE)
             ->whereNotNull('last_run_at')
             ->get()
