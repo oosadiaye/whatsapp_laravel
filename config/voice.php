@@ -219,6 +219,13 @@ return [
         'greeting' => env('VOICE_VOICEMAIL_GREETING',
             'Please leave your message after the tone. Press the hash key when you are done.'),
         'max_length_seconds' => (int) env('VOICE_VOICEMAIL_MAX_LENGTH', 120),
+        // SSRF guard for the recording proxy: only these hosts (https only) are
+        // fetched. Set to whatever host AT actually serves recordings from once
+        // verified live (may be an S3 bucket rather than voice.africastalking.com).
+        'allowed_hosts' => array_values(array_filter(array_map('trim', explode(
+            ',',
+            (string) env('VOICE_RECORDING_ALLOWED_HOSTS', 'voice.africastalking.com'),
+        )))),
     ],
 
 ];

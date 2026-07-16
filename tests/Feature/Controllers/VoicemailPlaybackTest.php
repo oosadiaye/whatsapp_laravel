@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Controllers;
 
+use App\Models\Conversation;
 use App\Models\User;
 use App\Models\Voicemail;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -57,5 +58,46 @@ class VoicemailPlaybackTest extends TestCase
 
         $res->assertSee(route('voicemails.download', $vm), false);
         $res->assertDontSee('voice.africastalking.com/rec/secret.mp3', false);
+    }
+
+    public function test_ssrf_a_non_allowlisted_host_is_rejected_and_never_fetched(): void
+    {
+        Http::fake(); // must not be hit
+        $vm = Voicemail::factory()->create(['recording_url' => 'https://evil.example.com/x.mp3']);
+
+        $this->actingAs($this->admin())->get(route('voicemails.download', $vm))->assertNotFound();
+        Http::assertNothingSent();
+    }
+
+    public function test_agent_cannot_play_a_voicemail_not_assigned_to_them(): void
+    {
+        Http::fake();
+        $agent = User::factory()->create(['is_active' => true]);
+        $agent->assignRole('agent'); // has conversations.view_assigned
+
+        $someoneElse = User::factory()->create(['is_active' => true]);
+        $conv = Conversation::factory()->create(['assigned_to_user_id' => $someoneElse->id]);
+        $vm = Voicemail::factory()->create([
+            'conversation_id' => $conv->id,
+            'recording_url' => 'https://voice.africastalking.com/r.mp3',
+        ]);
+
+        $this->actingAs($agent)->get(route('voicemails.download', $vm))->assertForbidden();
+        Http::assertNothingSent();
+    }
+
+    public function test_agent_can_play_a_voicemail_assigned_to_them(): void
+    {
+        Http::fake(['voice.africastalking.com/*' => Http::response('A', 200, ['Content-Type' => 'audio/mpeg'])]);
+        $agent = User::factory()->create(['is_active' => true]);
+        $agent->assignRole('agent');
+
+        $conv = Conversation::factory()->create(['assigned_to_user_id' => $agent->id]);
+        $vm = Voicemail::factory()->create([
+            'conversation_id' => $conv->id,
+            'recording_url' => 'https://voice.africastalking.com/r.mp3',
+        ]);
+
+        $this->actingAs($agent)->get(route('voicemails.download', $vm))->assertOk();
     }
 }
