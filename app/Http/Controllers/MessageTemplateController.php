@@ -297,6 +297,12 @@ class MessageTemplateController extends Controller
         ];
 
         if ($existing) {
+            // Preserve the operator's local category on re-sync. Meta has only
+            // MARKETING/UTILITY/AUTHENTICATION, so mapping back is lossy — a
+            // 'reminder' template submitted as UTILITY would otherwise silently
+            // become 'transactional' on the next sync. Only the FIRST import
+            // guesses the category from Meta.
+            unset($payload['category']);
             $existing->update($payload);
 
             return 'updated';
