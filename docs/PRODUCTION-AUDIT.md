@@ -4,8 +4,11 @@
 **Scope:** Full application — WhatsApp Cloud API marketing, Africa's Talking voice, bulk email.
 **Method:** Three parallel audits (security · data & performance · deployment/config/reliability), then every Blocker/High claim re-verified by hand against source.
 
-> This is an **audit**, not a set of applied changes. Nothing here has been fixed yet.
-> IDs are stable so you can say e.g. "fix B1, B2, H2, H4".
+> **Resolution (2026-07-16): all findings below — B1, B2, H1–H6, M1–M11, L1–L13 —
+> have been fixed and are covered by regression tests where behaviour changed.**
+> The full suite is green (517 passing). See the `fix(...)`/`perf(...)`/`docs(...)`
+> commits on `main`. The findings are kept here as the record of what was
+> addressed; IDs are stable.
 
 ---
 
