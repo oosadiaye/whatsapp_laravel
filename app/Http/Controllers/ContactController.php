@@ -326,7 +326,16 @@ class ContactController extends Controller
     public function destroy(string $id): RedirectResponse
     {
         $contact = Contact::findOrFail($id);
+
+        // Capture the groups this contact belonged to BEFORE deleting, then
+        // recompute their denormalized contact_count — otherwise the counter
+        // drifts high on every contact deletion.
+        $groups = $contact->groups()->get();
         $contact->delete();
+
+        foreach ($groups as $group) {
+            $group->update(['contact_count' => $group->contacts()->count()]);
+        }
 
         return redirect()->back()->with('success', 'Contact deleted successfully.');
     }

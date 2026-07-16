@@ -68,6 +68,13 @@ return [
     'timezone' => 'UTC',
 
     /*
+    | Business timezone for "today"-style reporting. Timestamps are stored in UTC
+    | (above), but operator-facing day boundaries (e.g. the dashboard's messages-
+    | today count) should follow the business's local day, not UTC midnight.
+    */
+    'business_timezone' => env('APP_BUSINESS_TIMEZONE', 'Africa/Lagos'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------

@@ -24,7 +24,13 @@ class CallClaimed implements ShouldBroadcast
     public function broadcastOn(): PrivateChannel
     {
         // assigned_to_user_id lives on Conversation, not CallLog (Task 4 finding).
-        return new PrivateChannel('user.' . $this->call->conversation->assigned_to_user_id);
+        // Fall back to the placing agent for unassigned (outbound) conversations,
+        // and to 0 so we never broadcast to "user." (null).
+        $userId = (int) ($this->call->conversation?->assigned_to_user_id
+            ?? $this->call->placed_by_user_id
+            ?? 0);
+
+        return new PrivateChannel('user.' . $userId);
     }
 
     public function broadcastAs(): string

@@ -31,7 +31,19 @@ class CallRinging implements ShouldBroadcast
 
     public function broadcastOn(): PrivateChannel
     {
-        return new PrivateChannel('user.' . $this->call->conversation->assigned_to_user_id);
+        return new PrivateChannel('user.' . $this->targetUserId());
+    }
+
+    /**
+     * The agent this call belongs to: the conversation's assignee, else the
+     * agent who placed it (outbound calls are often on an unassigned
+     * conversation). Falls back to 0 so the channel is never "user." (null).
+     */
+    private function targetUserId(): int
+    {
+        return (int) ($this->call->conversation?->assigned_to_user_id
+            ?? $this->call->placed_by_user_id
+            ?? 0);
     }
 
     public function broadcastAs(): string

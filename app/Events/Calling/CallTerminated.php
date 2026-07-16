@@ -23,7 +23,13 @@ class CallTerminated implements ShouldBroadcast
 
     public function broadcastOn(): PrivateChannel
     {
-        return new PrivateChannel('user.' . $this->call->conversation->assigned_to_user_id);
+        // Fall back to the placing agent for unassigned (outbound) conversations,
+        // and to 0 so the channel is never "user." (null).
+        $userId = (int) ($this->call->conversation?->assigned_to_user_id
+            ?? $this->call->placed_by_user_id
+            ?? 0);
+
+        return new PrivateChannel('user.' . $userId);
     }
 
     public function broadcastAs(): string

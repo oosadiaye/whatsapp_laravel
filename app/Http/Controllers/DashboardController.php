@@ -29,7 +29,11 @@ class DashboardController extends Controller
         $totalCampaigns = Campaign::count();
         $totalContacts = Contact::count();
 
-        $messagesToday = MessageLog::whereDate('sent_at', Carbon::today())->count();
+        // "Today" follows the business timezone, not UTC — otherwise messages in
+        // the first hour(s) of the local day fall into the wrong bucket. sent_at
+        // is stored UTC, so compute the local day-start and convert back to UTC.
+        $startOfToday = Carbon::now(config('app.business_timezone'))->startOfDay()->utc();
+        $messagesToday = MessageLog::where('sent_at', '>=', $startOfToday)->count();
 
         $deliveryRate = Campaign::query()
             ->where('sent_count', '>', 0)
