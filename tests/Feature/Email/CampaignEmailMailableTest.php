@@ -63,4 +63,33 @@ class CampaignEmailMailableTest extends TestCase
         $mailable->assertDontSeeInHtml('{{name}}', false);
         $mailable->assertDontSeeInHtml('{{email}}', false);
     }
+
+    public function test_html_in_contact_name_is_escaped_in_the_body(): void
+    {
+        // Audit H1: a contact name is attacker-influenceable free text. It must
+        // be HTML-escaped before substitution into the raw email body, or the
+        // markup is injected verbatim into every email.
+        $mailable = new CampaignEmail(
+            $this->campaign(['body_html' => '<p>Hello {{name}}</p>']),
+            'jane@example.com',
+            '<script>alert(1)</script>',
+        );
+
+        // The raw tag must not survive into the body; the escaped form must.
+        $mailable->assertDontSeeInHtml('<script>alert(1)</script>', false);
+        $mailable->assertSeeInHtml('&lt;script&gt;alert(1)&lt;/script&gt;', false);
+    }
+
+    public function test_subject_still_substitutes_plain_text_without_escaping(): void
+    {
+        // The subject is a plain-text context — an ampersand in a name must stay
+        // a literal '&', not become '&amp;'.
+        $mailable = new CampaignEmail(
+            $this->campaign(['subject' => 'Deal for {{name}}']),
+            'jane@example.com',
+            'Ben & Co',
+        );
+
+        $mailable->assertHasSubject('Deal for Ben & Co');
+    }
 }

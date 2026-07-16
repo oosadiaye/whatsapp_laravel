@@ -41,7 +41,14 @@ class EmailSendPipelineTest extends TestCase
 
     private function campaign(): EmailCampaign
     {
-        $c = EmailCampaign::factory()->create(['user_id' => $this->user->id, 'rate_per_minute' => 600]);
+        // QUEUED mirrors production: EmailCampaignDispatch is only ever dispatched
+        // by EmailCampaignService::launch(), which sets the campaign QUEUED first.
+        // The dispatch job now claims QUEUED->SENDING atomically (audit H2).
+        $c = EmailCampaign::factory()->create([
+            'user_id' => $this->user->id,
+            'rate_per_minute' => 600,
+            'status' => EmailCampaign::STATUS_QUEUED,
+        ]);
         $c->contactGroups()->attach($this->group->id);
 
         return $c;
@@ -113,5 +120,42 @@ class EmailSendPipelineTest extends TestCase
         Mail::assertNothingSent();
         $this->assertSame(EmailCampaign::STATUS_SENT, $campaign->fresh()->status);
         $this->assertSame(0, $campaign->fresh()->total_recipients);
+    }
+
+    public function test_dispatch_is_idempotent_and_does_not_double_fan_out_on_retry(): void
+    {
+        // Audit H2: a released/re-run dispatch job must not create a second batch
+        // of emails + EmailLog rows for the same campaign.
+        Mail::fake();
+        $this->contactInGroup(['email' => 'ann@example.com', 'is_active' => true]);
+        $this->contactInGroup(['email' => 'bob@example.com', 'is_active' => true]);
+        $campaign = $this->campaign();
+        $service = app(\App\Services\EmailCampaignService::class);
+
+        (new EmailCampaignDispatch($campaign->id))->handle($service);
+        // Simulate the queue re-running the same job after a timeout release.
+        (new EmailCampaignDispatch($campaign->id))->handle($service);
+
+        Mail::assertSentCount(2);
+        $this->assertSame(2, EmailLog::count(), 'no duplicate EmailLog rows on retry');
+        $this->assertSame(2, $campaign->fresh()->sent_count);
+    }
+
+    public function test_send_job_does_not_resend_an_already_sent_log(): void
+    {
+        // Audit H3: a released/re-run send job must not deliver a second copy.
+        Mail::fake();
+        $campaign = $this->campaign();
+        $log = EmailLog::factory()->create([
+            'email_campaign_id' => $campaign->id,
+            'email' => 'done@example.com',
+            'status' => EmailLog::STATUS_SENT,
+            'sent_at' => now(),
+        ]);
+
+        (new SendCampaignEmail($log->id))->handle();
+
+        Mail::assertNothingSent();
+        $this->assertSame(EmailLog::STATUS_SENT, $log->fresh()->status);
     }
 }

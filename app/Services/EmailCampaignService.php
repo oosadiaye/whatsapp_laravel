@@ -9,6 +9,7 @@ use App\Models\Contact;
 use App\Models\EmailCampaign;
 use App\Models\EmailSuppression;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Orchestrates email-campaign sending: resolves the recipient set and kicks off
@@ -47,6 +48,18 @@ class EmailCampaignService
      */
     public function launch(EmailCampaign $campaign): void
     {
+        // Audit M11: a non-delivering transport (log/array) makes a campaign
+        // report SENT while nothing arrives. The controller surfaces this in the
+        // UI on manual launch; log it too so the scheduled/cron path (which has
+        // no UI) isn't a silent black hole.
+        $mailer = (string) config('mail.default');
+        if (in_array($mailer, ['log', 'array', ''], true)) {
+            Log::warning('Email campaign launched with a non-delivering mail transport', [
+                'campaign_id' => $campaign->id,
+                'mail_mailer' => $mailer,
+            ]);
+        }
+
         $campaign->update([
             'status' => EmailCampaign::STATUS_QUEUED,
             'started_at' => $campaign->started_at ?? now(),

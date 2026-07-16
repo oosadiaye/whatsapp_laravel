@@ -37,6 +37,15 @@ class SendCampaignEmail implements ShouldQueue
             return;
         }
 
+        // Idempotency guard (audit H3): once this log leaves QUEUED it has
+        // already been sent/failed/skipped by a prior run. There is no
+        // idempotency key on the mail transport, so re-entering the send branch
+        // after a released/retried job would deliver a DUPLICATE email. Bail.
+        // Mirrors SendWhatsAppMessage's PENDING guard.
+        if ($log->status !== EmailLog::STATUS_QUEUED) {
+            return;
+        }
+
         $campaign = $log->campaign;
         if ($campaign->status === EmailCampaign::STATUS_CANCELLED) {
             return;

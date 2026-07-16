@@ -57,6 +57,9 @@ class CampaignEmail extends Mailable
         ]);
     }
 
+    /**
+     * Substitute placeholders for the SUBJECT (plain-text context — no escaping).
+     */
     private function personalize(string $text): string
     {
         return strtr($text, [
@@ -67,9 +70,27 @@ class CampaignEmail extends Mailable
         ]);
     }
 
+    /**
+     * Substitute placeholders for the HTML BODY. The contact name/email are
+     * attacker-influenceable free text (CSV import, WhatsApp profile name), so
+     * each substituted VALUE is HTML-escaped before it lands in the raw email
+     * body — otherwise a name like `<img src=x onerror=...>` would be injected
+     * verbatim into every email (audit H1). The operator's own body_html markup
+     * is left intact; only the injected values are escaped.
+     */
+    private function personalizeHtml(string $html): string
+    {
+        return strtr($html, [
+            '{{name}}' => e($this->recipientName ?? ''),
+            '{{ name }}' => e($this->recipientName ?? ''),
+            '{{email}}' => e($this->recipientEmail),
+            '{{ email }}' => e($this->recipientEmail),
+        ]);
+    }
+
     private function renderHtml(): string
     {
-        $body = $this->personalize($this->campaign->body_html);
+        $body = $this->personalizeHtml($this->campaign->body_html);
         $sender = e((string) ($this->campaign->from_name ?: config('mail.from.name')));
 
         $footer = '<hr style="margin-top:32px;border:none;border-top:1px solid #e5e7eb">'

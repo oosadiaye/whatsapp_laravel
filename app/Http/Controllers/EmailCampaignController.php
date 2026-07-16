@@ -118,7 +118,9 @@ class EmailCampaignController extends Controller
 
         $this->service->launch($campaign);
 
-        return redirect()->route('email-campaigns.show', $campaign)->with('success', 'Email campaign is sending.');
+        return redirect()->route('email-campaigns.show', $campaign)
+            ->with('success', 'Email campaign is sending.')
+            ->with('warning', $this->mailTransportWarning());
     }
 
     public function pause(string $id): RedirectResponse
@@ -176,7 +178,9 @@ class EmailCampaignController extends Controller
         if ($action === 'send') {
             $this->service->launch($campaign);
 
-            return redirect()->route('email-campaigns.show', $campaign)->with('success', 'Email campaign is sending.');
+            return redirect()->route('email-campaigns.show', $campaign)
+                ->with('success', 'Email campaign is sending.')
+                ->with('warning', $this->mailTransportWarning());
         }
 
         if ($action === 'schedule' && $scheduledAt !== null) {
@@ -187,5 +191,27 @@ class EmailCampaignController extends Controller
         }
 
         return redirect()->route('email-campaigns.show', $campaign)->with('success', 'Email campaign saved as draft.');
+    }
+
+    /**
+     * A warning when the configured mail transport won't actually deliver mail
+     * (audit M11): `log` writes to the log file and `array` discards, so a
+     * campaign reports SENT while nothing arrives. Returns null for a real
+     * transport (the warning flash is skipped when null).
+     */
+    private function mailTransportWarning(): ?string
+    {
+        $mailer = (string) config('mail.default');
+
+        if (in_array($mailer, ['log', 'array', ''], true)) {
+            return "Emails are NOT being delivered: MAIL_MAILER is \"{$mailer}\". "
+                .'Configure a real mail transport (SMTP/SES/etc.) for messages to actually send.';
+        }
+
+        if ($mailer === 'smtp' && blank(config('mail.mailers.smtp.host'))) {
+            return 'Emails may not be delivered: the SMTP transport has no host configured. Check your MAIL_* settings.';
+        }
+
+        return null;
     }
 }

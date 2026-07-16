@@ -34,10 +34,26 @@ class EmailCampaignDispatch implements ShouldQueue
             return;
         }
 
+        // Idempotency guard (audit H2): atomically claim the QUEUED campaign for
+        // sending. Every dispatch path goes through EmailCampaignService::launch,
+        // which sets QUEUED first — so a job that is released and re-run (worker
+        // timeout under a short retry_after, or an accidental double dispatch)
+        // finds the campaign already SENDING/SENT and updates 0 rows here,
+        // bailing before it fans out a SECOND batch of duplicate emails.
+        $claimed = EmailCampaign::query()
+            ->whereKey($campaign->id)
+            ->where('status', EmailCampaign::STATUS_QUEUED)
+            ->update(['status' => EmailCampaign::STATUS_SENDING]);
+
+        if ($claimed === 0) {
+            return;
+        }
+
+        $campaign->refresh();
+
         $recipients = $service->recipients($campaign);
 
         $campaign->update([
-            'status' => EmailCampaign::STATUS_SENDING,
             'total_recipients' => $recipients->count(),
         ]);
 
