@@ -4,15 +4,23 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\WhatsAppApiException;
 use App\Models\Setting;
 use App\Models\WhatsAppInstance;
+use App\Services\WhatsAppCloudApiService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Throwable;
 
 class SettingsController extends Controller
 {
+    public function __construct(private readonly WhatsAppCloudApiService $cloudApi)
+    {
+    }
+
     /**
      * Keys whose database value is ciphertext (encrypted via Crypt::encryptString
      * in {@see update()}). The form NEVER pre-fills these — it just shows a
@@ -71,9 +79,11 @@ class SettingsController extends Controller
             }
         }
 
-        $this->upsertWhatsAppInstance($request);
+        $warning = $this->upsertWhatsAppInstance($request);
 
-        return redirect()->back()->with('success', 'Settings updated successfully.');
+        $redirect = redirect()->back()->with('success', 'Settings updated successfully.');
+
+        return $warning !== null ? $redirect->with('warning', $warning) : $redirect;
     }
 
     /**
@@ -84,8 +94,13 @@ class SettingsController extends Controller
      * same "leave blank to keep existing" rule as the AT key — the token/secret
      * are only written when the form actually carries a new value, and the model
      * encrypts them at rest.
+     *
+     * After saving, if the instance has the credentials to reach Meta, we probe
+     * graph.facebook.com to VALIDATE them (this is the auto-verify the setup docs
+     * describe — restored after the unify into Settings dropped it). Returns a
+     * user-facing warning string when the probe fails, else null.
      */
-    private function upsertWhatsAppInstance(Request $request): void
+    private function upsertWhatsAppInstance(Request $request): ?string
     {
         $data = $request->validate([
             'wa_display_name' => ['nullable', 'string', 'max:255'],
@@ -102,7 +117,7 @@ class SettingsController extends Controller
         // Nothing to do: WhatsApp not configured yet and the form carried no
         // WhatsApp fields.
         if ($instance === null && ! $anyProvided) {
-            return;
+            return null;
         }
 
         if ($instance === null) {
@@ -136,5 +151,48 @@ class SettingsController extends Controller
         }
 
         $instance->save();
+
+        return $this->probeInstance($instance);
+    }
+
+    /**
+     * Validate the saved credentials against Meta and record the outcome.
+     * Success → CONNECTED (+ auto-filled phone number / verified name / quality).
+     * Meta rejection → CREDENTIALS_INVALID. Network failure → UNREACHABLE.
+     * Returns a warning message on failure, null on success / not-yet-ready.
+     */
+    private function probeInstance(WhatsAppInstance $instance): ?string
+    {
+        if (! $instance->isReady()) {
+            return null; // not enough credentials to talk to Meta yet
+        }
+
+        try {
+            $info = $this->cloudApi->getPhoneNumberInfo($instance);
+
+            $update = [
+                'business_phone_number' => $info['display_phone_number'] ?? $instance->business_phone_number,
+                'quality_rating' => $info['quality_rating'] ?? $instance->quality_rating,
+                'messaging_limit_tier' => $info['messaging_limit_tier'] ?? $instance->messaging_limit_tier,
+                'status' => WhatsAppInstance::STATUS_CONNECTED,
+            ];
+            // Auto-fill the display name from Meta's verified name only when the
+            // operator left it blank (the docs say "leave blank, auto-fills").
+            if (blank($instance->display_name) && filled($info['verified_name'] ?? null)) {
+                $update['display_name'] = $info['verified_name'];
+            }
+            $instance->update($update);
+
+            return null;
+        } catch (WhatsAppApiException $e) {
+            $instance->update(['status' => 'CREDENTIALS_INVALID']);
+
+            return 'WhatsApp saved, but Meta rejected the credentials: '.$e->getMessage();
+        } catch (Throwable $e) {
+            Log::warning('WhatsApp credential probe failed', ['error' => $e->getMessage()]);
+            $instance->update(['status' => 'UNREACHABLE']);
+
+            return 'WhatsApp saved, but graph.facebook.com could not be reached to verify the credentials.';
+        }
     }
 }

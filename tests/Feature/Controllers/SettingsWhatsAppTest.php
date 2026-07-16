@@ -9,6 +9,7 @@ use App\Models\WhatsAppInstance;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -30,10 +31,51 @@ class SettingsWhatsAppTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** Probe HTTP status the faked Meta endpoint returns (200 = valid creds). */
+    private int $metaStatus = 200;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(RolesAndPermissionsSeeder::class);
+        // Saving credentials now probes Meta to verify them. One closure fake
+        // reads $this->metaStatus at request time, so a test can flip it to
+        // exercise the rejection path without fighting Http::fake merge order.
+        Http::fake(['graph.facebook.com/*' => function () {
+            return $this->metaStatus === 200
+                ? Http::response([
+                    'display_phone_number' => '+2348000000000',
+                    'verified_name' => 'Verified Biz',
+                    'quality_rating' => 'GREEN',
+                    'messaging_limit_tier' => 'TIER_1K',
+                ], 200)
+                : Http::response(['error' => ['message' => 'bad token']], $this->metaStatus);
+        }]);
+    }
+
+    public function test_probe_marks_the_instance_connected_and_fills_metadata(): void
+    {
+        $this->actingAs($this->makeAdmin())->put(route('settings.update'), [
+            'wa_phone_number_id' => '111', 'wa_waba_id' => '222',
+            'wa_access_token' => 'tok', 'wa_app_secret' => 'sec',
+        ])->assertRedirect();
+
+        $instance = WhatsAppInstance::primary();
+        $this->assertSame(WhatsAppInstance::STATUS_CONNECTED, $instance->status);
+        $this->assertSame('+2348000000000', $instance->business_phone_number);
+        $this->assertSame('Verified Biz', $instance->display_name); // auto-filled (was blank)
+    }
+
+    public function test_probe_flags_credentials_invalid_and_warns_on_meta_rejection(): void
+    {
+        $this->metaStatus = 401; // Meta rejects the credentials
+
+        $this->actingAs($this->makeAdmin())->put(route('settings.update'), [
+            'wa_phone_number_id' => '111', 'wa_waba_id' => '222',
+            'wa_access_token' => 'bad', 'wa_app_secret' => 'sec',
+        ])->assertRedirect()->assertSessionHas('warning');
+
+        $this->assertSame('CREDENTIALS_INVALID', WhatsAppInstance::primary()->status);
     }
 
     public function test_saving_credentials_creates_the_single_instance(): void
