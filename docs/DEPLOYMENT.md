@@ -177,7 +177,7 @@ Auto-renews every 90 days via the certbot timer.
 ```ini
 [program:blastiq-worker]
 process_name=%(program_name)s_%(process_num)02d
-command=php /home/BlastIQ/artisan queue:work --queue=messages,default --tries=3 --backoff=30 --max-time=3600
+command=php /home/BlastIQ/artisan queue:work --queue=messages,imports,default --tries=3 --backoff=30 --max-time=3600
 autostart=true
 autorestart=true
 user=www-data
@@ -193,24 +193,43 @@ sudo supervisorctl update
 sudo supervisorctl start blastiq-worker:*
 ```
 
-> Two worker processes (`numprocs=2`) is fine for low-medium volume. Bump if your queue backs up.
+> **The `--queue` list MUST include every queue the app dispatches onto:
+> `messages` (sends), `imports` (contact imports), `default` (campaign fan-out,
+> email). Omit one and those jobs sit queued forever with no error.**
+>
+> Caveat: a single `queue:work` drains queues left-to-right, so a large import
+> can starve message sends. For anything beyond low volume, **use Horizon
+> instead** (below) — it runs a separate, independently-scaled worker pool per
+> queue, so the queues can't starve each other.
 
-### Optional: Horizon (for Redis-backed queues)
+### Recommended: Horizon (Redis-backed queues)
 
-If you went with `QUEUE_CONNECTION=redis`, prefer Horizon over raw `queue:work`:
+Production uses `QUEUE_CONNECTION=redis`; run **Horizon** rather than raw
+`queue:work`. Horizon already defines per-queue supervisors (`messages`,
+`imports`, `default`) in `config/horizon.php`, so no `--queue` list to keep in
+sync and no cross-queue starvation.
 
 ```bash
 php artisan horizon:install        # one-time, already done in this repo
-php artisan horizon                # in production: replace queue:work command in supervisor with `horizon`
 ```
 
-Visit `/horizon` to see queue activity, throughput, failed jobs.
+Point the Supervisor program at `horizon` instead of `queue:work`:
+
+```ini
+command=php /home/BlastIQ/artisan horizon
+```
+
+Then `reread`/`update`/`start` as above. Visit `/horizon` (super_admin/admin
+only) to see queue activity, throughput, wait times, and failed jobs. Queue
+metrics history is captured by the scheduled `horizon:snapshot` (see Cron).
 
 ---
 
 ## Cron — schedule:run
 
-Laravel's scheduled commands (the 15-min `templates:sync-status` and the every-minute `campaigns:dispatch-scheduled`) need a cron entry:
+A single cron entry runs Laravel's scheduler, which dispatches every scheduled
+command (WhatsApp + email campaign launch, template sync, stale-call cleanup,
+recording prune, `horizon:snapshot`). See `routes/console.php` for the list.
 
 ```bash
 crontab -e -u www-data
@@ -221,6 +240,29 @@ Add:
 ```
 * * * * * cd /home/BlastIQ && php artisan schedule:run >> /dev/null 2>&1
 ```
+
+---
+
+## Storage symlink
+
+Campaign header-media URLs are served from `public/storage`, so the symlink
+must exist or Meta gets a 404 fetching header images (Cloud API error 131053):
+
+```bash
+php artisan storage:link
+```
+
+## Observability
+
+- **Health check:** `/up` returns 200 when the app boots. Point your uptime
+  monitor at it.
+- **Queue failures:** watch `failed_jobs` (or Horizon's Failed tab). Alert on
+  growth — a spike usually means a bad credential or an unreachable provider.
+- **Error tracking (recommended):** wire an exception reporter (e.g. Sentry) in
+  `bootstrap/app.php`'s `withExceptions` so 500s and job failures are captured
+  with context instead of only landing in `storage/logs/laravel.log`.
+- **Non-delivering mail:** if `MAIL_MAILER=log`/`array`, email campaigns report
+  SENT but nothing is delivered — the UI warns on launch and it's logged.
 
 ---
 
@@ -240,7 +282,7 @@ curl -I https://blast.example.com/webhooks/whatsapp/999999
 # 3. Run the test suite
 cd /home/BlastIQ
 php artisan test
-# → expect 68 passing
+# → expect the full suite green
 
 # 4. Check queue worker
 sudo supervisorctl status

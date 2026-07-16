@@ -241,7 +241,11 @@ return [
                 'balance' => 'auto',
                 'maxProcesses' => 2,
                 'tries' => 3,
-                'timeout' => 120,
+                // Campaign fan-out runs here and can take a while on large
+                // audiences; keep this at/above its job timeout and below the
+                // queue retry_after (360s) so a slow job is never released and
+                // double-run (audit H6/M1).
+                'timeout' => 300,
             ],
         ],
 

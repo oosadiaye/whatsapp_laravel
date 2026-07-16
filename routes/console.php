@@ -30,3 +30,7 @@ Schedule::command('calls:cleanup-stale')
 Schedule::command('calls:prune-recordings')
     ->daily()
     ->withoutOverlapping();
+
+// Snapshot Horizon queue metrics so the dashboard's wait-time/throughput trends
+// have history to draw (audit L9). No-op when Horizon isn't running.
+Schedule::command('horizon:snapshot')->everyFiveMinutes();
