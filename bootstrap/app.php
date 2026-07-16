@@ -21,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // all; pin to the LB CIDR here if that ever changes.
         $middleware->trustProxies(at: '*');
 
+        // Baseline security headers (CSP/HSTS/etc.) on every web response.
+        $middleware->appendToGroup('web', \App\Http\Middleware\SecurityHeaders::class);
+
         // Log out users deactivated mid-session on their next request.
         $middleware->appendToGroup('web', \App\Http\Middleware\EnsureUserIsActive::class);
 

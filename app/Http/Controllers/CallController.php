@@ -409,7 +409,13 @@ class CallController extends Controller
 
         $maxKb = (int) config('voice.recording_max_kb', 25600);
         $request->validate([
-            'audio' => ['required', 'file', "max:{$maxKb}"],
+            // Audit L2: validate the server-SNIFFED content type (mimetypes, not
+            // the client-declared header), restricted to audio. MediaRecorder's
+            // webm audio commonly sniffs as video/webm, so it's allowed too.
+            'audio' => [
+                'required', 'file', "max:{$maxKb}",
+                'mimetypes:audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/x-wav,video/webm',
+            ],
         ]);
 
         // store() uses the default (local) disk, rooted at storage/app/private —
@@ -420,7 +426,9 @@ class CallController extends Controller
 
         $call->update([
             'recording_path' => $path,
-            'recording_mime' => $this->normaliseAudioMime($request->file('audio')->getClientMimeType()),
+            // getMimeType() sniffs the file contents; getClientMimeType() would
+            // trust the browser-declared header (audit L2).
+            'recording_mime' => $this->normaliseAudioMime($request->file('audio')->getMimeType()),
             'recording_uploaded_at' => now(),
             // Only queue analysis if Gemini is configured; otherwise the recording
             // is kept but the panel shows "analysis unavailable".

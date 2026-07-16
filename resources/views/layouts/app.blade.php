@@ -48,10 +48,12 @@
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        {{-- Self-hosted (audit M8): no third-party CDN, so no supply-chain risk
+             and CSP script-src can stay same-origin. chart.js v4.5.1 pinned. --}}
+        <script src="{{ asset('vendor/chart.min.js') }}"></script>
         @auth
             @if($bqAtVoiceReady)
-                <script defer data-at-sdk src="https://unpkg.com/africastalking-client@1.0.7/build/africastalking.js" crossorigin="anonymous"></script>
+                <script defer data-at-sdk src="{{ asset('vendor/africastalking-1.0.7.js') }}"></script>
             @endif
         @endauth
         @livewireStyles
