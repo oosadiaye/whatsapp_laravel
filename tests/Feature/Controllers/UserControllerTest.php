@@ -160,18 +160,6 @@ class UserControllerTest extends TestCase
         $this->assertNull(User::find($other->id));
     }
 
-    public function test_legacy_isAdmin_helper_still_works_for_spatie_admins(): void
-    {
-        // Backward-compat check: AdminOnly middleware uses isAdmin(),
-        // which must return true for spatie admin/super_admin even when
-        // legacy 'role' column says 'user'.
-        $u = User::factory()->create(['role' => 'user']);
-        $u->assignRole('admin');
-        $u->refresh();
-
-        $this->assertTrue($u->isAdmin());
-    }
-
     private function makeUser(string $role, string $email = null): User
     {
         $user = User::factory()->create([

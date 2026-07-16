@@ -117,23 +117,10 @@ class SendWhatsAppMessage implements ShouldQueue
                 $language,
                 $components,
             );
-        } elseif ($this->campaign->media_path) {
-            // Branch 2: media + caption (only legal inside the 24h window).
-            $caption = $personalizer->personalizeMessage(
-                $this->campaign->message,
-                $this->contact,
-                $this->campaign->name,
-            );
-
-            $result = $messenger->sendMedia(
-                $instance,
-                $this->contact->phone,
-                $caption,
-                asset($this->campaign->media_path),
-                (string) $this->campaign->media_type,
-            );
         } else {
-            // Branch 3: plain text (only legal inside the 24h conversation window).
+            // Plain text (only legal inside the 24h conversation window).
+            // NB: there is no campaigns.media_path send branch — campaign media
+            // rides on the template header (header_media_url), not media_path.
             $message = $personalizer->personalizeMessage(
                 $this->campaign->message,
                 $this->contact,

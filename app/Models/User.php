@@ -12,16 +12,11 @@ use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
 /**
- * Carries TWO role systems during the Phase 11 transition:
- *
- *   - The legacy `role` string column ('admin'/'user') used by the existing
- *     {@see \App\Http\Middleware\AdminOnly} middleware.
- *   - The new spatie/laravel-permission roles via the HasRoles trait
- *     (super_admin / admin / manager / agent).
- *
- * `isAdmin()` checks both, so legacy middleware keeps working while new code
- * migrates to spatie's role/permission gates. Once all controllers use
- * spatie role checks, the legacy `role` column can be dropped.
+ * Authorization is via spatie/laravel-permission roles (super_admin / admin /
+ * manager / agent) + the HasRoles trait; every route gates on a permission or
+ * role. The denormalized `role` string column is retained because some queries
+ * filter on it directly (e.g. the team/wallboard rosters use
+ * `where('role', ROLE_AGENT)`); it's kept in sync in UserController.
  */
 class User extends Authenticatable
 {
@@ -120,31 +115,6 @@ class User extends Authenticatable
     public function messageTemplates(): HasMany
     {
         return $this->hasMany(MessageTemplate::class);
-    }
-
-    /**
-     * Legacy admin check used by {@see \App\Http\Middleware\AdminOnly}.
-     *
-     * Returns true for super_admin OR admin role (spatie) OR legacy
-     * `role='admin'` column so middleware decisions stay consistent across
-     * both systems during the migration.
-     *
-     * Wrapped in try/catch so a partial deploy where the Phase 11 spatie
-     * tables (model_has_roles, etc.) don't yet exist falls back gracefully
-     * to the legacy column check instead of throwing on every request and
-     * 500'ing the login page.
-     */
-    public function isAdmin(): bool
-    {
-        try {
-            if ($this->hasAnyRole([self::ROLE_SUPER_ADMIN, self::ROLE_ADMIN])) {
-                return true;
-            }
-        } catch (\Throwable) {
-            // spatie tables missing — fall through to legacy column check
-        }
-
-        return $this->role === 'admin';
     }
 
     public function isAgent(): bool

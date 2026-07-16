@@ -16,7 +16,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('web', \App\Http\Middleware\EnsureUserIsActive::class);
 
         $middleware->alias([
-            'admin' => \App\Http\Middleware\AdminOnly::class,
             // Optional source-IP allowlist for provider webhooks (empty = off).
             'webhook.allowed-ips' => \App\Http\Middleware\AllowedWebhookIps::class,
             // spatie/laravel-permission middleware aliases — usage:

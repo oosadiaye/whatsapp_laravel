@@ -54,7 +54,8 @@ class UserController extends Controller
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
-            // Mirror to legacy column for AdminOnly middleware compat.
+            // Keep the denormalized `role` column in sync — some rosters query
+            // it directly (e.g. team/wallboard `where('role', ROLE_AGENT)`).
             'role' => in_array($validated['role'], [User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN], true) ? 'admin' : 'user',
             'is_active' => true,
             'email_verified_at' => now(),
