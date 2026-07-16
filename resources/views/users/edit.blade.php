@@ -24,9 +24,22 @@
 
                     <div>
                         <x-input-label for="password" :value="__('New password (leave blank to keep current)')" />
-                        <x-text-input id="password" name="password" type="password" class="mt-1 block w-full" />
+                        <x-text-input id="password" name="password" type="password" class="mt-1 block w-full" autocomplete="new-password" />
                         <x-input-error :messages="$errors->get('password')" class="mt-2" />
                     </div>
+
+                    @if($user->id !== auth()->id())
+                        {{-- Confirming a NEW password for another user requires the acting
+                             admin to re-enter their OWN password (blocks drive-by account
+                             takeover from a borrowed session). Only required server-side
+                             when the New password field above is filled in. --}}
+                        <div>
+                            <x-input-label for="current_password" :value="__('Your current password')" />
+                            <x-text-input id="current_password" name="current_password" type="password" class="mt-1 block w-full" autocomplete="current-password" />
+                            <p class="mt-1 text-xs text-gray-500">{{ __('Required only to set a new password for this user.') }}</p>
+                            <x-input-error :messages="$errors->get('current_password')" class="mt-2" />
+                        </div>
+                    @endif
 
                     <div>
                         <x-input-label for="role" :value="__('Role')" />

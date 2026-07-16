@@ -7,6 +7,7 @@ namespace Tests\Feature\Controllers;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 /**
@@ -158,6 +159,118 @@ class UserControllerTest extends TestCase
             ->assertRedirect(route('users.index'));
 
         $this->assertNull(User::find($other->id));
+    }
+
+    // ── Privilege-boundary guards (Production-Audit blocker B2) ──────────────
+    //
+    // The `admin` role keeps `users.edit` (it's super_admin minus create/delete),
+    // so without these guards an admin could promote anyone to super_admin or
+    // reset any user's password — horizontal → vertical privilege escalation.
+
+    public function test_admin_cannot_promote_another_user_to_super_admin(): void
+    {
+        $admin = $this->makeUser('admin');
+        $target = $this->makeUser('agent', 'target@example.com');
+
+        $this->actingAs($admin)
+            ->put(route('users.update', $target), [
+                'name' => $target->name,
+                'email' => $target->email,
+                'role' => 'super_admin',
+            ])
+            ->assertSessionHas('error');
+
+        $target->refresh();
+        $this->assertFalse($target->hasRole('super_admin'), 'admin must not be able to grant super_admin');
+        $this->assertTrue($target->hasRole('agent'));
+    }
+
+    public function test_admin_cannot_edit_an_existing_super_admin(): void
+    {
+        $admin = $this->makeUser('admin');
+        $super = $this->makeUser('super_admin', 'super@example.com');
+        $originalName = $super->name;
+
+        $this->actingAs($admin)
+            ->put(route('users.update', $super), [
+                'name' => 'Hijacked Name',
+                'email' => $super->email,
+                'role' => 'super_admin',
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame($originalName, $super->fresh()->name, 'admin must not be able to edit a super_admin');
+    }
+
+    public function test_admin_setting_another_users_password_requires_current_password(): void
+    {
+        $admin = $this->makeUser('admin');
+        $target = $this->makeUser('agent', 'target@example.com');
+        $originalHash = $target->password;
+
+        $this->actingAs($admin)
+            ->put(route('users.update', $target), [
+                'name' => $target->name,
+                'email' => $target->email,
+                'role' => 'agent',
+                'password' => 'newpassword123',
+                // deliberately omitting current_password
+            ])
+            ->assertSessionHasErrors('current_password');
+
+        $this->assertSame($originalHash, $target->fresh()->password, "target's password must be unchanged");
+    }
+
+    public function test_admin_can_set_another_users_password_with_correct_current_password(): void
+    {
+        // Factory seeds every user's password as 'password'.
+        $admin = $this->makeUser('admin');
+        $target = $this->makeUser('agent', 'target@example.com');
+
+        $this->actingAs($admin)
+            ->put(route('users.update', $target), [
+                'name' => $target->name,
+                'email' => $target->email,
+                'role' => 'agent',
+                'password' => 'newpassword123',
+                'current_password' => 'password',
+            ])
+            ->assertRedirect(route('users.index'));
+
+        $this->assertTrue(Hash::check('newpassword123', $target->fresh()->password));
+    }
+
+    public function test_admin_can_edit_a_regular_user_without_current_password_when_not_touching_password(): void
+    {
+        $admin = $this->makeUser('admin');
+        $target = $this->makeUser('agent', 'target@example.com');
+
+        $this->actingAs($admin)
+            ->put(route('users.update', $target), [
+                'name' => 'Renamed',
+                'email' => $target->email,
+                'role' => 'agent',
+            ])
+            ->assertRedirect(route('users.index'));
+
+        $this->assertSame('Renamed', $target->fresh()->name);
+    }
+
+    public function test_super_admin_can_still_assign_super_admin_role(): void
+    {
+        // Regression guard: the boundary must not block the legitimate flow.
+        $super = $this->makeUser('super_admin');
+        $target = $this->makeUser('agent', 'target@example.com');
+
+        $this->actingAs($super)
+            ->put(route('users.update', $target), [
+                'name' => $target->name,
+                'email' => $target->email,
+                'role' => 'super_admin',
+            ])
+            ->assertRedirect(route('users.index'));
+
+        $this->assertTrue($target->fresh()->hasRole('super_admin'));
     }
 
     private function makeUser(string $role, string $email = null): User
