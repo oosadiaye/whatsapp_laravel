@@ -9,6 +9,7 @@ use App\Models\Contact;
 use App\Models\EmailCampaign;
 use App\Models\EmailSuppression;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -30,15 +31,22 @@ class EmailCampaignService
             return collect();
         }
 
-        $suppressed = EmailSuppression::query()->pluck('email'); // already lowercased
-
         return Contact::query()
             ->whereHas('groups', fn ($q) => $q->whereIn('contact_groups.id', $groupIds))
             ->where('is_active', true)
             ->whereNotNull('email')
             ->where('email', '!=', '')
+            // Exclude suppressed addresses in SQL (audit M5) instead of plucking
+            // the whole suppression list and doing an O(n*m) PHP contains().
+            // Suppression emails are stored already-lowercased, so match on
+            // LOWER(contacts.email).
+            ->whereNotIn(
+                DB::raw('LOWER(email)'),
+                EmailSuppression::query()->select('email'),
+            )
             ->get()
-            ->reject(fn (Contact $c) => $suppressed->contains(EmailSuppression::normalize((string) $c->email)))
+            // Case-insensitive dedupe still runs in PHP: two rows 'A@x'/'a@x' are
+            // distinct contacts but one recipient.
             ->unique(fn (Contact $c) => EmailSuppression::normalize((string) $c->email))
             ->values();
     }

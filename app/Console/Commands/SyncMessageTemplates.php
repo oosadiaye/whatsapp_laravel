@@ -120,12 +120,20 @@ class SyncMessageTemplates extends Command
                 'synced_at' => Carbon::now(),
             ];
 
-            $existing = MessageTemplate::where('whatsapp_instance_id', $instance->id)
+            // withTrashed: message_templates has the same softDeletes()+unique
+            // trap as contacts (audit L4). A re-synced template whose local row
+            // was soft-deleted must be found + revived, not re-created into the
+            // (deleted_at-unversioned) unique index — which would throw.
+            $existing = MessageTemplate::withTrashed()
+                ->where('whatsapp_instance_id', $instance->id)
                 ->where('whatsapp_template_id', $remoteId)
                 ->where('language', $language)
                 ->first();
 
             if ($existing) {
+                if ($existing->trashed()) {
+                    $existing->restore();
+                }
                 $existing->update($payload);
                 $updated++;
             } else {

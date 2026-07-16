@@ -117,6 +117,49 @@ class SyncMessageTemplatesTest extends TestCase
         $this->assertSame(1, MessageTemplate::where('whatsapp_instance_id', $working->id)->count());
     }
 
+    public function test_resyncing_a_soft_deleted_template_revives_it_instead_of_crashing(): void
+    {
+        // Audit L4: message_templates has softDeletes() + a unique
+        // (instance, template_id, language). A re-synced template whose local
+        // row was soft-deleted must be revived + updated, not re-created into
+        // the deleted_at-unversioned unique index (which would throw).
+        $user = User::factory()->create();
+        $cloud = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
+        Campaign::factory()->create(['user_id' => $user->id, 'instance_id' => $cloud->id]);
+
+        $template = MessageTemplate::factory()->create([
+            'whatsapp_instance_id' => $cloud->id,
+            'whatsapp_template_id' => '1001',
+            'language' => 'en_US',
+            'name' => 'order_confirm',
+        ]);
+        $template->delete();
+        $this->assertSoftDeleted('message_templates', ['id' => $template->id]);
+
+        Http::fake([
+            'graph.facebook.com/*' => Http::response([
+                'data' => [[
+                    'id' => '1001',
+                    'name' => 'order_confirm',
+                    'language' => 'en_US',
+                    'status' => 'APPROVED',
+                    'category' => 'UTILITY',
+                    'components' => [['type' => 'BODY', 'text' => 'Hi again']],
+                ]],
+            ], 200),
+        ]);
+
+        $exitCode = Artisan::call('templates:sync-status');
+
+        $this->assertSame(0, $exitCode);
+        // Same row revived, not duplicated.
+        $this->assertSame(1, MessageTemplate::withTrashed()->where('whatsapp_template_id', '1001')->count());
+        $revived = MessageTemplate::where('whatsapp_template_id', '1001')->first();
+        $this->assertNotNull($revived, 'the soft-deleted template must be revived');
+        $this->assertSame($template->id, $revived->id);
+        $this->assertNull($revived->deleted_at);
+    }
+
     public function test_instance_flag_scopes_to_a_single_instance(): void
     {
         $user = User::factory()->create();

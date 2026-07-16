@@ -545,17 +545,16 @@ class CampaignController extends Controller
     {
         $campaign = Campaign::findOrFail($id);
 
-        $logs = $campaign->messageLogs()
-            ->with('contact')
-            ->get();
-
         $filename = 'campaign_' . $campaign->id . '_logs_' . now()->format('Y-m-d') . '.csv';
 
-        return response()->streamDownload(function () use ($logs) {
+        // Stream the logs lazily (audit M5): lazy() chunks by id under the hood
+        // and eager-loads `contact` per chunk, so a large campaign's logs are
+        // never all materialised in memory before the download begins.
+        return response()->streamDownload(function () use ($campaign) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, ['phone', 'contact_name', 'status', 'sent_at', 'delivered_at', 'read_at', 'error_message']);
 
-            foreach ($logs as $log) {
+            foreach ($campaign->messageLogs()->with('contact')->lazy() as $log) {
                 fputcsv($handle, [
                     \App\Support\Csv::safe($log->phone),
                     \App\Support\Csv::safe($log->contact?->name ?? ''),
