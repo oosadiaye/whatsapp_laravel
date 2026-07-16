@@ -29,8 +29,13 @@ class Wallboard extends Component
         // Which agents are on a live call right now (outbound placer).
         $onCallUserIds = $liveCalls->pluck('placed_by_user_id')->filter()->unique()->values()->all();
 
+        // Sargable "today" range on the created_at index (audit M2) — whereDate()
+        // wraps the column in a function and can't use the index. Business-tz
+        // day boundary, matching the calls dashboard.
+        $startOfToday = \Illuminate\Support\Carbon::now(config('app.business_timezone'))->startOfDay()->utc();
         $today = CallLog::query()
-            ->whereDate('created_at', today())
+            ->where('created_at', '>=', $startOfToday)
+            ->where('created_at', '<', $startOfToday->copy()->addDay())
             ->get(['status', 'direction', 'duration_seconds', 'connected_at', 'quality_metrics']);
 
         $answered = $today->whereNotNull('connected_at')->count();

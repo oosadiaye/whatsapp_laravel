@@ -55,8 +55,18 @@ class CallController extends Controller
             }
         };
 
+        // "Today" is defined in the business timezone (matching the dashboard),
+        // then bounded as a half-open UTC range so the query stays sargable on
+        // the created_at index — whereDate() wraps the column in a function and
+        // defeats the index (audit M2).
+        $startOfToday = \Illuminate\Support\Carbon::now(config('app.business_timezone'))->startOfDay()->utc();
+        $endOfToday = $startOfToday->copy()->addDay();
+        $todayScoped = fn () => CallLog::query()->tap($scope)
+            ->where('created_at', '>=', $startOfToday)
+            ->where('created_at', '<', $endOfToday);
+
         // Header trend widgets — computed from real data, scoped like the list.
-        $todayCount = CallLog::query()->tap($scope)->whereDate('created_at', today())->count();
+        $todayCount = $todayScoped()->count();
         $avgDurationSeconds = (int) round(
             (float) CallLog::query()->tap($scope)->where('duration_seconds', '>', 0)->avg('duration_seconds')
         );
@@ -65,22 +75,31 @@ class CallController extends Controller
             ->groupBy('provider')
             ->pluck('aggregate', 'provider');
 
-        // Richer observability metrics — today, same visibility scope. One fetch
-        // so the answer-rate / time-to-answer / MOS / failure-breakdown tiles
-        // don't each cost a query.
-        $todayCalls = CallLog::query()->tap($scope)
-            ->whereDate('created_at', today())
-            ->get(['status', 'connected_at', 'started_at', 'quality_metrics']);
-
-        $answered = $todayCalls->whereNotNull('connected_at')->count();
-        $missed = $todayCalls->where('status', CallLog::STATUS_MISSED)->count();
+        // Observability tiles (today, same visibility scope). Counts + the
+        // failure breakdown are SQL aggregates instead of materialising every
+        // row (audit L11); only time-to-answer (a timestamp diff) and MOS
+        // (buried in the quality_metrics JSON) fetch the narrow columns they
+        // actually need, and only for the rows that have the data.
+        $answered = $todayScoped()->whereNotNull('connected_at')->count();
+        $missed = $todayScoped()->where('status', CallLog::STATUS_MISSED)->count();
         $decisive = $answered + $missed;
 
-        $timeToAnswer = $todayCalls
-            ->filter(fn (CallLog $c) => $c->connected_at !== null && $c->started_at !== null)
+        $statusBreakdown = $todayScoped()
+            ->selectRaw('status, count(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $timeToAnswer = $todayScoped()
+            ->whereNotNull('connected_at')
+            ->whereNotNull('started_at')
+            ->get(['started_at', 'connected_at'])
             ->map(fn (CallLog $c) => max(0, $c->connected_at->getTimestamp() - $c->started_at->getTimestamp()));
 
-        $mos = $todayCalls->map(fn (CallLog $c) => $c->quality_metrics['mos'] ?? null)->filter();
+        $mos = $todayScoped()
+            ->whereNotNull('quality_metrics')
+            ->get(['quality_metrics'])
+            ->map(fn (CallLog $c) => $c->quality_metrics['mos'] ?? null)
+            ->filter();
 
         $query = CallLog::query()->tap($scope)
             ->with(['contact', 'conversation', 'whatsappInstance', 'placedBy']);
@@ -114,7 +133,7 @@ class CallController extends Controller
                 'answerRate' => $decisive > 0 ? (int) round($answered / $decisive * 100) : null,
                 'avgTimeToAnswerSeconds' => $timeToAnswer->isNotEmpty() ? (int) round($timeToAnswer->avg()) : null,
                 'avgMos' => $mos->isNotEmpty() ? round((float) $mos->avg(), 1) : null,
-                'statusBreakdown' => $todayCalls->groupBy('status')->map->count(),
+                'statusBreakdown' => $statusBreakdown,
             ],
         ]);
     }

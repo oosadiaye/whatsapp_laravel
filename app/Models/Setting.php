@@ -13,19 +13,61 @@ class Setting extends Model
         'value',
     ];
 
+    /**
+     * Request-scoped memoization (audit L12). Settings are read repeatedly per
+     * request (default_country_code, voice config, ...) but rarely change within
+     * one; caching the resolved value avoids a DB round-trip per call. A distinct
+     * MISS sentinel lets us cache "no such row" separately from a stored null.
+     * The cache is flushed between tests (see Tests\TestCase::setUp).
+     *
+     * @var array<string, mixed>
+     */
+    protected static array $cache = [];
+
+    private const MISS = "\0__setting_miss__\0";
+
+    protected static function booted(): void
+    {
+        // Any model-level write or delete invalidates the request cache. Mass
+        // query-builder deletes (Setting::query()->...->delete()) bypass model
+        // events, so code doing that must call flushCache() itself — but
+        // production only ever writes through set()/model deletes.
+        static::saved(fn () => static::flushCache());
+        static::deleted(fn () => static::flushCache());
+    }
+
     public static function get(string $key, $default = null)
     {
-        $setting = static::where('key', $key)->first();
+        if (! array_key_exists($key, static::$cache)) {
+            $setting = static::where('key', $key)->first();
+            static::$cache[$key] = $setting ? $setting->value : self::MISS;
+        }
 
-        return $setting ? $setting->value : $default;
+        $value = static::$cache[$key];
+
+        return $value === self::MISS ? $default : $value;
     }
 
     public static function set(string $key, $value): static
     {
-        return static::updateOrCreate(
+        $model = static::updateOrCreate(
             ['key' => $key],
             ['value' => $value],
         );
+
+        static::$cache[$key] = $value;
+
+        return $model;
+    }
+
+    /**
+     * Clear the request-scoped cache. Called between tests so a value written in
+     * one test can't leak into the next (the DB is truncated by RefreshDatabase,
+     * but this in-memory cache is process-static).
+     */
+    public static function flushCache(): void
+    {
+        static::$cache = [];
     }
 
     /**

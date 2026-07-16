@@ -107,6 +107,7 @@ class AfricasTalkingVoiceServiceTest extends TestCase
     public function test_place_call_throws_configuration_exception_when_virtual_number_missing(): void
     {
         Setting::query()->where('key', 'africastalking_virtual_number')->delete();
+        Setting::flushCache(); // direct query-builder delete bypasses the model cache
 
         $service = $this->app->make(AfricasTalkingVoiceService::class);
         $this->expectException(ConfigurationException::class);
@@ -181,6 +182,7 @@ class AfricasTalkingVoiceServiceTest extends TestCase
     public function test_generate_client_token_throws_configuration_exception_when_api_key_missing(): void
     {
         Setting::query()->where('key', 'africastalking_api_key')->delete();
+        Setting::flushCache(); // direct query-builder delete bypasses the model cache
 
         $service = $this->app->make(AfricasTalkingVoiceService::class);
         $user = User::factory()->create();
