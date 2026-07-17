@@ -144,7 +144,7 @@
                                                     Edit
                                                 </a>
                                                 <form action="{{ route('contacts.destroy', $contact) }}" method="POST" class="inline"
-                                                      onsubmit="return confirm('Remove this contact?')">
+                                                      data-confirm="Remove this contact?">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit"

@@ -6,6 +6,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Vite;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -13,13 +14,16 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Content-Security-Policy: chart.js and the Africa's Talking SDK are now
  * self-hosted under public/vendor (audit M8), so no external script origin is
- * needed — script-src is same-origin. Alpine and Livewire still require
- * 'unsafe-inline'/'unsafe-eval', and a few inline boot scripts (the voice
- * client) need 'unsafe-inline', so those stay for now; tightening to a
- * nonce-based policy is a documented follow-up. Even with those, the policy
- * blocks loading script from any external origin, plugin embedding
- * (object-src none), base-tag injection (base-uri self) and clickjacking
- * (frame-ancestors none).
+ * needed. script-src is nonce-based — a per-request nonce (Vite::useCspNonce)
+ * is carried by @vite, Livewire (which reads Vite::cspNonce()), and our inline
+ * <script> tags, so 'unsafe-inline' is dropped: an injected inline script won't
+ * execute without the nonce. 'unsafe-eval' remains because Alpine 3's standard
+ * build evaluates x-data/x-on expressions via new Function() (removing it needs
+ * the Alpine CSP build — a separate, larger change). style-src keeps
+ * 'unsafe-inline' because inline style="" attributes can't use nonces. The
+ * policy also blocks external script origins, plugin embedding (object-src
+ * none), base-tag injection (base-uri self) and clickjacking (frame-ancestors
+ * none).
  *
  * HSTS is emitted only over HTTPS — with TrustProxies configured, secure() is
  * correct behind the load balancer (audit H5).
@@ -31,6 +35,11 @@ class SecurityHeaders
 {
     public function handle(Request $request, Closure $next): Response
     {
+        // Generate the per-request CSP nonce BEFORE the view renders so @vite,
+        // Livewire, and our inline <script nonce="..."> tags all emit the same
+        // value that the script-src directive below trusts.
+        Vite::useCspNonce();
+
         $response = $next($request);
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
@@ -53,11 +62,16 @@ class SecurityHeaders
 
     private function contentSecurityPolicy(): string
     {
+        // Same per-request nonce that @vite/Livewire/our inline scripts emit.
+        $nonce = Vite::cspNonce();
+
         return implode('; ', [
             "default-src 'self'",
-            // Alpine/Livewire need eval+inline; all first-party scripts are
-            // same-origin (self-hosted vendor libs), so no external host here.
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+            // Nonce-based: inline scripts must carry this nonce, so an injected
+            // <script> can't run. 'unsafe-eval' stays for Alpine's expression
+            // evaluation (see class docblock). All first-party scripts are
+            // same-origin (self-hosted vendor libs), so no external host.
+            "script-src 'self' 'nonce-{$nonce}' 'unsafe-eval'",
             "style-src 'self' 'unsafe-inline' https://fonts.bunny.net",
             "font-src 'self' https://fonts.bunny.net data:",
             "img-src 'self' data: https:",

@@ -173,6 +173,20 @@
             </main>
         </div>
 
+        {{-- Delegated confirm() guard for destructive forms. Replaces per-form
+             onsubmit="return confirm(...)" handlers, which a nonce-based CSP
+             can't allow (nonces don't cover inline event-handler attributes).
+             Capture-phase delegation also covers Livewire-rendered forms. --}}
+        <script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
+            document.addEventListener('submit', function (e) {
+                var form = e.target;
+                if (form instanceof HTMLFormElement && form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, true);
+        </script>
+
         @livewireScripts
         @stack('scripts')
     </body>

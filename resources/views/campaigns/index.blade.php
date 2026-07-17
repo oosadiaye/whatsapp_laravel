@@ -16,7 +16,7 @@
                 @can('campaigns.cancel')
                     @if($stuckCount > 0)
                         <form action="{{ route('campaigns.clearQueue') }}" method="POST" class="inline"
-                              onsubmit="return confirm('{{ __('Cancel all') }} {{ $stuckCount }} {{ __('queued/running campaigns and abort their pending sends? This cannot be undone.') }}');">
+                              data-confirm="{{ __('Cancel all') }} {{ $stuckCount }} {{ __('queued/running campaigns and abort their pending sends? This cannot be undone.') }}">
                             @csrf
                             <button type="submit"
                                     class="inline-flex items-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"

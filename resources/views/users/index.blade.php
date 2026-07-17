@@ -81,7 +81,7 @@
                                     @can('users.delete')
                                         @if($user->id !== auth()->id())
                                             <form action="{{ route('users.destroy', $user) }}" method="POST" class="inline"
-                                                  onsubmit="return confirm('Delete user {{ $user->email }}? Their authored campaigns and contacts will remain.')">
+                                                  data-confirm="Delete user {{ $user->email }}? Their authored campaigns and contacts will remain.">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" class="text-red-600 hover:text-red-800 font-medium">{{ __('Delete') }}</button>

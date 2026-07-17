@@ -154,7 +154,7 @@
                                             @endif
 
                                             <a href="{{ route('contacts.edit', $contact) }}" class="text-[#25D366] hover:text-[#1da851] font-medium">{{ __('Edit') }}</a>
-                                            <form method="POST" action="{{ route('contacts.destroy', $contact) }}" onsubmit="return confirm('{{ __('Are you sure you want to delete this contact?') }}')" class="inline">
+                                            <form method="POST" action="{{ route('contacts.destroy', $contact) }}" data-confirm="{{ __('Are you sure you want to delete this contact?') }}" class="inline">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" class="text-red-600 hover:text-red-800 font-medium">{{ __('Delete') }}</button>

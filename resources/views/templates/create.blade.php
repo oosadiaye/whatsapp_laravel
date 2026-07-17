@@ -160,7 +160,7 @@
     </div>
 
     @push('scripts')
-    <script>
+    <script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
         function templateEditor() {
             return {
                 name: '{{ old("name", "") }}',

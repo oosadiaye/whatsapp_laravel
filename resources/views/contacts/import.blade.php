@@ -323,7 +323,7 @@
     </div>
 
     @push('scripts')
-    <script>
+    <script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
         function contactImport() {
             return {
                 step: 1,

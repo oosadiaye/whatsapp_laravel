@@ -40,7 +40,7 @@
                      the database queue table, so jobs queued before cancel won't fire. --}}
                 @if(in_array($campaign->status, ['RUNNING', 'QUEUED', 'PAUSED'], true))
                     <form action="{{ route('campaigns.cancel', $campaign) }}" method="POST" class="inline"
-                          onsubmit="return confirm('{{ __('Cancel this campaign and clear its pending sends?') }}')">
+                          data-confirm="{{ __('Cancel this campaign and clear its pending sends?') }}">
                         @csrf
                         <button type="submit" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600">Cancel</button>
                     </form>
@@ -65,7 +65,7 @@
                 @can('campaigns.delete')
                     @if(in_array($campaign->status, ['DRAFT', 'QUEUED', 'PAUSED', 'COMPLETED', 'FAILED', 'CANCELLED'], true))
                         <form action="{{ route('campaigns.destroy', $campaign) }}" method="POST" class="inline"
-                              onsubmit="return confirm('{{ __("Permanently delete this campaign and all its message logs? This cannot be undone.") }}');">
+                              data-confirm="{{ __("Permanently delete this campaign and all its message logs? This cannot be undone.") }}">
                             @csrf
                             @method('DELETE')
                             <button type="submit" class="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">{{ __('Delete') }}</button>

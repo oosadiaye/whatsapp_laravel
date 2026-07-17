@@ -49,7 +49,7 @@
                             <div class="text-xs text-gray-400">{{ ucfirst($s->reason) }} · {{ $s->created_at?->diffForHumans() }}</div>
                         </div>
                         @can('email.edit')
-                            <form method="POST" action="{{ route('email-suppressions.destroy', $s) }}" onsubmit="return confirm('Remove {{ $s->email }} from the suppression list? They may be emailed again.')">
+                            <form method="POST" action="{{ route('email-suppressions.destroy', $s) }}" data-confirm="Remove {{ $s->email }} from the suppression list? They may be emailed again.">
                                 @csrf @method('DELETE')
                                 <button type="submit" class="text-xs font-semibold text-red-600 hover:underline">{{ __('Remove') }}</button>
                             </form>

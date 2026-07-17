@@ -74,7 +74,7 @@
                                     View
                                 </a>
                                 <form action="{{ route('groups.destroy', $group) }}" method="POST" class="inline"
-                                      onsubmit="return confirm('Delete this group? This cannot be undone.')">
+                                      data-confirm="Delete this group? This cannot be undone.">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit"

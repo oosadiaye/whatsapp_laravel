@@ -156,7 +156,7 @@
                                 @endunless
                                 <form method="POST"
                                       action="{{ route('templates.destroy', $template) }}"
-                                      onsubmit="return confirm('{{ __('Are you sure you want to delete this template?') }}')">
+                                      data-confirm="{{ __('Are you sure you want to delete this template?') }}">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit"

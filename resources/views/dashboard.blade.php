@@ -143,7 +143,7 @@
     </div>
 
     @push('scripts')
-    <script>
+    <script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
         document.addEventListener('DOMContentLoaded', function () {
             // Messages Per Day - Line Chart
             const messagesData = @json($messagesPerDay);

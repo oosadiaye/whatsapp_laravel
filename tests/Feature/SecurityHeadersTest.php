@@ -38,4 +38,45 @@ class SecurityHeadersTest extends TestCase
         $this->assertStringNotContainsString('cdn.jsdelivr.net', $csp);
         $this->assertStringNotContainsString('unpkg.com', $csp);
     }
+
+    public function test_script_src_is_nonce_based_not_unsafe_inline(): void
+    {
+        $csp = $this->get('/login')->headers->get('Content-Security-Policy');
+
+        // Isolate the script-src directive from the rest of the policy.
+        preg_match('/script-src[^;]*/', $csp, $m);
+        $scriptSrc = $m[0] ?? '';
+
+        $this->assertStringContainsString("'nonce-", $scriptSrc, 'script-src must be nonce-based');
+        $this->assertStringNotContainsString("'unsafe-inline'", $scriptSrc, "script-src must not fall back to 'unsafe-inline'");
+        // 'unsafe-eval' is a documented residual (Alpine's expression evaluation).
+        $this->assertStringContainsString("'unsafe-eval'", $scriptSrc);
+
+        // style-src MUST keep 'unsafe-inline' — inline style="" attributes can't
+        // be nonced, and removing it would break the UI.
+        preg_match('/style-src[^;]*/', $csp, $sm);
+        $this->assertStringContainsString("'unsafe-inline'", $sm[0] ?? '');
+    }
+
+    public function test_rendered_inline_scripts_carry_the_header_nonce(): void
+    {
+        // The per-request nonce in the CSP header must be the same one @vite,
+        // Livewire, and our inline <script> tags emit — otherwise the browser
+        // blocks them. Render a full app-layout page and prove they match.
+        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+        $user = \App\Models\User::factory()->create(['is_active' => true]);
+        $user->assignRole('super_admin');
+
+        $response = $this->actingAs($user)->get(route('dashboard'));
+        $response->assertOk();
+
+        $csp = $response->headers->get('Content-Security-Policy');
+        preg_match("/'nonce-([^']+)'/", (string) $csp, $m);
+        $nonce = $m[1] ?? null;
+        $this->assertNotEmpty($nonce, 'CSP must carry a nonce');
+
+        // At least one inline script (Livewire's config script + the dashboard
+        // chart script) must carry that exact nonce.
+        $this->assertStringContainsString('nonce="'.$nonce.'"', $response->getContent());
+    }
 }

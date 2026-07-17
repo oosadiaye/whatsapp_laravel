@@ -45,7 +45,7 @@
                     @endcan
                     @can('email.send')
                         @if($sendable)
-                            <form method="POST" action="{{ route('email-campaigns.launch', $campaign) }}" onsubmit="return confirm('Send this campaign now to {{ $recipientCount }} recipients?')">
+                            <form method="POST" action="{{ route('email-campaigns.launch', $campaign) }}" data-confirm="Send this campaign now to {{ $recipientCount }} recipients?">
                                 @csrf
                                 <button type="submit" class="px-4 py-1.5 text-sm rounded-lg bg-[#4f46e5] text-white font-semibold hover:bg-[#4338ca]">{{ __('Send now') }}</button>
                             </form>
@@ -63,7 +63,7 @@
                             </form>
                         @endif
                         @if(in_array($campaign->status, ['scheduled','queued','sending']))
-                            <form method="POST" action="{{ route('email-campaigns.cancel', $campaign) }}" onsubmit="return confirm('Cancel this campaign?')">
+                            <form method="POST" action="{{ route('email-campaigns.cancel', $campaign) }}" data-confirm="Cancel this campaign?">
                                 @csrf
                                 <button type="submit" class="px-3 py-1.5 text-sm rounded-lg border border-red-200 text-red-600 hover:bg-red-50">{{ __('Cancel') }}</button>
                             </form>
