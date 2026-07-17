@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Imports\ContactsSheetImport;
 use App\Models\Contact;
 use App\Models\ContactGroup;
 use App\Models\Setting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\LazyCollection;
+use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * Handles contact import from CSV/XLSX files and message personalization.
@@ -31,90 +33,124 @@ class ContactImportService
         // every row).
         $defaultCountryCode = (string) Setting::get('default_country_code', '234');
 
-        $imported = 0;
-        $duplicates = 0;
-        $invalid = 0;
-
-        // Stream the file row-by-row (audit M6 — never materialise the whole
-        // file) and process in transactional chunks (audit L3 — a mid-chunk
-        // failure rolls back instead of leaving partial state).
-        $this->rows($filePath)->chunk(100)->each(function ($chunk) use (
-            &$imported, &$duplicates, &$invalid, $columnMap, $userId, $group, $defaultCountryCode
-        ): void {
-            DB::transaction(function () use (
-                $chunk, &$imported, &$duplicates, &$invalid, $columnMap, $userId, $group, $defaultCountryCode
-            ): void {
-                foreach ($chunk as $row) {
-                    $rawPhone = isset($columnMap['phone']) ? ($row[$columnMap['phone']] ?? '') : '';
-                    $phone = $this->normalizePhone((string) $rawPhone, $defaultCountryCode);
-
-                    $rawEmail = isset($columnMap['email']) ? trim((string) ($row[$columnMap['email']] ?? '')) : '';
-                    $email = filter_var($rawEmail, FILTER_VALIDATE_EMAIL) ? strtolower($rawEmail) : null;
-
-                    // A row needs at least a valid phone OR a valid email to be a
-                    // contact (email-only prospects are allowed now).
-                    if ($phone === null && $email === null) {
-                        $invalid++;
-                        continue;
-                    }
-
-                    $name = $row[$columnMap['name']] ?? null;
-
-                    $customFields = [];
-                    if (isset($columnMap['custom_field_1'], $row[$columnMap['custom_field_1']])) {
-                        $customFields['custom_field_1'] = $row[$columnMap['custom_field_1']];
-                    }
-                    if (isset($columnMap['custom_field_2'], $row[$columnMap['custom_field_2']])) {
-                        $customFields['custom_field_2'] = $row[$columnMap['custom_field_2']];
-                    }
-
-                    // Only write name/custom_fields when the incoming row actually
-                    // carries a value. Blank cells (a phone-only re-import) must NOT
-                    // overwrite a contact's existing name/custom fields with ''/null
-                    // — that was silent data loss. Omitting the key leaves the stored
-                    // value untouched on update, and falls back to the column default
-                    // on create.
-                    $attributes = [];
-                    if ($name !== null && trim((string) $name) !== '') {
-                        $attributes['name'] = $name;
-                    }
-                    if ($customFields !== []) {
-                        $attributes['custom_fields'] = $customFields;
-                    }
-                    if ($email !== null) {
-                        $attributes['email'] = $email;
-                    }
-
-                    // Upsert on phone when present, else on email (email-only rows).
-                    $key = $phone !== null
-                        ? ['user_id' => $userId, 'phone' => $phone]
-                        : ['user_id' => $userId, 'email' => $email];
-
-                    // IncludingTrashed: re-importing a previously-deleted contact
-                    // revives + updates it instead of dying on the unversioned
-                    // unique index mid-batch (see Contact::firstOrNewIncludingTrashed).
-                    $contact = Contact::updateOrCreateIncludingTrashed($key, $attributes);
-
-                    if ($contact->wasRecentlyCreated) {
-                        $imported++;
-                    } else {
-                        $duplicates++;
-                    }
-
-                    if (! $group->contacts()->where('contact_id', $contact->id)->exists()) {
-                        $group->contacts()->attach($contact->id);
-                    }
-                }
-            });
-        });
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $counters = $extension === 'csv'
+            ? $this->importCsv($filePath, $columnMap, $userId, $group, $defaultCountryCode)
+            : $this->importXlsx($filePath, $columnMap, $userId, $group, $defaultCountryCode);
 
         $group->update(['contact_count' => $group->contacts()->count()]);
 
+        return $counters;
+    }
+
+    /**
+     * Stream a CSV row-by-row (audit M6 — never materialise the whole file) and
+     * process it in transactional chunks (audit L3 — a mid-chunk failure rolls
+     * back instead of leaving partial state).
+     *
+     * @param  array<string, string>  $columnMap
+     * @return array{imported: int, duplicates: int, invalid: int}
+     */
+    private function importCsv(string $filePath, array $columnMap, int $userId, ContactGroup $group, string $defaultCountryCode): array
+    {
+        $counters = ['imported' => 0, 'duplicates' => 0, 'invalid' => 0];
+
+        LazyCollection::make(fn () => $this->streamCsv($filePath))
+            ->chunk(100)
+            ->each(function ($chunk) use (&$counters, $columnMap, $userId, $group, $defaultCountryCode): void {
+                DB::transaction(function () use ($chunk, &$counters, $columnMap, $userId, $group, $defaultCountryCode): void {
+                    foreach ($chunk as $row) {
+                        $counters[$this->processImportRow($row, $columnMap, $userId, $group, $defaultCountryCode)]++;
+                    }
+                });
+            });
+
+        return $counters;
+    }
+
+    /**
+     * Chunk-read an .xlsx workbook (audit M6) via {@see ContactsSheetImport} so a
+     * large sheet never loads fully into memory, mirroring the CSV stream. Rows
+     * flow through the same {@see processImportRow()} handler the CSV path uses,
+     * so the two formats can't drift.
+     *
+     * @param  array<string, string>  $columnMap
+     * @return array{imported: int, duplicates: int, invalid: int}
+     */
+    private function importXlsx(string $filePath, array $columnMap, int $userId, ContactGroup $group, string $defaultCountryCode): array
+    {
+        $import = new ContactsSheetImport(
+            fn (array $row): string => $this->processImportRow($row, $columnMap, $userId, $group, $defaultCountryCode),
+        );
+
+        Excel::import($import, $this->absoluteCsvPath($filePath));
+
         return [
-            'imported' => $imported,
-            'duplicates' => $duplicates,
-            'invalid' => $invalid,
+            'imported' => $import->imported,
+            'duplicates' => $import->duplicates,
+            'invalid' => $import->invalid,
         ];
+    }
+
+    /**
+     * Process a single import row: parse phone/email, upsert the contact
+     * (reviving a soft-deleted match — see Contact::firstOrNewIncludingTrashed),
+     * and attach it to the group. Shared by the CSV and XLSX readers.
+     *
+     * @param  array<string, mixed>  $row  associative, keyed by the file's headers
+     * @param  array<string, string>  $columnMap
+     * @return string  the result key this row increments: imported|duplicates|invalid
+     */
+    private function processImportRow(array $row, array $columnMap, int $userId, ContactGroup $group, string $defaultCountryCode): string
+    {
+        $rawPhone = isset($columnMap['phone']) ? ($row[$columnMap['phone']] ?? '') : '';
+        $phone = $this->normalizePhone((string) $rawPhone, $defaultCountryCode);
+
+        $rawEmail = isset($columnMap['email']) ? trim((string) ($row[$columnMap['email']] ?? '')) : '';
+        $email = filter_var($rawEmail, FILTER_VALIDATE_EMAIL) ? strtolower($rawEmail) : null;
+
+        // A row needs at least a valid phone OR a valid email to be a contact
+        // (email-only prospects are allowed now).
+        if ($phone === null && $email === null) {
+            return 'invalid';
+        }
+
+        $name = $row[$columnMap['name']] ?? null;
+
+        $customFields = [];
+        if (isset($columnMap['custom_field_1'], $row[$columnMap['custom_field_1']])) {
+            $customFields['custom_field_1'] = $row[$columnMap['custom_field_1']];
+        }
+        if (isset($columnMap['custom_field_2'], $row[$columnMap['custom_field_2']])) {
+            $customFields['custom_field_2'] = $row[$columnMap['custom_field_2']];
+        }
+
+        // Only write name/custom_fields when the incoming row actually carries a
+        // value. Blank cells (a phone-only re-import) must NOT overwrite an
+        // existing name/custom fields with ''/null — that was silent data loss.
+        $attributes = [];
+        if ($name !== null && trim((string) $name) !== '') {
+            $attributes['name'] = $name;
+        }
+        if ($customFields !== []) {
+            $attributes['custom_fields'] = $customFields;
+        }
+        if ($email !== null) {
+            $attributes['email'] = $email;
+        }
+
+        // Upsert on phone when present, else on email (email-only rows).
+        $key = $phone !== null
+            ? ['user_id' => $userId, 'phone' => $phone]
+            : ['user_id' => $userId, 'email' => $email];
+
+        $contact = Contact::updateOrCreateIncludingTrashed($key, $attributes);
+
+        if (! $group->contacts()->where('contact_id', $contact->id)->exists()) {
+            $group->contacts()->attach($contact->id);
+        }
+
+        return $contact->wasRecentlyCreated ? 'imported' : 'duplicates';
     }
 
     /**
@@ -165,25 +201,6 @@ class ContactImportService
     public function personalizeMessage(string $template, Contact $contact, string $campaignName = ''): string
     {
         return (new \App\Support\Personalizer())->named($contact, $template, $campaignName);
-    }
-
-    /**
-     * A lazy row stream for the import file, uniform across formats. CSV is read
-     * row-by-row (true streaming — audit M6); XLSX is materialised by
-     * Maatwebsite\Excel::toArray and wrapped so callers get the same lazy
-     * interface (chunk-reading XLSX is a larger change, deferred).
-     *
-     * @return LazyCollection<int, array<string, string>>
-     */
-    private function rows(string $filePath): LazyCollection
-    {
-        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-
-        if ($extension === 'csv') {
-            return LazyCollection::make(fn () => $this->streamCsv($filePath));
-        }
-
-        return LazyCollection::make($this->readXlsx($filePath));
     }
 
     /**
@@ -263,42 +280,5 @@ class ContactImportService
         }
 
         return \Illuminate\Support\Facades\Storage::disk('local')->path($filePath);
-    }
-
-    /**
-     * Read rows from an XLSX file using Maatwebsite\Excel.
-     *
-     * @return array<int, array<string, string>>
-     */
-    private function readXlsx(string $filePath): array
-    {
-        // Same path-resolution rule as readCsv — Maatwebsite\Excel::toArray
-        // needs an absolute filesystem path, not a Storage disk key.
-        $filePath = $this->absoluteCsvPath($filePath);
-        $rows = [];
-
-        try {
-            $data = \Maatwebsite\Excel\Facades\Excel::toArray(null, $filePath);
-
-            if (empty($data) || empty($data[0])) {
-                return [];
-            }
-
-            $sheet = $data[0];
-            $headers = array_map('trim', $sheet[0]);
-
-            for ($i = 1, $count = count($sheet); $i < $count; $i++) {
-                if (count($sheet[$i]) === count($headers)) {
-                    $rows[] = array_combine($headers, $sheet[$i]);
-                }
-            }
-        } catch (\Throwable $e) {
-            Log::error('ContactImportService: Failed to read XLSX file', [
-                'path' => $filePath,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        return $rows;
     }
 }

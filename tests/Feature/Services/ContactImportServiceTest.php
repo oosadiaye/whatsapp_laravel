@@ -160,4 +160,83 @@ class ContactImportServiceTest extends TestCase
 
         $this->assertSame('Alice', Contact::where('phone', '2348012345678')->firstOrFail()->name);
     }
+
+    public function test_xlsx_import_chunk_reads_and_persists_contacts(): void
+    {
+        // Audit M6 (XLSX): the .xlsx path now chunk-reads via ContactsSheetImport
+        // instead of loading the whole sheet. Verify a real workbook imports and
+        // shares the CSV path's parsing (valid rows in, invalid row rejected).
+        Storage::fake('local');
+
+        $admin = User::factory()->create(['is_active' => true]);
+        $group = ContactGroup::create(['user_id' => $admin->id, 'name' => 'Targets']);
+
+        $diskKey = 'imports/contacts.xlsx';
+        $this->writeXlsx(Storage::disk('local')->path($diskKey), [
+            ['phone', 'name'],
+            ['+2348011111111', 'Ann'],
+            ['+2348022222222', 'Bob'],
+            ['not-a-phone', ''], // invalid — no phone, no email
+        ]);
+
+        $result = (new ContactImportService())->importFromFile(
+            $diskKey,
+            $group->id,
+            ['phone' => 'phone', 'name' => 'name'],
+            $admin->id,
+        );
+
+        $this->assertSame(2, $result['imported']);
+        $this->assertSame(1, $result['invalid']);
+        $this->assertDatabaseHas('contacts', ['phone' => '2348011111111', 'name' => 'Ann']);
+        $this->assertDatabaseHas('contacts', ['phone' => '2348022222222', 'name' => 'Bob']);
+        $this->assertSame(2, $group->fresh()->contacts()->count());
+    }
+
+    public function test_xlsx_reimport_revives_a_soft_deleted_contact(): void
+    {
+        // The XLSX path runs the same processImportRow → updateOrCreateIncludingTrashed
+        // as CSV, so the B1 revival guarantee holds for .xlsx too.
+        Storage::fake('local');
+
+        $admin = User::factory()->create(['is_active' => true]);
+        $group = ContactGroup::create(['user_id' => $admin->id, 'name' => 'Targets']);
+
+        $deleted = Contact::create(['user_id' => $admin->id, 'phone' => '2348011111111', 'name' => 'Before']);
+        $deleted->delete();
+
+        $diskKey = 'imports/revive.xlsx';
+        $this->writeXlsx(Storage::disk('local')->path($diskKey), [
+            ['phone', 'name'],
+            ['+2348011111111', 'After'],
+        ]);
+
+        (new ContactImportService())->importFromFile(
+            $diskKey,
+            $group->id,
+            ['phone' => 'phone', 'name' => 'name'],
+            $admin->id,
+        );
+
+        $this->assertSame(1, Contact::withTrashed()->where('phone', '2348011111111')->count());
+        $revived = Contact::where('phone', '2348011111111')->first();
+        $this->assertNotNull($revived);
+        $this->assertSame($deleted->id, $revived->id);
+        $this->assertSame('After', $revived->name);
+    }
+
+    /**
+     * Write a real .xlsx workbook at an absolute path for the import to read.
+     *
+     * @param  array<int, array<int, string>>  $rows
+     */
+    private function writeXlsx(string $absolutePath, array $rows): void
+    {
+        @mkdir(dirname($absolutePath), 0777, true);
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $spreadsheet->getActiveSheet()->fromArray($rows);
+        (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet))->save($absolutePath);
+        $spreadsheet->disconnectWorksheets();
+    }
 }
