@@ -254,8 +254,11 @@ php artisan storage:link
 
 ## Observability
 
-- **Health check:** `/up` returns 200 when the app boots. Point your uptime
-  monitor at it.
+- **Health check:** `/up` deep-checks the database (returns non-200 if it's
+  unreachable, not just when PHP fails to boot). Point your uptime monitor at it.
+- **Queue backlog:** the scheduler runs `queue:monitor` every 5 min and logs a
+  `Queue backlog exceeded threshold` warning when `messages`/`imports`/`default`
+  exceed 200 pending jobs — wire your log alerting to that string.
 - **Queue failures:** watch `failed_jobs` (or Horizon's Failed tab). Alert on
   growth — a spike usually means a bad credential or an unreachable provider.
 - **Error tracking (recommended):** wire an exception reporter (e.g. Sentry) in

@@ -34,3 +34,8 @@ Schedule::command('calls:prune-recordings')
 // Snapshot Horizon queue metrics so the dashboard's wait-time/throughput trends
 // have history to draw (audit L9). No-op when Horizon isn't running.
 Schedule::command('horizon:snapshot')->everyFiveMinutes();
+
+// Alert when a queue backs up past a healthy threshold (audit L10). Fires
+// QueueBusy → logged in AppServiceProvider. Bare queue names use the default
+// connection, so this is queue-driver agnostic (redis or database).
+Schedule::command('queue:monitor messages,imports,default --max=200')->everyFiveMinutes();

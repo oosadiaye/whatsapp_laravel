@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use Illuminate\Foundation\Events\DiagnosingHealth;
+use Illuminate\Queue\Events\QueueBusy;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
@@ -17,6 +22,34 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->guardAgainstStrayViteHotFileInProduction();
+        $this->registerObservability();
+    }
+
+    /**
+     * Observability wiring (audit L10).
+     *
+     * 1. Deep health check: the `/up` route dispatches DiagnosingHealth. Probe
+     *    the primary datastore so a throw makes `/up` return non-200 — an uptime
+     *    monitor then reflects real availability, not just "PHP booted" (the
+     *    default `/up` returns 200 even with the database unreachable).
+     * 2. Queue backlog: `queue:monitor` (scheduled in routes/console.php) fires
+     *    QueueBusy when a queue exceeds its threshold. Log it so a backing-up
+     *    send/import queue is visible + alertable without watching Horizon.
+     */
+    private function registerObservability(): void
+    {
+        Event::listen(function (DiagnosingHealth $event): void {
+            // Cheap liveness of the DB connection — throws if unreachable.
+            DB::connection()->getPdo();
+        });
+
+        Event::listen(function (QueueBusy $event): void {
+            Log::warning('Queue backlog exceeded threshold', [
+                'connection' => $event->connection,
+                'queue' => $event->queue,
+                'size' => $event->size,
+            ]);
+        });
     }
 
     /**
