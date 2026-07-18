@@ -28,6 +28,17 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    | Inbound provider bounce/complaint webhooks. The secret is an unguessable
+    | token embedded in the callback URL path
+    | (/webhooks/email/{provider}/{secret}); the endpoint fails closed (404)
+    | until it is set. A hard bounce or spam complaint adds the address to the
+    | EmailSuppression list so the send pipeline stops emailing it.
+    */
+    'email_webhooks' => [
+        'secret' => env('EMAIL_WEBHOOK_SECRET'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

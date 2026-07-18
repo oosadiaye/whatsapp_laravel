@@ -34,6 +34,12 @@ Route::middleware([
     // see config voice.at_webhook_secret.
     Route::post('/webhooks/africastalking/voice/{secret?}', [\App\Http\Controllers\AfricasTalkingWebhookController::class, 'handle'])
         ->name('webhook.africastalking.voice');
+
+    // Provider bounce/complaint ingestion → auto-suppression. The {secret} path
+    // segment authenticates (fail-closed 404 until services.email_webhooks.secret
+    // is set); {provider} selects the parser (e.g. postmark).
+    Route::post('/webhooks/email/{provider}/{secret}', [\App\Http\Controllers\EmailWebhookController::class, 'handle'])
+        ->name('webhook.email');
 });
 
 // Public one-click email unsubscribe. Signed URL (tamper-proof); every campaign

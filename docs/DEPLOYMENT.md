@@ -269,6 +269,34 @@ php artisan storage:link
 
 ---
 
+## Bounce / complaint auto-suppression
+
+Once real email sending is live, wire your provider's bounce + spam-complaint
+webhooks so hard bounces and complaints add themselves to the suppression list
+automatically (otherwise you keep emailing dead addresses and hurt your sender
+reputation).
+
+1. Set a long random secret: `EMAIL_WEBHOOK_SECRET=$(openssl rand -hex 32)`.
+   Until this is set the endpoint returns 404 (inert).
+2. In your provider, point the **Bounce** and **SpamComplaint** webhooks at:
+
+   ```
+   https://your-app/webhooks/email/{provider}/{EMAIL_WEBHOOK_SECRET}
+   ```
+
+   `{provider}` is `postmark` (supported out of the box). The URL secret
+   authenticates the callback (constant-time compared, fail-closed).
+3. Hard/permanent bounces → suppressed as `bounce`; spam complaints → `complaint`.
+   Soft/transient bounces are ignored (they recover). Manage the list at
+   `/email-campaigns/suppressions`.
+
+Adding another provider (SES SNS, Mailgun, SendGrid) is one parser class
+implementing `App\Services\EmailEvents\EmailEventParser`, registered in
+`EmailEventParserFactory` — providers that sign payloads verify that signature
+in their parser on top of the URL secret.
+
+---
+
 ## Verifying the deploy
 
 After everything is up:
