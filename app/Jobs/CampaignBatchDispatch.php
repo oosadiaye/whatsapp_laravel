@@ -85,9 +85,22 @@ class CampaignBatchDispatch implements ShouldQueue
         $intervalMs = (60 / $this->campaign->rate_per_minute) * 1000;
         $delay = 0.0;
 
-        $audience()->chunkById(500, function ($contacts) use (&$delay, $intervalMs): void {
-            $this->fanOutChunk($contacts, $delay, $intervalMs);
-        });
+        // Fan out only contacts that don't ALREADY have a log for this campaign.
+        // message_logs has no unique (campaign_id, contact_id) constraint, so
+        // without this an operator relaunch after a partial failure (the recovery
+        // path failed()/$tries=1 recommends) would insert a second PENDING log
+        // per already-dispatched contact and double-send. total_contacts stays
+        // the full-audience count above, so completion still measures against the
+        // whole audience while sent_count accumulates across the resumed run.
+        $audience()
+            ->whereNotIn('id', function ($q) {
+                $q->select('contact_id')
+                    ->from('message_logs')
+                    ->where('campaign_id', $this->campaign->id);
+            })
+            ->chunkById(500, function ($contacts) use (&$delay, $intervalMs): void {
+                $this->fanOutChunk($contacts, $delay, $intervalMs);
+            });
     }
 
     /**

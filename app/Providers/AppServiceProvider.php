@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\Setting;
 use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Queue\Events\QueueBusy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
@@ -23,6 +25,13 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->guardAgainstStrayViteHotFileInProduction();
         $this->registerObservability();
+
+        // Setting has a process-static read cache (audit L12). PHP-FPM resets
+        // statics per request, but a long-lived queue worker keeps them across
+        // jobs — so a setting changed in the web process would be served stale by
+        // the worker until it recycled. Flush before each job to bound staleness
+        // to a single job.
+        Queue::before(fn () => Setting::flushCache());
     }
 
     /**

@@ -26,6 +26,14 @@ class SendCampaignEmail implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    // Exactly one attempt (mirrors SendWhatsAppMessage). The per-log QUEUED
+    // guard in handle() is check-then-act, not atomic: if a send succeeds but
+    // the follow-up status write throws, the log is still QUEUED, so a Horizon
+    // auto-retry (default supervisor tries=3) would re-enter and send a DUPLICATE
+    // email. $tries=1 means a first-attempt crash just fails the job — no
+    // re-entry — which is what actually closes the gap.
+    public int $tries = 1;
+
     public function __construct(public readonly int $logId)
     {
     }

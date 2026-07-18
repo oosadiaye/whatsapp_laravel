@@ -151,6 +151,50 @@ class CampaignContactAttachmentTest extends TestCase
         Bus::assertDispatchedTimes(\App\Jobs\SendWhatsAppMessage::class, 4);
     }
 
+    public function test_relaunch_does_not_re_fan_out_already_logged_contacts(): void
+    {
+        // Review finding: relaunching a partially-failed campaign (the recovery
+        // path failed()/$tries=1 recommends) must not create a second log or a
+        // second send for contacts already dispatched.
+        Http::fake();
+        Bus::fake([\App\Jobs\SendWhatsAppMessage::class]);
+
+        $admin = $this->makeAdmin();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+        $group = ContactGroup::create(['user_id' => $admin->id, 'name' => 'Targets']);
+
+        $contacts = Contact::factory()->count(3)->create(['user_id' => $admin->id, 'is_active' => true]);
+        foreach ($contacts as $c) {
+            $group->contacts()->attach($c->id);
+        }
+
+        $campaign = Campaign::create([
+            'user_id' => $admin->id,
+            'instance_id' => $instance->id,
+            'name' => 'Resumable',
+            'message' => 'Hi',
+            'status' => 'QUEUED',
+            'rate_per_minute' => 60,
+            'delay_min' => 0,
+            'delay_max' => 1,
+        ]);
+        $campaign->contactGroups()->attach($group->id);
+
+        // First launch: 3 logs, 3 sends.
+        (new CampaignBatchDispatch($campaign))->handle();
+        $this->assertSame(3, MessageLog::where('campaign_id', $campaign->id)->count());
+        Bus::assertDispatchedTimes(\App\Jobs\SendWhatsAppMessage::class, 3);
+
+        // Operator relaunch of the campaign.
+        $campaign->update(['status' => 'QUEUED']);
+        (new CampaignBatchDispatch($campaign->fresh()))->handle();
+
+        // No duplicate logs and no extra sends — already-logged contacts are
+        // excluded from the re-fan-out.
+        $this->assertSame(3, MessageLog::where('campaign_id', $campaign->id)->count(), 'no duplicate logs on relaunch');
+        Bus::assertDispatchedTimes(\App\Jobs\SendWhatsAppMessage::class, 3);
+    }
+
     public function test_batch_dispatch_with_no_groups_marks_campaign_completed_with_zero_contacts(): void
     {
         Http::fake();

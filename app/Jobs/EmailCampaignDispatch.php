@@ -23,6 +23,11 @@ class EmailCampaignDispatch implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    // One attempt. The atomic QUEUED->SENDING claim in handle() already makes a
+    // re-run a no-op, but $tries=1 keeps this consistent with the other fan-out
+    // jobs and avoids a retry churning through an already-claimed campaign.
+    public int $tries = 1;
+
     public function __construct(public readonly int $campaignId)
     {
     }

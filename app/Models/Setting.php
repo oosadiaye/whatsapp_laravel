@@ -14,11 +14,16 @@ class Setting extends Model
     ];
 
     /**
-     * Request-scoped memoization (audit L12). Settings are read repeatedly per
-     * request (default_country_code, voice config, ...) but rarely change within
-     * one; caching the resolved value avoids a DB round-trip per call. A distinct
-     * MISS sentinel lets us cache "no such row" separately from a stored null.
-     * The cache is flushed between tests (see Tests\TestCase::setUp).
+     * In-process read cache (audit L12). Settings are read repeatedly
+     * (default_country_code, voice config, ...) but rarely change; caching the
+     * resolved value avoids a DB round-trip per call. A distinct MISS sentinel
+     * lets us cache "no such row" separately from a stored null.
+     *
+     * SCOPE — this is process-static, NOT request-scoped: PHP-FPM resets statics
+     * per request, but a long-lived queue worker keeps them across jobs. So it's
+     * flushed before each queued job (AppServiceProvider::boot) and between tests
+     * (Tests\TestCase::setUp), and invalidated on any model save/delete in the
+     * same process (see booted()).
      *
      * @var array<string, mixed>
      */

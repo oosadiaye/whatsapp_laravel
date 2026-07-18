@@ -46,8 +46,10 @@ class ContactsSheetImport implements ToCollection, WithChunkReading
      */
     public function collection(Collection $rows): void
     {
-        // One transaction per chunk (audit L3): a mid-chunk failure rolls back
-        // rather than leaving a partially-imported sheet.
+        // Transaction per chunk (audit L3): a mid-chunk failure rolls back rather
+        // than leaving a partially-imported sheet. Belt-and-suspenders — Maatwebsite
+        // Excel wraps each chunk in a transaction by default, but this doesn't rely
+        // on that library setting staying enabled.
         DB::transaction(function () use ($rows): void {
             foreach ($rows as $rawCells) {
                 $cells = array_map(
