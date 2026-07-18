@@ -148,6 +148,14 @@ class UserController extends Controller
                 ->with('error', 'You cannot deactivate yourself.');
         }
 
+        // Same privilege boundary as update() (B2): a non-super_admin must not be
+        // able to deactivate a super_admin — otherwise an `admin` (who holds
+        // users.edit) could force-logout and lock out a super_admin via
+        // EnsureUserIsActive + the LoginRequest active check.
+        if ($reason = $this->forbiddenTargetReason($user, $user->roles->first()?->name ?? '')) {
+            return redirect()->back()->with('error', $reason);
+        }
+
         $user->update(['is_active' => ! $user->is_active]);
         $action = $user->is_active ? 'activated' : 'deactivated';
 

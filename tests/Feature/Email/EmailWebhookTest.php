@@ -17,13 +17,16 @@ class EmailWebhookTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** A realistic (>= 16 char) secret; short secrets are rejected as too weak. */
+    private const SECRET = 'webhook-secret-0123456789abcdef';
+
     protected function setUp(): void
     {
         parent::setUp();
-        config(['services.email_webhooks.secret' => 'test-secret']);
+        config(['services.email_webhooks.secret' => self::SECRET]);
     }
 
-    private function url(string $provider = 'postmark', string $secret = 'test-secret'): string
+    private function url(string $provider = 'postmark', ?string $secret = self::SECRET): string
     {
         return "/webhooks/email/{$provider}/{$secret}";
     }
@@ -93,10 +96,34 @@ class EmailWebhookTest extends TestCase
 
     public function test_unknown_provider_is_not_found(): void
     {
-        $this->postJson($this->url('mailchimp', 'test-secret'), [
+        $this->postJson($this->url('mailchimp'), [
             'RecordType' => 'Bounce',
             'Type' => 'HardBounce',
             'Email' => 'x@example.com',
         ])->assertNotFound();
+    }
+
+    public function test_a_too_weak_configured_secret_disables_the_endpoint(): void
+    {
+        config(['services.email_webhooks.secret' => 'short']); // < 16 chars
+
+        $this->postJson($this->url('postmark', 'short'), [
+            'RecordType' => 'Bounce',
+            'Type' => 'HardBounce',
+            'Email' => 'x@example.com',
+        ])->assertNotFound();
+
+        $this->assertFalse(EmailSuppression::isSuppressed('x@example.com'));
+    }
+
+    public function test_a_malformed_email_in_the_payload_is_not_suppressed(): void
+    {
+        $this->postJson($this->url(), [
+            'RecordType' => 'Bounce',
+            'Type' => 'HardBounce',
+            'Email' => 'not-an-email',
+        ])->assertOk(); // authed + parseable, so 200 — but nothing suppressed
+
+        $this->assertSame(0, EmailSuppression::count());
     }
 }

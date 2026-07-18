@@ -34,8 +34,10 @@ class EmailWebhookController extends Controller
     ): Response {
         $configured = (string) config('services.email_webhooks.secret', '');
 
-        // Fail closed: no secret configured → the feature is off, look absent.
-        if ($configured === '') {
+        // Fail closed: an unset OR too-short secret means the feature is off (or
+        // not a real secret) — look absent. .env.example recommends rand -hex 32;
+        // a <16-char value is never an intentional webhook secret.
+        if (strlen($configured) < 16) {
             abort(404);
         }
         // Configured but wrong secret → auth failure.
@@ -52,16 +54,25 @@ class EmailWebhookController extends Controller
             abort(403);
         }
 
-        $suppressed = 0;
+        $suppressed = [];
         foreach ($parser->parse($request) as $event) {
+            // Defensive: never let a malformed payload pollute the list with a
+            // non-address (the parser reads a provider-supplied field verbatim).
+            if (! filter_var($event->email, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
             EmailSuppression::suppress($event->email, $event->suppressionReason());
-            $suppressed++;
+            $suppressed[] = EmailSuppression::normalize($event->email);
         }
 
-        if ($suppressed > 0) {
+        if ($suppressed !== []) {
+            // Audit trail: which addresses, from where — so a suspicious burst of
+            // suppressions is diagnosable if the URL secret ever leaks.
             Log::info('Email webhook suppressed addresses', [
                 'provider' => $provider,
-                'count' => $suppressed,
+                'ip' => $request->ip(),
+                'emails' => $suppressed,
+                'count' => count($suppressed),
             ]);
         }
 

@@ -256,6 +256,34 @@ class UserControllerTest extends TestCase
         $this->assertSame('Renamed', $target->fresh()->name);
     }
 
+    public function test_admin_cannot_deactivate_a_super_admin(): void
+    {
+        // Same boundary as update() but via toggleActive — an admin (holds
+        // users.edit) must not be able to deactivate a super_admin, which would
+        // force-log-out and lock out that account.
+        $admin = $this->makeUser('admin');
+        $super = $this->makeUser('super_admin', 'super@example.com');
+
+        $this->actingAs($admin)
+            ->post(route('users.toggleActive', $super))
+            ->assertSessionHas('error');
+
+        $this->assertTrue($super->fresh()->is_active, 'the super_admin must stay active');
+    }
+
+    public function test_super_admin_can_still_deactivate_an_admin(): void
+    {
+        // The boundary must not block the legitimate flow.
+        $super = $this->makeUser('super_admin');
+        $target = $this->makeUser('admin', 'other-admin@example.com');
+
+        $this->actingAs($super)
+            ->post(route('users.toggleActive', $target))
+            ->assertRedirect();
+
+        $this->assertFalse($target->fresh()->is_active);
+    }
+
     public function test_super_admin_can_still_assign_super_admin_role(): void
     {
         // Regression guard: the boundary must not block the legitimate flow.
