@@ -12,19 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Behind nginx / a load balancer the app only ever sees the proxy's IP
-        // and scheme. Trust the proxy so the client's real IP + scheme are
-        // restored — required for the webhook source-IP allowlist
-        // (AllowedWebhookIps), correct HTTPS detection (secure cookies, HSTS,
-        // generated URLs), and IP-keyed login throttling (audit H5).
-        //
-        // SECURITY (review M1): '*' trusts X-Forwarded-* from ANY client, which
-        // is only safe when the app is reachable ONLY through the proxy. If the
-        // origin can be hit directly, PIN this to your load balancer's CIDR(s)
-        // here so a client can't spoof its IP and defeat the webhook IP allowlist
-        // / per-IP rate limits — e.g.  at: ['10.0.0.0/8', '172.16.0.0/12'].
-        // (This runs before config/env is loaded, so it must be a literal.)
-        $middleware->trustProxies(at: '*');
+        // NOTE: TrustProxies is configured from config('app.trusted_proxies') in
+        // AppServiceProvider::boot() (via TrustProxies::at()), because this
+        // closure runs before config/env is loaded. Set TRUSTED_PROXIES to pin
+        // trust to your LB's CIDR(s) — see the SECURITY note there (review M1).
 
         // Baseline security headers (CSP/HSTS/etc.) on every web response.
         $middleware->appendToGroup('web', \App\Http\Middleware\SecurityHeaders::class);

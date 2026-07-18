@@ -7,6 +7,7 @@ namespace App\Jobs;
 use App\Models\Campaign;
 use App\Models\Contact;
 use App\Models\MessageLog;
+use App\Services\CampaignService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -58,9 +59,9 @@ class CampaignBatchDispatch implements ShouldQueue
         ]);
 
         // Audience: contacts in any of the campaign's groups, deduped. Resolved
-        // as a reusable query (not a materialized ->get()) so we can count it and
-        // then STREAM it in chunks — a low-tens-of-thousands campaign never loads
-        // its whole audience into memory at once (audit M1).
+        // as a reusable query (not a materialized ->get()) so we can STREAM it in
+        // chunks — a low-tens-of-thousands campaign never loads its whole audience
+        // into memory at once (audit M1).
         $groupIds = $this->campaign->contactGroups->pluck('id');
         $audience = fn () => Contact::query()
             ->active()
@@ -70,7 +71,30 @@ class CampaignBatchDispatch implements ShouldQueue
                     ->whereIn('group_id', $groupIds);
             });
 
-        $total = $audience()->count();
+        $intervalMs = (60 / $this->campaign->rate_per_minute) * 1000;
+        $delay = 0.0;
+
+        // Fan out only contacts that don't ALREADY have a log for this campaign.
+        // message_logs has no unique (campaign_id, contact_id) constraint, so
+        // without this an operator relaunch after a partial failure (the recovery
+        // path failed()/$tries=1 recommends) would insert a second PENDING log
+        // per already-dispatched contact and double-send.
+        $audience()
+            ->whereNotIn('id', function ($q) {
+                $q->select('contact_id')
+                    ->from('message_logs')
+                    ->where('campaign_id', $this->campaign->id);
+            })
+            ->chunkById(500, function ($contacts) use (&$delay, $intervalMs): void {
+                $this->fanOutChunk($contacts, $delay, $intervalMs);
+            });
+
+        // total_contacts = the ACTUAL number of logs for this campaign — the
+        // definitive completion denominator. Deriving it from a count() taken
+        // BEFORE the loop drifted from what was dispatched if group membership
+        // changed mid-run, leaving the campaign stuck RUNNING (review #4). Counting
+        // the logs afterwards can't drift, and is correct across a resumed relaunch.
+        $total = MessageLog::where('campaign_id', $this->campaign->id)->count();
         $this->campaign->update(['total_contacts' => $total]);
 
         if ($total === 0) {
@@ -82,25 +106,10 @@ class CampaignBatchDispatch implements ShouldQueue
             return;
         }
 
-        $intervalMs = (60 / $this->campaign->rate_per_minute) * 1000;
-        $delay = 0.0;
-
-        // Fan out only contacts that don't ALREADY have a log for this campaign.
-        // message_logs has no unique (campaign_id, contact_id) constraint, so
-        // without this an operator relaunch after a partial failure (the recovery
-        // path failed()/$tries=1 recommends) would insert a second PENDING log
-        // per already-dispatched contact and double-send. total_contacts stays
-        // the full-audience count above, so completion still measures against the
-        // whole audience while sent_count accumulates across the resumed run.
-        $audience()
-            ->whereNotIn('id', function ($q) {
-                $q->select('contact_id')
-                    ->from('message_logs')
-                    ->where('campaign_id', $this->campaign->id);
-            })
-            ->chunkById(500, function ($contacts) use (&$delay, $intervalMs): void {
-                $this->fanOutChunk($contacts, $delay, $intervalMs);
-            });
+        // A relaunch that dispatched no NEW sends (every contact already logged +
+        // resolved) won't trigger completion via a send job — reconcile now.
+        // On a fresh launch the logs are still PENDING, so this is a no-op.
+        (new CampaignService())->checkCompletion($this->campaign);
     }
 
     /**

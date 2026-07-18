@@ -75,6 +75,16 @@ return [
     'business_timezone' => env('APP_BUSINESS_TIMEZONE', 'Africa/Lagos'),
 
     /*
+    | Trusted reverse-proxy / load-balancer addresses (applied via
+    | TrustProxies::at() in AppServiceProvider::boot, where config is available —
+    | bootstrap/app.php runs too early to read env). Comma-separated CIDRs pin
+    | trust to the real LB so a client can't spoof X-Forwarded-For to forge its
+    | IP (which would defeat the webhook IP allowlist + per-IP rate limits).
+    | '*' trusts ANY proxy — only safe when the app is reachable ONLY via the proxy.
+    */
+    'trusted_proxies' => env('TRUSTED_PROXIES', '*'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------

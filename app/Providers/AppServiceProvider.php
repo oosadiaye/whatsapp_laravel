@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Models\Setting;
 use Illuminate\Foundation\Events\DiagnosingHealth;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Queue\Events\QueueBusy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -24,6 +25,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->guardAgainstStrayViteHotFileInProduction();
+        $this->configureTrustedProxies();
         $this->registerObservability();
 
         // Setting has a process-static read cache (audit L12). PHP-FPM resets
@@ -77,6 +79,27 @@ class AppServiceProvider extends ServiceProvider
      *
      * Local dev is unaffected — APP_ENV=local skips this guard so HMR works.
      */
+    /**
+     * Configure TrustProxies from config (review M1). Set here — not in
+     * bootstrap/app.php's withMiddleware closure — because that closure runs
+     * before config/env is loaded; the middleware reads this static
+     * (TrustProxies::$alwaysTrustProxies) at request time, well after boot().
+     *
+     * SECURITY: '*' trusts X-Forwarded-* from ANY client, safe only when the app
+     * is reachable ONLY through the proxy. If the origin can be hit directly, set
+     * TRUSTED_PROXIES to your LB's CIDR(s) so a client can't spoof its IP and
+     * defeat the webhook IP allowlist / per-IP rate limits — restoring the real
+     * client IP + scheme behind nginx is what H5 needs.
+     */
+    private function configureTrustedProxies(): void
+    {
+        $proxies = config('app.trusted_proxies', '*');
+
+        TrustProxies::at($proxies === '*' || blank($proxies)
+            ? '*'
+            : array_map('trim', explode(',', (string) $proxies)));
+    }
+
     private function guardAgainstStrayViteHotFileInProduction(): void
     {
         if ($this->app->environment('production')) {

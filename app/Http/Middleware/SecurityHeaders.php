@@ -75,8 +75,12 @@ class SecurityHeaders
             "style-src 'self' 'unsafe-inline' https://fonts.bunny.net",
             "font-src 'self' https://fonts.bunny.net data:",
             "img-src 'self' data: https:",
-            // Reverb WebSocket + the AT WebRTC SDK dial out; keep egress open.
-            "connect-src 'self' https: wss: ws:",
+            // No broad https: — fetch/XHR is same-origin (Livewire), so an
+            // injected script can't beacon data to an arbitrary host via fetch
+            // (review M2). WebSocket egress (Reverb; AT WebRTC signalling when
+            // voice is enabled) stays open via wss/ws. If live AT voice needs a
+            // specific https endpoint, add it here explicitly.
+            "connect-src 'self' wss: ws:",
             "media-src 'self' blob: data:",
             // Allow the sandboxed email-preview srcdoc iframe (same-origin).
             "frame-src 'self'",
