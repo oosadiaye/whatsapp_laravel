@@ -102,6 +102,15 @@ class RolesAndPermissionsSeeder extends Seeder
             // Explicitly NOT granted to agent (their syncPermissions is
             // an allowlist; we don't add team.view there).
             'team.view',
+
+            // Per-employee email client (mailbox.*), DELIBERATELY separate from
+            // the bulk-campaign email.* perms. Default visibility is PRIVATE
+            // per-user (inverse of conversations.*): mailbox.view = use your OWN
+            // mailbox; view_all = read the team's inboxes (sensitive — kept to
+            // super_admin/admin); admin = manage other users' accounts.
+            'mailbox.view',
+            'mailbox.view_all',
+            'mailbox.admin',
         ];
 
         foreach ($perms as $perm) {
@@ -129,13 +138,18 @@ class RolesAndPermissionsSeeder extends Seeder
             'users.delete',
         ]));
 
-        // Manager: full operational access but no user management at all.
+        // Manager: full operational access but no user management, and no
+        // reading other people's private inboxes / managing their accounts
+        // (mailbox.view_all/admin stay super_admin+admin only). Managers still
+        // get mailbox.view for their OWN mailbox.
         $manager = Role::firstOrCreate(['name' => User::ROLE_MANAGER, 'guard_name' => 'web']);
         $manager->syncPermissions(array_diff($allPermissions, [
             'users.view',
             'users.create',
             'users.edit',
             'users.delete',
+            'mailbox.view_all',
+            'mailbox.admin',
         ]));
 
         // Agent (support staff): contacts + assigned conversations only.
@@ -154,6 +168,8 @@ class RolesAndPermissionsSeeder extends Seeder
             // conversation page (server-side gate on the /calls/outbound
             // route). Without it agents see the button but POSTing returns 403.
             'conversations.call',
+            // Own mailbox only (never view_all/admin).
+            'mailbox.view',
         ]);
     }
 
