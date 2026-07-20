@@ -247,6 +247,17 @@ return [
                 // double-run (audit H6/M1).
                 'timeout' => 300,
             ],
+            // Per-employee email-client inbound sync (plan B3). SyncEmailAccount
+            // retries with backoff (idempotent re-fetch), so tries>1 is correct.
+            // (A staging Horizon env — plan A1/H2 — must also include this queue.)
+            'mail-sync-supervisor' => [
+                'connection' => 'redis',
+                'queue' => ['mail-sync'],
+                'balance' => 'auto',
+                'maxProcesses' => 2,
+                'tries' => 3,
+                'timeout' => 300,
+            ],
         ],
 
         'local' => [

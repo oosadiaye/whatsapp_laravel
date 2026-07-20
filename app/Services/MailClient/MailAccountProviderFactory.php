@@ -27,4 +27,16 @@ class MailAccountProviderFactory
     {
         return $this->make($account->provider);
     }
+
+    /**
+     * The inbound fetcher (plan B3) for an account's provider, or null if the
+     * provider is unsupported.
+     */
+    public function fetcherFor(EmailAccount $account): ?MailFetcher
+    {
+        return match ($account->provider) {
+            EmailAccount::PROVIDER_IMAP => new ImapFetcher(),
+            default => null,
+        };
+    }
 }
