@@ -1,0 +1,114 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Livewire\Mailbox;
+
+use App\Models\EmailThread;
+use Illuminate\Database\Eloquent\Builder;
+use Livewire\Component;
+use Livewire\WithPagination;
+
+/**
+ * The per-employee mailbox inbox (plan B4) — thread list + read view. This is
+ * the B4 SHELL: B5 renders its composer + per-message actions into the seam in
+ * the view, so the two steps don't both own this component.
+ *
+ * Scoping (review M4) is PRIVATE-per-user by default — a user sees only their
+ * OWN accounts' threads; mailbox.view_all widens it to the team (the inverse of
+ * conversations.*). Authorization runs on every action/render, not just mount,
+ * because Livewire updates bypass the route middleware.
+ *
+ * Message bodies are untrusted inbound HTML, rendered in a sandboxed srcdoc
+ * iframe (no allow-scripts/allow-same-origin) — reusing the email-preview
+ * sandbox, safe under the app CSP (frame-src 'self').
+ */
+class Inbox extends Component
+{
+    use WithPagination;
+
+    public string $search = '';
+
+    public string $folder = EmailThread::FOLDER_INBOX;
+
+    public ?int $selectedThreadId = null;
+
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingFolder(): void
+    {
+        $this->resetPage();
+        $this->selectedThreadId = null;
+    }
+
+    public function selectThread(int $threadId): void
+    {
+        $thread = $this->accessibleThreads()->whereKey($threadId)->first();
+        abort_if($thread === null, 404);
+
+        // Mark read LOCALLY (provider write-back lands in B5). Re-sync only adds
+        // new messages, so this state persists.
+        if ($thread->unread_count > 0) {
+            $thread->messages()->where('is_read', false)->update(['is_read' => true]);
+            $thread->update(['unread_count' => 0]);
+        }
+
+        $this->selectedThreadId = $thread->id;
+    }
+
+    public function render()
+    {
+        $threads = $this->accessibleThreads()
+            ->where('folder', $this->folder)
+            ->when($this->search !== '', function (Builder $q): void {
+                $term = '%'.$this->search.'%';
+                $q->where(function (Builder $sub) use ($term): void {
+                    $sub->where('subject', 'like', $term)
+                        ->orWhereHas('messages', function (Builder $m) use ($term): void {
+                            $m->where('from_email', 'like', $term)
+                                ->orWhere('subject', 'like', $term)
+                                ->orWhere('body_text', 'like', $term);
+                        });
+                });
+            })
+            ->orderByDesc('last_message_at')
+            ->paginate(20);
+
+        $selected = null;
+        if ($this->selectedThreadId !== null) {
+            $selected = $this->accessibleThreads()
+                ->with([
+                    'messages' => fn ($q) => $q->orderBy('received_at')->orderBy('id'),
+                    'messages.attachments',
+                ])
+                ->whereKey($this->selectedThreadId)
+                ->first();
+        }
+
+        return view('livewire.mailbox.inbox', [
+            'threads' => $threads,
+            'selected' => $selected,
+        ]);
+    }
+
+    /**
+     * Threads the current user may see. Aborts if the feature is off or the user
+     * lacks mailbox.view — Livewire actions don't re-run the route middleware.
+     */
+    private function accessibleThreads(): Builder
+    {
+        abort_unless((bool) config('mail_client.enabled'), 404);
+        abort_unless(auth()->user()?->can('mailbox.view'), 403);
+
+        $query = EmailThread::query();
+
+        if (! auth()->user()->can('mailbox.view_all')) {
+            $query->whereHas('account', fn (Builder $q) => $q->where('user_id', auth()->id()));
+        }
+
+        return $query;
+    }
+}
