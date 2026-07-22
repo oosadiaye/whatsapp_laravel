@@ -39,4 +39,16 @@ class MailAccountProviderFactory
             default => null,
         };
     }
+
+    /**
+     * The outbound sender (plan B5a) for an account's provider, or null if the
+     * provider is unsupported.
+     */
+    public function senderFor(EmailAccount $account): ?MailSender
+    {
+        return match ($account->provider) {
+            EmailAccount::PROVIDER_IMAP => new SmtpSender(),
+            default => null,
+        };
+    }
 }

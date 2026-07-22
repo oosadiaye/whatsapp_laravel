@@ -258,6 +258,17 @@ return [
                 'tries' => 3,
                 'timeout' => 300,
             ],
+            // Per-employee outbound send (plan B5a). SendUserEmail is tries=1 on
+            // purpose — a send has no wire idempotency key, so a retry would
+            // double-deliver; a failed send is surfaced for the user to resend.
+            'mail-send-supervisor' => [
+                'connection' => 'redis',
+                'queue' => ['mail-send'],
+                'balance' => 'auto',
+                'maxProcesses' => 2,
+                'tries' => 1,
+                'timeout' => 120,
+            ],
         ],
 
         'local' => [
