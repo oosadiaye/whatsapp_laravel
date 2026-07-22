@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Livewire\Mailbox;
 
+use App\Livewire\Mailbox\Concerns\WithCompose;
+use App\Models\EmailAccount;
 use App\Models\EmailThread;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 /**
@@ -25,7 +28,7 @@ use Livewire\WithPagination;
  */
 class Inbox extends Component
 {
-    use WithPagination;
+    use WithCompose, WithFileUploads, WithPagination;
 
     public string $search = '';
 
@@ -42,6 +45,7 @@ class Inbox extends Component
     {
         $this->resetPage();
         $this->selectedThreadId = null;
+        $this->cancelCompose();
     }
 
     public function selectThread(int $threadId): void
@@ -81,6 +85,7 @@ class Inbox extends Component
         if ($this->selectedThreadId !== null) {
             $selected = $this->accessibleThreads()
                 ->with([
+                    'account',
                     'messages' => fn ($q) => $q->orderBy('received_at')->orderBy('id'),
                     'messages.attachments',
                 ])
@@ -88,9 +93,24 @@ class Inbox extends Component
                 ->first();
         }
 
+        // Accounts the user may send AS (own + active). Drives the composer's
+        // account selector and whether reply/forward/compose are offered — you
+        // can read a colleague's thread but only send from your own identity.
+        $myAccounts = EmailAccount::query()
+            ->where('user_id', auth()->id())
+            ->where('is_active', true)
+            ->orderBy('email')
+            ->get();
+
+        $canSendFromSelected = $selected !== null
+            && $selected->account !== null
+            && $selected->account->user_id === auth()->id();
+
         return view('livewire.mailbox.inbox', [
             'threads' => $threads,
             'selected' => $selected,
+            'myAccounts' => $myAccounts,
+            'canSendFromSelected' => $canSendFromSelected,
         ]);
     }
 

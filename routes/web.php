@@ -70,6 +70,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // mailbox.view. A user manages their OWN accounts (see controller guards).
     Route::middleware(['mailbox.enabled', 'permission:mailbox.view'])->group(function () {
         Route::get('/mailbox', [\App\Http\Controllers\MailboxController::class, 'inbox'])->name('mailbox.inbox');
+        Route::get('/mailbox/attachments/{attachment}', [\App\Http\Controllers\MailboxController::class, 'downloadAttachment'])->name('mailbox.attachments.download');
         Route::get('/mailbox/accounts', [\App\Http\Controllers\EmailAccountController::class, 'index'])->name('mailbox.accounts.index');
         Route::get('/mailbox/accounts/connect', [\App\Http\Controllers\EmailAccountController::class, 'create'])->name('mailbox.accounts.create');
         Route::post('/mailbox/accounts', [\App\Http\Controllers\EmailAccountController::class, 'store'])->name('mailbox.accounts.store');
