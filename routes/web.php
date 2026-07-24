@@ -202,6 +202,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/email-campaigns/{emailCampaign}', [\App\Http\Controllers\EmailCampaignController::class, 'destroy'])->name('email-campaigns.destroy');
     });
 
+    // ─── Email Templates ───────────────────────────────────────────────────
+    // The team's OWN reusable email designs (built here) — not to be confused
+    // with the Meta-synced WhatsApp message templates under /templates.
+    // Static /create precedes the {emailTemplate} wildcard routes.
+    Route::middleware('permission:email.view')->group(function () {
+        Route::get('/email-templates', [\App\Http\Controllers\EmailTemplateController::class, 'index'])->name('email-templates.index');
+    });
+    Route::middleware('permission:email.create')->group(function () {
+        Route::get('/email-templates/create', [\App\Http\Controllers\EmailTemplateController::class, 'create'])->name('email-templates.create');
+        Route::post('/email-templates', [\App\Http\Controllers\EmailTemplateController::class, 'store'])->name('email-templates.store');
+    });
+    Route::middleware('permission:email.edit')->group(function () {
+        Route::get('/email-templates/{emailTemplate}/edit', [\App\Http\Controllers\EmailTemplateController::class, 'edit'])->name('email-templates.edit');
+        Route::put('/email-templates/{emailTemplate}', [\App\Http\Controllers\EmailTemplateController::class, 'update'])->name('email-templates.update');
+    });
+    Route::middleware('permission:email.delete')->group(function () {
+        Route::delete('/email-templates/{emailTemplate}', [\App\Http\Controllers\EmailTemplateController::class, 'destroy'])->name('email-templates.destroy');
+    });
+
     // ─── Conversations / Chat (Phase 13/14) ────────────────────────────────
     Route::middleware('role_or_permission:conversations.view_all|conversations.view_assigned')->group(function () {
         Route::get('/conversations', [ConversationController::class, 'index'])->name('conversations.index');
