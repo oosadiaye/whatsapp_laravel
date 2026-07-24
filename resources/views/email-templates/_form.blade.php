@@ -1,5 +1,5 @@
 <form method="POST" action="{{ $action }}"
-      x-data="{ body: @js(old('body_html', $template?->body_html ?? ($preselectHtml ?? ''))) }"
+      x-data="{ body: @js(old('body_html', $template?->body_html ?? ($preselectHtml ?? ''))), device: 'desktop' }"
       class="space-y-6">
     @csrf
     @if($template)
@@ -53,13 +53,22 @@
         <div>
             <div class="flex items-center justify-between mb-1">
                 <label class="block text-sm font-medium text-gray-700">{{ __('Live preview') }}</label>
-                <span class="text-[11px] text-gray-400">{{ __('updates as you type') }}</span>
+                <div class="inline-flex rounded-md border border-gray-200 overflow-hidden text-[11px] font-medium">
+                    <button type="button" @click="device = 'desktop'"
+                            :class="device === 'desktop' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'"
+                            class="px-2.5 py-1">{{ __('Desktop') }}</button>
+                    <button type="button" @click="device = 'mobile'"
+                            :class="device === 'mobile' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'"
+                            class="px-2.5 py-1 border-l border-gray-200">{{ __('Mobile') }}</button>
+                </div>
             </div>
             {{-- Sandboxed (no scripts/same-origin), safe under CSP frame-src 'self'.
-                 Framed on a grey backdrop so the rendered email card stands out. --}}
-            <div class="rounded-xl border border-gray-300 bg-gray-100 p-3 shadow-inner">
+                 Framed on a grey backdrop so the rendered email card stands out; the
+                 toggle previews desktop full-width vs a ~390px phone view. --}}
+            <div class="rounded-xl border border-gray-300 bg-gray-100 p-3 shadow-inner flex justify-center">
                 <iframe sandbox :srcdoc="body" title="{{ __('Preview') }}"
-                        class="w-full h-[640px] rounded-lg border border-gray-200 bg-white shadow-md"></iframe>
+                        :class="device === 'mobile' ? 'max-w-[390px]' : 'max-w-full'"
+                        class="w-full h-[640px] rounded-lg border border-gray-200 bg-white shadow-md transition-all duration-300"></iframe>
             </div>
         </div>
     </div>
