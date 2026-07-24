@@ -7,6 +7,7 @@ namespace App\Livewire\Mailbox\Concerns;
 use App\Jobs\SendUserEmail;
 use App\Models\EmailAccount;
 use App\Models\EmailMessage;
+use App\Services\MailClient\AttachmentName;
 use App\Services\MailClient\OutboundAttachment;
 use App\Services\MailClient\OutboundEmail;
 use Illuminate\Support\Str;
@@ -196,7 +197,8 @@ trait WithCompose
         $staged = [];
 
         foreach ($this->composeFiles as $file) {
-            $name = $file->getClientOriginalName();
+            // Client-supplied upload name — sanitise before it touches a path.
+            $name = AttachmentName::safe($file->getClientOriginalName());
             $path = $file->storeAs(
                 'mailbox/outbox/'.$account->id,
                 Str::uuid()->toString().'-'.$name,

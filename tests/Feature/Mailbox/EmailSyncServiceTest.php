@@ -170,6 +170,27 @@ class EmailSyncServiceTest extends TestCase
         Storage::disk('local')->assertExists($attachment->path);
     }
 
+    public function test_a_hostile_attachment_filename_cannot_escape_the_disk(): void
+    {
+        Storage::fake('local');
+        $account = EmailAccount::factory()->create();
+
+        // Unsanitised, this traversal name would make Flysystem throw inside the
+        // sync loop and wedge the account's whole sync (poison message). It must
+        // be reduced to a safe basename under the account's own directory.
+        $this->service()->sync($account, $this->fetcherReturning($this->fetchResult([
+            $this->msg('<evil@example.com>', attachments: [
+                new FetchedAttachment('../../../../evil.php', 'application/x-php', 'x'),
+            ]),
+        ])));
+
+        $attachment = EmailMessage::first()->attachments->first();
+        $this->assertSame('evil.php', $attachment->filename);
+        $this->assertStringStartsWith('email-attachments/'.$account->id.'/', $attachment->path);
+        $this->assertStringNotContainsString('..', $attachment->path);
+        Storage::disk('local')->assertExists($attachment->path);
+    }
+
     public function test_a_new_inbound_message_broadcasts_to_the_owner(): void
     {
         Event::fake([MailReceived::class]);

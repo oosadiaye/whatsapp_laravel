@@ -84,11 +84,14 @@ class EmailSyncService
         ]);
 
         foreach ($fetched->attachments as $attachment) {
-            $path = 'email-attachments/'.$account->id.'/'.Str::uuid()->toString().'-'.$attachment->filename;
+            // Sender-controlled MIME name — sanitise to a basename before it
+            // touches a path (traversal + poison-message DoS; see AttachmentName).
+            $safeName = AttachmentName::safe($attachment->filename);
+            $path = 'email-attachments/'.$account->id.'/'.Str::uuid()->toString().'-'.$safeName;
             Storage::disk('local')->put($path, $attachment->content);
 
             $message->attachments()->create([
-                'filename' => $attachment->filename,
+                'filename' => $safeName,
                 'mime' => $attachment->mime,
                 'size' => $attachment->size(),
                 'path' => $path,
