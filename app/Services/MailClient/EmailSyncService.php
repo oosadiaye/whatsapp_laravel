@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\MailClient;
 
+use App\Events\Mailbox\MailReceived;
 use App\Models\EmailAccount;
 use App\Models\EmailMessage;
 use App\Models\EmailThread;
@@ -99,6 +100,11 @@ class EmailSyncService
             'unread_count' => $thread->unread_count + 1,
             'subject' => $thread->subject ?: $fetched->subject,
         ]);
+
+        // Realtime push to the owner's inbox (plan B6). Only fires for genuinely
+        // new mail — a re-fetch/full-resync dedupes above and never reaches here,
+        // so the owner is never notified twice for one message.
+        MailReceived::dispatch($account, $message);
 
         return true;
     }

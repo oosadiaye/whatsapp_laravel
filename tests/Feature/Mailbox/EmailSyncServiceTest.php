@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Mailbox;
 
+use App\Events\Mailbox\MailReceived;
 use App\Models\EmailAccount;
 use App\Models\EmailMessage;
 use App\Models\EmailThread;
@@ -13,6 +14,7 @@ use App\Services\MailClient\FetchedMessage;
 use App\Services\MailClient\FetchResult;
 use App\Services\MailClient\MailFetcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -166,5 +168,34 @@ class EmailSyncServiceTest extends TestCase
         $this->assertSame('report.pdf', $attachment->filename);
         $this->assertSame(strlen('PDF-BYTES'), $attachment->size);
         Storage::disk('local')->assertExists($attachment->path);
+    }
+
+    public function test_a_new_inbound_message_broadcasts_to_the_owner(): void
+    {
+        Event::fake([MailReceived::class]);
+        $account = EmailAccount::factory()->create();
+
+        $this->service()->sync($account, $this->fetcherReturning(
+            $this->fetchResult([$this->msg('<ping@example.com>')]),
+        ));
+
+        Event::assertDispatched(
+            MailReceived::class,
+            fn (MailReceived $e): bool => $e->account->is($account) && $e->message->message_id === 'ping@example.com',
+        );
+    }
+
+    public function test_a_redelivered_message_does_not_rebroadcast(): void
+    {
+        // The dedup guard runs BEFORE the broadcast, so a full re-sync never
+        // re-notifies the owner for mail they already have.
+        Event::fake([MailReceived::class]);
+        $account = EmailAccount::factory()->create();
+        $fetch = fn () => $this->fetcherReturning($this->fetchResult([$this->msg('<once@example.com>')]));
+
+        $this->service()->sync($account, $fetch());
+        $this->service()->sync($account, $fetch());
+
+        Event::assertDispatchedTimes(MailReceived::class, 1);
     }
 }

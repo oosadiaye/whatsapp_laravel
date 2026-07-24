@@ -36,6 +36,24 @@ class Inbox extends Component
 
     public ?int $selectedThreadId = null;
 
+    /**
+     * Reverb push (plan B6): refresh the moment sync stores new mail on THIS
+     * user's channel. `$refresh` re-queries the list + open thread and preserves
+     * compose state (public props survive), so a live delivery never interrupts
+     * a reply in progress. Falls back gracefully to manual refresh if Reverb is
+     * down — mail is not latency-critical.
+     *
+     * @return array<string, string>
+     */
+    protected function getListeners(): array
+    {
+        $userId = auth()->id();
+
+        return $userId === null
+            ? []
+            : ["echo-private:user.{$userId},.mail.received" => '$refresh'];
+    }
+
     public function updatingSearch(): void
     {
         $this->resetPage();
