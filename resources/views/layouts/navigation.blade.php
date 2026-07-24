@@ -104,10 +104,10 @@
                 </div>
             </div>
 
-            {{-- Section: Messaging --}}
-            @canany(['campaigns.view', 'email.view', 'templates.view'])
+            {{-- Section: WhatsApp --}}
+            @canany(['campaigns.view', 'templates.view'])
                 <div>
-                    <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('Messaging') }}</h3>
+                    <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('WhatsApp') }}</h3>
                     <div class="space-y-1">
                         @can('campaigns.view')
                             <x-sidebar-link :href="route('campaigns.index')" :active="request()->routeIs('campaigns.*')">
@@ -118,21 +118,36 @@
                             </x-sidebar-link>
                         @endcan
 
+                        @can('templates.view')
+                            <x-sidebar-link :href="route('templates.index')" :active="request()->routeIs('templates.*')">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+                                </svg>
+                                {{ __('Templates') }}
+                            </x-sidebar-link>
+                        @endcan
+                    </div>
+                </div>
+            @endcanany
+
+            {{-- Section: Email --}}
+            @if(auth()->user()?->can('email.view') || (config('mail_client.enabled') && auth()->user()?->can('mailbox.view')))
+                <div>
+                    <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('Email') }}</h3>
+                    <div class="space-y-1">
                         @can('email.view')
                             <x-sidebar-link :href="route('email-campaigns.index')" :active="request()->routeIs('email-campaigns.*')">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/>
                                 </svg>
-                                {{ __('Email') }}
+                                {{ __('Campaigns') }}
                             </x-sidebar-link>
-                        @endcan
 
-                        @can('email.view')
                             <x-sidebar-link :href="route('email-templates.index')" :active="request()->routeIs('email-templates.*')">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h12A2.25 2.25 0 0120.25 6v2.25H3.75V6zm0 4.5h16.5V18A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18v-7.5z"/>
                                 </svg>
-                                {{ __('Email Templates') }}
+                                {{ __('Templates') }}
                             </x-sidebar-link>
                         @endcan
 
@@ -146,18 +161,9 @@
                                 </x-sidebar-link>
                             @endcan
                         @endif
-
-                        @can('templates.view')
-                            <x-sidebar-link :href="route('templates.index')" :active="request()->routeIs('templates.*')">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
-                                </svg>
-                                {{ __('WhatsApp Templates') }}
-                            </x-sidebar-link>
-                        @endcan
                     </div>
                 </div>
-            @endcanany
+            @endif
 
             {{-- Section: Audience --}}
             @canany(['contacts.view', 'groups.view'])
