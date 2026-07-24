@@ -35,10 +35,36 @@
                         @error('reply_to')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
                     </div>
                 </div>
+                @php($emailTemplates = $templates ?? [])
+                @if(! empty($emailTemplates))
+                    <div x-data class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ __('Start from a beautiful template') }}</label>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                            @foreach($emailTemplates as $tpl)
+                                <button type="button"
+                                        @click="const ta = document.getElementById('body_html'); ta.value = document.getElementById('email-tpl-{{ $tpl['key'] }}').innerHTML.trim(); ta.dispatchEvent(new Event('input', { bubbles: true }));"
+                                        class="group text-left rounded-lg border border-gray-200 bg-white overflow-hidden hover:border-gray-300 hover:shadow-md transition focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                                    <span class="block h-1.5" style="background: {{ $tpl['accent'] }}"></span>
+                                    <span class="block px-3 py-2">
+                                        <span class="block text-sm font-semibold text-gray-800">{{ $tpl['name'] }}</span>
+                                        <span class="block text-[11px] text-gray-400 mt-0.5 leading-snug">{{ $tpl['description'] }}</span>
+                                    </span>
+                                </button>
+                            @endforeach
+                        </div>
+                        <p class="mt-1.5 text-xs text-gray-400">{{ __('Click a template to load it into the editor below, then make it yours.') }}</p>
+
+                        {{-- Inert HTML sources for the picker (parsed but not rendered). --}}
+                        @foreach($emailTemplates as $tpl)
+                            <template id="email-tpl-{{ $tpl['key'] }}">{!! $tpl['html'] !!}</template>
+                        @endforeach
+                    </div>
+                @endif
+
                 <div>
                     <label class="block text-sm font-medium text-gray-700">{{ __('Email body (HTML)') }} *</label>
-                    <textarea name="body_html" rows="12" required
-                              class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm font-mono text-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('body_html', $campaign?->body_html) }}</textarea>
+                    <textarea name="body_html" id="body_html" rows="12" required
+                              class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm font-mono text-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('body_html', $campaign?->body_html ?? ($preselectHtml ?? '')) }}</textarea>
                     <p class="mt-1 text-xs text-gray-400">{{ __('Personalize with') }} <code>@{{name}}</code> {{ __('and') }} <code>@{{email}}</code>. {{ __('An unsubscribe link is added automatically.') }}</p>
                     @error('body_html')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
                 </div>

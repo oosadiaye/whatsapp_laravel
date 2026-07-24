@@ -8,6 +8,7 @@ use App\Http\Requests\StoreEmailCampaignRequest;
 use App\Models\ContactGroup;
 use App\Models\EmailCampaign;
 use App\Services\EmailCampaignService;
+use App\Support\EmailTemplateLibrary;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -25,12 +26,18 @@ class EmailCampaignController extends Controller
     {
         return view('email-campaigns.index', [
             'campaigns' => EmailCampaign::latest()->paginate(20),
+            'templates' => EmailTemplateLibrary::catalogue(),
         ]);
     }
 
     public function create(): View
     {
-        return view('email-campaigns.create', ['groups' => ContactGroup::all()]);
+        return view('email-campaigns.create', [
+            'groups' => ContactGroup::all(),
+            'templates' => EmailTemplateLibrary::all(),
+            // Pre-load a body when arriving from a template card (?template=key).
+            'preselectHtml' => EmailTemplateLibrary::html((string) request('template')),
+        ]);
     }
 
     public function store(StoreEmailCampaignRequest $request): RedirectResponse
@@ -77,6 +84,7 @@ class EmailCampaignController extends Controller
         return view('email-campaigns.edit', [
             'campaign' => $campaign,
             'groups' => ContactGroup::all(),
+            'templates' => EmailTemplateLibrary::all(),
         ]);
     }
 
