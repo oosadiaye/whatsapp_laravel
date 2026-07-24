@@ -26,6 +26,7 @@ final class EmailTemplateLibrary
             ['key' => 'newsletter', 'name' => 'Newsletter', 'description' => 'Stacked content blocks for a regular update.', 'accent' => '#0ea5e9'],
             ['key' => 'promotion', 'name' => 'Promotion', 'description' => 'A sale hero with a discount code and CTA.', 'accent' => '#e11d48'],
             ['key' => 'welcome', 'name' => 'Welcome', 'description' => 'A warm onboarding email with next steps.', 'accent' => '#10b981'],
+            ['key' => 'code', 'name' => 'Verification code', 'description' => 'A one-time passcode (OTP) email.', 'accent' => '#7c3aed'],
             ['key' => 'simple', 'name' => 'Simple', 'description' => 'A clean, text-first layout for best deliverability.', 'accent' => '#334155'],
         ];
     }
