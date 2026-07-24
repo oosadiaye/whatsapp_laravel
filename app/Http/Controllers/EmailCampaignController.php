@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreEmailCampaignRequest;
 use App\Models\ContactGroup;
 use App\Models\EmailCampaign;
+use App\Models\EmailTemplate;
 use App\Services\EmailCampaignService;
 use App\Support\EmailTemplateLibrary;
 use Illuminate\Http\RedirectResponse;
@@ -35,9 +36,27 @@ class EmailCampaignController extends Controller
         return view('email-campaigns.create', [
             'groups' => ContactGroup::all(),
             'templates' => EmailTemplateLibrary::all(),
-            // Pre-load a body when arriving from a template card (?template=key).
-            'preselectHtml' => EmailTemplateLibrary::html((string) request('template')),
+            'savedTemplates' => EmailTemplate::latest()->get(['id', 'name', 'body_html']),
+            'preselectHtml' => $this->preselectHtml(),
         ]);
+    }
+
+    /**
+     * The body to pre-fill the composer with: a starter design (?template=key)
+     * or one of the team's saved templates (?email_template=id).
+     */
+    private function preselectHtml(): string
+    {
+        $starter = EmailTemplateLibrary::html((string) request('template'));
+        if ($starter !== '') {
+            return $starter;
+        }
+
+        if (request()->filled('email_template')) {
+            return (string) (EmailTemplate::find(request('email_template'))?->body_html ?? '');
+        }
+
+        return '';
     }
 
     public function store(StoreEmailCampaignRequest $request): RedirectResponse
@@ -85,6 +104,7 @@ class EmailCampaignController extends Controller
             'campaign' => $campaign,
             'groups' => ContactGroup::all(),
             'templates' => EmailTemplateLibrary::all(),
+            'savedTemplates' => EmailTemplate::latest()->get(['id', 'name', 'body_html']),
         ]);
     }
 
