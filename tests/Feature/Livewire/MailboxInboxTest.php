@@ -102,6 +102,42 @@ class MailboxInboxTest extends TestCase
         $this->assertSame(0, $thread->messages()->where('is_read', false)->count());
     }
 
+    public function test_thread_messages_render_in_event_time_order(): void
+    {
+        $me = $this->user();
+        $account = EmailAccount::factory()->for($me)->create(['email' => 'me@company.test']);
+        $thread = EmailThread::factory()->create([
+            'email_account_id' => $account->id,
+            'unread_count' => 0,
+        ]);
+
+        // Inbound arrived yesterday.
+        EmailMessage::factory()->create([
+            'email_thread_id' => $thread->id,
+            'email_account_id' => $account->id,
+            'direction' => EmailMessage::DIRECTION_INBOUND,
+            'from_email' => 'client@example.test',
+            'received_at' => now()->subDay(),
+            'sent_at' => null,
+            'is_read' => true,
+        ]);
+        // Our reply sent today — outbound has received_at NULL, which a naive
+        // orderBy('received_at') would float to the TOP of the thread.
+        EmailMessage::factory()->create([
+            'email_thread_id' => $thread->id,
+            'email_account_id' => $account->id,
+            'direction' => EmailMessage::DIRECTION_OUTBOUND,
+            'from_email' => 'me@company.test',
+            'received_at' => null,
+            'sent_at' => now(),
+            'is_read' => true,
+        ]);
+
+        Livewire::actingAs($me)->test(Inbox::class)
+            ->call('selectThread', $thread->id)
+            ->assertSeeHtmlInOrder(['client@example.test', 'me@company.test']);
+    }
+
     public function test_a_user_cannot_open_another_users_thread(): void
     {
         $me = $this->user();

@@ -61,7 +61,11 @@ class ImapFetcher implements MailFetcher
                 ->getByUidGreater($fromUid);
 
             $messages = [];
-            $maxUid = $lastUid;
+            // Start from 0 on a full re-sync: a UIDVALIDITY change renumbers the
+            // mailbox, so the OLD last_uid is meaningless in the new UID space and
+            // seeding maxUid with it could pin the cursor above the new (smaller)
+            // UIDs, making the next incremental fetch skip everything below it.
+            $maxUid = $fullResync ? 0 : $lastUid;
             foreach ($collection as $message) {
                 try {
                     $uid = (int) $message->getUid();

@@ -104,7 +104,13 @@ class Inbox extends Component
             $selected = $this->accessibleThreads()
                 ->with([
                     'account',
-                    'messages' => fn ($q) => $q->orderBy('received_at')->orderBy('id'),
+                    // Order by EVENT time: inbound has received_at, outbound has
+                    // sent_at (received_at NULL). A plain orderBy('received_at')
+                    // sorts NULLs first, so every sent reply would jump above the
+                    // inbound message it answered — coalesce to the real timestamp.
+                    'messages' => fn ($q) => $q
+                        ->orderByRaw('COALESCE(received_at, sent_at, created_at) asc')
+                        ->orderBy('id'),
                     'messages.attachments',
                 ])
                 ->whereKey($this->selectedThreadId)
