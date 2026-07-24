@@ -46,15 +46,21 @@
         <div>
             <label class="block text-sm font-medium text-gray-700">{{ __('HTML') }} *</label>
             <textarea name="body_html" x-model="body" rows="18" required
-                      class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm font-mono text-xs focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                      class="mt-1 block w-full h-[640px] rounded-lg border-gray-300 shadow-sm font-mono text-xs focus:border-indigo-500 focus:ring-indigo-500"></textarea>
             <p class="mt-1 text-xs text-gray-400">{{ __('Personalize with') }} <code>@{{name}}</code> {{ __('and') }} <code>@{{email}}</code>.</p>
             @error('body_html')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
         </div>
         <div>
-            <label class="block text-sm font-medium text-gray-700">{{ __('Live preview') }}</label>
-            {{-- Sandboxed (no scripts/same-origin), safe under CSP frame-src 'self'. --}}
-            <iframe sandbox :srcdoc="body" title="{{ __('Preview') }}"
-                    class="mt-1 w-full h-[420px] rounded-lg border border-gray-200 bg-white"></iframe>
+            <div class="flex items-center justify-between mb-1">
+                <label class="block text-sm font-medium text-gray-700">{{ __('Live preview') }}</label>
+                <span class="text-[11px] text-gray-400">{{ __('updates as you type') }}</span>
+            </div>
+            {{-- Sandboxed (no scripts/same-origin), safe under CSP frame-src 'self'.
+                 Framed on a grey backdrop so the rendered email card stands out. --}}
+            <div class="rounded-xl border border-gray-300 bg-gray-100 p-3 shadow-inner">
+                <iframe sandbox :srcdoc="body" title="{{ __('Preview') }}"
+                        class="w-full h-[640px] rounded-lg border border-gray-200 bg-white shadow-md"></iframe>
+            </div>
         </div>
     </div>
 
