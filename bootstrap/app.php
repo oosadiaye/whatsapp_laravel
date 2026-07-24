@@ -26,6 +26,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             // Optional source-IP allowlist for provider webhooks (empty = off).
             'webhook.allowed-ips' => \App\Http\Middleware\AllowedWebhookIps::class,
+            // Gates the per-employee email client behind config('mail_client.enabled').
+            'mailbox.enabled' => \App\Http\Middleware\EnsureMailClientEnabled::class,
             // spatie/laravel-permission middleware aliases — usage:
             //   ->middleware('role:admin')
             //   ->middleware('permission:users.create')
