@@ -65,6 +65,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // ─── Mailbox: per-employee email client (plan B2+) ─────────────────────
+    // Whole feature gated by config('mail_client.enabled') (404 when off) +
+    // mailbox.view. A user manages their OWN accounts (see controller guards).
+    Route::middleware(['mailbox.enabled', 'permission:mailbox.view'])->group(function () {
+        Route::get('/mailbox', [\App\Http\Controllers\MailboxController::class, 'inbox'])->name('mailbox.inbox');
+        Route::get('/mailbox/attachments/{attachment}', [\App\Http\Controllers\MailboxController::class, 'downloadAttachment'])->name('mailbox.attachments.download');
+        Route::get('/mailbox/accounts', [\App\Http\Controllers\EmailAccountController::class, 'index'])->name('mailbox.accounts.index');
+        Route::get('/mailbox/accounts/connect', [\App\Http\Controllers\EmailAccountController::class, 'create'])->name('mailbox.accounts.create');
+        Route::post('/mailbox/accounts', [\App\Http\Controllers\EmailAccountController::class, 'store'])->name('mailbox.accounts.store');
+        Route::delete('/mailbox/accounts/{account}', [\App\Http\Controllers\EmailAccountController::class, 'destroy'])->name('mailbox.accounts.destroy');
+    });
+
     // Single-instance app: the one WhatsApp number is configured on the
     // Settings page (SettingsController::upsertWhatsAppInstance). The old
     // multi-instance CRUD routes (/instances*) were removed in the unify.

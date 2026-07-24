@@ -247,6 +247,84 @@ return [
                 // double-run (audit H6/M1).
                 'timeout' => 300,
             ],
+            // Per-employee email-client inbound sync (plan B3). SyncEmailAccount
+            // retries with backoff (idempotent re-fetch), so tries>1 is correct.
+            // Mirrored into the `staging` env below (plan A1/H2).
+            'mail-sync-supervisor' => [
+                'connection' => 'redis',
+                'queue' => ['mail-sync'],
+                'balance' => 'auto',
+                'maxProcesses' => 2,
+                'tries' => 3,
+                'timeout' => 300,
+            ],
+            // Per-employee outbound send (plan B5a). SendUserEmail is tries=1 on
+            // purpose — a send has no wire idempotency key, so a retry would
+            // double-deliver; a failed send is surfaced for the user to resend.
+            'mail-send-supervisor' => [
+                'connection' => 'redis',
+                'queue' => ['mail-send'],
+                'balance' => 'auto',
+                'maxProcesses' => 2,
+                'tries' => 1,
+                'timeout' => 120,
+            ],
+        ],
+
+        // Mirrors `production` so a staging deploy (APP_ENV=staging) actually
+        // runs workers for EVERY queue (audit H2). Horizon matches supervisors
+        // by app.env, so without this block a staging host processes nothing —
+        // campaigns, imports, and the mail-sync/mail-send queues would all
+        // silently stall, breaking any staging live-verification. Same
+        // tries/timeout as production (those are correctness, not scale); fewer
+        // processes since staging carries less load. Alternative: run the
+        // staging host as APP_ENV=production.
+        'staging' => [
+            'messages-supervisor' => [
+                'connection' => 'redis',
+                'queue' => ['messages'],
+                'balance' => 'auto',
+                'maxProcesses' => 2,
+                'maxTime' => 0,
+                'maxJobs' => 0,
+                'memory' => 128,
+                'tries' => 3,
+                'timeout' => 60,
+                'balanceMaxShift' => 1,
+                'balanceCooldown' => 3,
+            ],
+            'imports-supervisor' => [
+                'connection' => 'redis',
+                'queue' => ['imports'],
+                'balance' => 'auto',
+                'maxProcesses' => 1,
+                'tries' => 1,
+                'timeout' => 300,
+            ],
+            'default-supervisor' => [
+                'connection' => 'redis',
+                'queue' => ['default'],
+                'balance' => 'auto',
+                'maxProcesses' => 1,
+                'tries' => 3,
+                'timeout' => 300,
+            ],
+            'mail-sync-supervisor' => [
+                'connection' => 'redis',
+                'queue' => ['mail-sync'],
+                'balance' => 'auto',
+                'maxProcesses' => 1,
+                'tries' => 3,
+                'timeout' => 300,
+            ],
+            'mail-send-supervisor' => [
+                'connection' => 'redis',
+                'queue' => ['mail-send'],
+                'balance' => 'auto',
+                'maxProcesses' => 1,
+                'tries' => 1,
+                'timeout' => 120,
+            ],
         ],
 
         'local' => [

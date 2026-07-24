@@ -39,3 +39,12 @@ Schedule::command('horizon:snapshot')->everyFiveMinutes();
 // QueueBusy → logged in AppServiceProvider. Bare queue names use the default
 // connection, so this is queue-driver agnostic (redis or database).
 Schedule::command('queue:monitor messages,imports,default --max=200')->everyFiveMinutes();
+
+// Inbound email-client sync (plan B3). Only runs while the feature is enabled;
+// interval from config (clamped to a valid */N cron). Each account syncs on the
+// mail-sync queue.
+$mailSyncEvery = min(59, max(1, (int) config('mail_client.sync_interval_minutes', 2)));
+Schedule::command('mailbox:sync')
+    ->cron("*/{$mailSyncEvery} * * * *")
+    ->withoutOverlapping()
+    ->when(fn (): bool => (bool) config('mail_client.enabled'));
