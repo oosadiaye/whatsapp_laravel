@@ -39,7 +39,7 @@
                     <label class="block text-sm font-medium text-gray-700">{{ __('Email body (HTML)') }} *</label>
                     <textarea name="body_html" rows="12" required
                               class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm font-mono text-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('body_html', $campaign?->body_html) }}</textarea>
-                    <p class="mt-1 text-xs text-gray-400">{{ __('Personalize with') }} <code>{{ '{{name}}' }}</code> {{ __('and') }} <code>{{ '{{email}}' }}</code>. {{ __('An unsubscribe link is added automatically.') }}</p>
+                    <p class="mt-1 text-xs text-gray-400">{{ __('Personalize with') }} <code>@{{name}}</code> {{ __('and') }} <code>@{{email}}</code>. {{ __('An unsubscribe link is added automatically.') }}</p>
                     @error('body_html')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
                 </div>
             </div>

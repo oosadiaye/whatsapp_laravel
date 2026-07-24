@@ -49,6 +49,23 @@ class EmailCampaignControllerTest extends TestCase
         $this->actingAs($noRole)->get(route('email-campaigns.index'))->assertForbidden();
     }
 
+    public function test_the_create_and_edit_pages_render(): void
+    {
+        // Regression: _form.blade.php had a Blade ParseError (nested {{ }}), so
+        // the whole create/edit form 500'd. The store tests never render the GET
+        // view, so this guards the form actually compiles.
+        $this->actingAs($this->admin)->get(route('email-campaigns.create'))->assertOk();
+
+        $campaign = EmailCampaign::create([
+            'user_id' => $this->admin->id,
+            'name' => 'Draft',
+            'subject' => 'Hello',
+            'body_html' => '<p>Hi</p>',
+            'status' => EmailCampaign::STATUS_DRAFT,
+        ]);
+        $this->actingAs($this->admin)->get(route('email-campaigns.edit', $campaign))->assertOk();
+    }
+
     public function test_store_saves_a_draft_with_its_groups(): void
     {
         Queue::fake();
