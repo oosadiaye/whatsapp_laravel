@@ -76,6 +76,26 @@ class EmailCampaignControllerTest extends TestCase
             ->assertSee('Newsletter');
     }
 
+    public function test_the_index_showcases_the_starter_templates(): void
+    {
+        // The templates must be visible from the Email landing page, not only
+        // buried inside the create form.
+        $this->actingAs($this->admin)
+            ->get(route('email-campaigns.index'))
+            ->assertOk()
+            ->assertSee('Start from a beautiful template')
+            ->assertSee('Promotion')
+            ->assertSee('Welcome');
+    }
+
+    public function test_create_preloads_the_body_from_a_template_query(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('email-campaigns.create', ['template' => 'promotion']))
+            ->assertOk()
+            ->assertSee('SAVE25'); // the promotion template's discount code is pre-filled
+    }
+
     public function test_store_saves_a_draft_with_its_groups(): void
     {
         Queue::fake();

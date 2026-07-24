@@ -26,6 +26,7 @@ class EmailCampaignController extends Controller
     {
         return view('email-campaigns.index', [
             'campaigns' => EmailCampaign::latest()->paginate(20),
+            'templates' => EmailTemplateLibrary::catalogue(),
         ]);
     }
 
@@ -34,6 +35,8 @@ class EmailCampaignController extends Controller
         return view('email-campaigns.create', [
             'groups' => ContactGroup::all(),
             'templates' => EmailTemplateLibrary::all(),
+            // Pre-load a body when arriving from a template card (?template=key).
+            'preselectHtml' => EmailTemplateLibrary::html((string) request('template')),
         ]);
     }
 

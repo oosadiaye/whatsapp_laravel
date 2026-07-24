@@ -20,6 +20,29 @@
             <div class="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
         @endif
 
+        @can('email.create')
+            @if(! empty($templates ?? []))
+                <div class="mb-8">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-1">{{ __('Start from a beautiful template') }}</h3>
+                    <p class="text-xs text-gray-400 mb-3">{{ __('Pick a design to open the composer pre-filled — then make it yours.') }}</p>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                        @foreach($templates as $tpl)
+                            <a href="{{ route('email-campaigns.create', ['template' => $tpl['key']]) }}"
+                               class="group rounded-xl border border-gray-200 bg-white overflow-hidden hover:border-gray-300 hover:shadow-md transition focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                                <span class="block h-16 relative" style="background: {{ $tpl['accent'] }}">
+                                    <span class="absolute inset-0 grid place-items-center text-white/90 text-2xl font-black tracking-tight">{{ mb_substr($tpl['name'], 0, 1) }}</span>
+                                </span>
+                                <span class="block px-3 py-2.5">
+                                    <span class="block text-sm font-semibold text-gray-800">{{ $tpl['name'] }}</span>
+                                    <span class="block text-[11px] text-gray-400 mt-0.5 leading-snug">{{ $tpl['description'] }}</span>
+                                </span>
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+        @endcan
+
         @php
             $statusMeta = [
                 'draft' => ['bg-gray-100 text-gray-600', 'Draft'],
