@@ -8,6 +8,7 @@ use App\Http\Requests\StoreEmailCampaignRequest;
 use App\Models\ContactGroup;
 use App\Models\EmailCampaign;
 use App\Services\EmailCampaignService;
+use App\Support\EmailTemplateLibrary;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -30,7 +31,10 @@ class EmailCampaignController extends Controller
 
     public function create(): View
     {
-        return view('email-campaigns.create', ['groups' => ContactGroup::all()]);
+        return view('email-campaigns.create', [
+            'groups' => ContactGroup::all(),
+            'templates' => EmailTemplateLibrary::all(),
+        ]);
     }
 
     public function store(StoreEmailCampaignRequest $request): RedirectResponse
@@ -77,6 +81,7 @@ class EmailCampaignController extends Controller
         return view('email-campaigns.edit', [
             'campaign' => $campaign,
             'groups' => ContactGroup::all(),
+            'templates' => EmailTemplateLibrary::all(),
         ]);
     }
 

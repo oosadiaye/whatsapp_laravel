@@ -66,6 +66,16 @@ class EmailCampaignControllerTest extends TestCase
         $this->actingAs($this->admin)->get(route('email-campaigns.edit', $campaign))->assertOk();
     }
 
+    public function test_the_create_page_offers_starter_templates(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('email-campaigns.create'))
+            ->assertOk()
+            ->assertSee('Start from a beautiful template')
+            ->assertSee('Announcement')
+            ->assertSee('Newsletter');
+    }
+
     public function test_store_saves_a_draft_with_its_groups(): void
     {
         Queue::fake();
