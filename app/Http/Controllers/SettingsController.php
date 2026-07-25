@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Models\WhatsAppInstance;
 use App\Services\WhatsAppCloudApiService;
 use App\Support\GeminiConfig;
+use App\Support\VoiceConfig;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -52,6 +53,9 @@ class SettingsController extends Controller
             'instance' => WhatsAppInstance::primary(),
             // Whether the Call Workspace AI has a usable key (Settings or env).
             'geminiConfigured' => filled(GeminiConfig::key()),
+            // Compliance-sensitive call recording (pre-fills the toggle + notice).
+            'recordingEnabled' => VoiceConfig::recordingEnabled(),
+            'recordingConsent' => VoiceConfig::recordingConsentNotice() ?? '',
         ]);
     }
 
@@ -67,7 +71,18 @@ class SettingsController extends Controller
             'africastalking_virtual_number' => ['nullable', 'string', 'regex:/^\+\d{10,15}$/'],
             'africastalking_rate_per_minute_kobo' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'gemini_api_key' => ['nullable', 'string', 'min:10', 'max:512'],
+            // Recording is compliance-sensitive: you can't turn it on without
+            // stating a consent notice.
+            'voice_recording_enabled' => ['nullable', 'boolean'],
+            'voice_recording_consent_notice' => ['nullable', 'required_if:voice_recording_enabled,1', 'string', 'max:1000'],
         ]);
+
+        // The recording toggle + its consent notice are handled explicitly — a
+        // checkbox doesn't submit when unchecked, so the "skip empty" loop below
+        // can't persist an OFF, and clearing the notice must actually clear it.
+        Setting::set('voice_recording_enabled', $request->boolean('voice_recording_enabled') ? '1' : '0');
+        Setting::set('voice_recording_consent_notice', (string) $request->input('voice_recording_consent_notice', ''));
+        unset($validated['voice_recording_enabled'], $validated['voice_recording_consent_notice']);
 
         foreach ($validated as $key => $value) {
             if ($value === null || $value === '') {

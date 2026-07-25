@@ -192,6 +192,41 @@
                         </div>
                     </div>
 
+                    {{-- Call recording (compliance-gated) --}}
+                    <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                        <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
+                            <span class="grid place-items-center w-9 h-9 rounded-lg bg-rose-50 text-rose-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/></svg>
+                            </span>
+                            <div>
+                                <h3 class="text-base font-bold text-gray-900">{{ __('Call recording') }}</h3>
+                                <p class="text-xs text-gray-500">{{ __('Record calls so the AI can transcribe & summarise them. Requires a consent notice.') }}</p>
+                            </div>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800 flex items-start gap-2">
+                                <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+                                <span>{{ __('Recording calls has legal implications. You are responsible for informing callers ("this call may be recorded") and setting a retention policy') }} (<code class="font-mono bg-amber-100 px-1 rounded">VOICE_RECORDING_RETENTION_DAYS</code>).</span>
+                            </div>
+
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" name="voice_recording_enabled" value="1"
+                                       {{ old('voice_recording_enabled', $recordingEnabled) ? 'checked' : '' }}
+                                       class="rounded border-gray-300 text-[#25D366] focus:ring-[#25D366]">
+                                <span class="text-sm font-medium text-gray-700">{{ __('Enable call recording') }}</span>
+                            </label>
+
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Consent notice') }}</label>
+                                <textarea name="voice_recording_consent_notice" rows="2"
+                                          placeholder="{{ __('This call may be recorded for quality and training purposes.') }}"
+                                          class="block w-full rounded-lg border-gray-300 shadow-sm text-sm focus:border-[#25D366] focus:ring-[#25D366]">{{ old('voice_recording_consent_notice', $recordingConsent) }}</textarea>
+                                @error('voice_recording_consent_notice')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                <p class="mt-1 text-xs text-gray-400">{{ __('Required to enable recording — state how callers are told the call is recorded.') }}</p>
+                            </div>
+                        </div>
+                    </div>
+
                     {{-- Gemini AI — call transcription --}}
                     <div x-data="{ showGemini: false }" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                         <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">

@@ -247,6 +247,57 @@ class SettingsControllerTest extends TestCase
         $this->assertSame('db-key-wins-999888', \App\Support\GeminiConfig::key());
     }
 
+    public function test_recording_cannot_be_enabled_without_a_consent_notice(): void
+    {
+        $this->actingAs($this->makeAdmin())
+            ->put(route('settings.update'), [
+                'voice_recording_enabled' => '1',
+                'voice_recording_consent_notice' => '',
+            ])
+            ->assertSessionHasErrors('voice_recording_consent_notice');
+
+        $this->assertFalse(\App\Support\VoiceConfig::recordingEnabled());
+    }
+
+    public function test_recording_can_be_enabled_with_a_consent_notice(): void
+    {
+        $notice = 'This call may be recorded for quality and training.';
+
+        $this->actingAs($this->makeAdmin())
+            ->put(route('settings.update'), [
+                'voice_recording_enabled' => '1',
+                'voice_recording_consent_notice' => $notice,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertTrue(\App\Support\VoiceConfig::recordingEnabled());
+        $this->assertSame($notice, \App\Support\VoiceConfig::recordingConsentNotice());
+    }
+
+    public function test_recording_can_be_disabled(): void
+    {
+        Setting::set('voice_recording_enabled', '1');
+
+        $this->actingAs($this->makeAdmin())
+            ->put(route('settings.update'), [
+                // checkbox absent = unchecked
+                'voice_recording_consent_notice' => 'still on file',
+            ])
+            ->assertRedirect();
+
+        $this->assertFalse(\App\Support\VoiceConfig::recordingEnabled());
+    }
+
+    public function test_recording_setting_takes_precedence_over_env(): void
+    {
+        config(['voice.call_recording_enabled' => false]);
+        $this->assertFalse(\App\Support\VoiceConfig::recordingEnabled());
+
+        Setting::set('voice_recording_enabled', '1');
+        $this->assertTrue(\App\Support\VoiceConfig::recordingEnabled());
+    }
+
     private function makeAdmin(): User
     {
         $admin = User::factory()->create([

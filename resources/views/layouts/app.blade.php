@@ -36,7 +36,7 @@
             <meta name="at-voice-ready" content="{{ $bqAtVoiceReady ? '1' : '0' }}">
             {{-- Call recording flag — the browser recorder only runs when this
                  is on (config/voice.php · VOICE_CALL_RECORDING_ENABLED). --}}
-            <meta name="bq-recording-enabled" content="{{ config('voice.call_recording_enabled') ? '1' : '0' }}">
+            <meta name="bq-recording-enabled" content="{{ \App\Support\VoiceConfig::recordingEnabled() ? '1' : '0' }}">
             {{-- WebRTC ICE servers (STUN + optional TURN) — one server-side
                  source of truth for both call paths. See App\Support\VoiceIce. --}}
             <meta name="bq-ice-servers" content="{{ json_encode(\App\Support\VoiceIce::servers(), JSON_UNESCAPED_SLASHES) }}">

@@ -20,6 +20,7 @@ use App\Services\AfricasTalkingVoiceService;
 use App\Services\CallQualityCalculator;
 use App\Services\WhatsAppCloudApiService;
 use App\Support\GeminiConfig;
+use App\Support\VoiceConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -170,7 +171,7 @@ class CallController extends Controller
         return view('calls.workspace', [
             'calls' => $calls,
             'selectedCallId' => $selected?->id,
-            'recordingEnabled' => (bool) config('voice.call_recording_enabled'),
+            'recordingEnabled' => VoiceConfig::recordingEnabled(),
             'aiConfigured' => filled(GeminiConfig::key()),
         ]);
     }
@@ -423,7 +424,7 @@ class CallController extends Controller
     {
         $this->authorizeCallAccess($call);
 
-        if (! config('voice.call_recording_enabled')) {
+        if (! VoiceConfig::recordingEnabled()) {
             return response()->json(['error' => 'Call recording is disabled.'], 403);
         }
 
