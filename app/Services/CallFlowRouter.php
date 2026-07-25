@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\CallLog;
+use App\Support\VoiceConfig;
 use App\Support\VoiceXml;
 
 /**
@@ -87,7 +88,10 @@ class CallFlowRouter
         $agentId = $call->conversation?->assigned_to_user_id;
 
         if ($agentId !== null) {
-            return VoiceXml::make()->dial(
+            $xml = VoiceXml::make();
+            $this->announceRecording($xml);
+
+            return $xml->dial(
                 AfricasTalkingVoiceService::clientNameForUser((int) $agentId),
                 ['callerId' => $call->from_phone ?: null],
             );
@@ -102,6 +106,26 @@ class CallFlowRouter
         }
 
         return VoiceXml::make()->say('All our agents are currently busy. Please call again later.');
+    }
+
+    /**
+     * Prepend the "this call may be recorded" consent notice when recording is
+     * enabled and a notice is configured — so inbound callers are ACTUALLY told
+     * before they're connected (and the agent's browser starts recording), not
+     * just informed via a line in the operator's settings. No-op when recording
+     * is off or no notice is set. (Outbound softphone calls aren't covered here —
+     * they don't run through this XML flow.)
+     */
+    private function announceRecording(VoiceXml $xml): void
+    {
+        if (! VoiceConfig::recordingEnabled()) {
+            return;
+        }
+
+        $notice = VoiceConfig::recordingConsentNotice();
+        if ($notice !== null && $notice !== '') {
+            $xml->say($notice);
+        }
     }
 
     private function queueXml(string $name): VoiceXml

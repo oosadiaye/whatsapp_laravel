@@ -58,6 +58,30 @@ class CallFlowRouterTest extends TestCase
         $this->assertStringContainsString('<Dial phoneNumbers="agent_'.$agentId.'" callerId="+2348011112222"/>', $xml);
     }
 
+    public function test_recording_consent_notice_is_announced_before_dialing(): void
+    {
+        [$call] = $this->inboundCall();
+        config(['voice.call_recording_enabled' => true]);
+        \App\Models\Setting::set('voice_recording_consent_notice', 'This call may be recorded.');
+
+        $xml = $this->router()->entryXml($call)->render();
+
+        $this->assertStringContainsString('<Say>This call may be recorded.</Say>', $xml);
+        // The notice must come BEFORE the caller is connected (and recorded).
+        $this->assertLessThan(strpos($xml, '<Dial'), strpos($xml, 'This call may be recorded.'));
+    }
+
+    public function test_no_consent_notice_when_recording_is_off(): void
+    {
+        [$call] = $this->inboundCall();
+        config(['voice.call_recording_enabled' => false]);
+        \App\Models\Setting::set('voice_recording_consent_notice', 'This call may be recorded.');
+
+        $xml = $this->router()->entryXml($call)->render();
+
+        $this->assertStringNotContainsString('This call may be recorded.', $xml);
+    }
+
     public function test_no_assigned_agent_and_no_features_says_busy(): void
     {
         [$call] = $this->inboundCall(withAgent: false);
