@@ -45,4 +45,22 @@ final class VoiceConfig
 
         return null;
     }
+
+    /**
+     * Days to keep recording audio before the prune sweeper deletes it (keeping
+     * the transcript). 0 = keep forever. DB setting wins over the env config.
+     */
+    public static function recordingRetentionDays(): int
+    {
+        try {
+            $setting = Setting::get('voice_recording_retention_days');
+            if ($setting !== null && $setting !== '') {
+                return max(0, (int) $setting);
+            }
+        } catch (QueryException) {
+            // No settings table — fall back to the env-backed config.
+        }
+
+        return max(0, (int) config('voice.recording_retention_days', 0));
+    }
 }

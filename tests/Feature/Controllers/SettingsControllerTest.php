@@ -298,6 +298,25 @@ class SettingsControllerTest extends TestCase
         $this->assertTrue(\App\Support\VoiceConfig::recordingEnabled());
     }
 
+    public function test_recording_retention_days_is_saved_and_resolves(): void
+    {
+        $this->actingAs($this->makeAdmin())
+            ->put(route('settings.update'), ['voice_recording_retention_days' => '30'])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(30, \App\Support\VoiceConfig::recordingRetentionDays());
+    }
+
+    public function test_retention_days_setting_takes_precedence_over_env(): void
+    {
+        config(['voice.recording_retention_days' => 90]);
+        $this->assertSame(90, \App\Support\VoiceConfig::recordingRetentionDays());
+
+        Setting::set('voice_recording_retention_days', '14');
+        $this->assertSame(14, \App\Support\VoiceConfig::recordingRetentionDays());
+    }
+
     private function makeAdmin(): User
     {
         $admin = User::factory()->create([

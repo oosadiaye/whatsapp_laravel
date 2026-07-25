@@ -56,6 +56,7 @@ class SettingsController extends Controller
             // Compliance-sensitive call recording (pre-fills the toggle + notice).
             'recordingEnabled' => VoiceConfig::recordingEnabled(),
             'recordingConsent' => VoiceConfig::recordingConsentNotice() ?? '',
+            'recordingRetentionDays' => VoiceConfig::recordingRetentionDays(),
         ]);
     }
 
@@ -75,6 +76,8 @@ class SettingsController extends Controller
             // stating a consent notice.
             'voice_recording_enabled' => ['nullable', 'boolean'],
             'voice_recording_consent_notice' => ['nullable', 'required_if:voice_recording_enabled,1', 'string', 'max:1000'],
+            // Retention: days to keep recording audio (0 = keep forever). ~10y cap.
+            'voice_recording_retention_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
         ]);
 
         // The recording toggle + its consent notice are handled explicitly — a

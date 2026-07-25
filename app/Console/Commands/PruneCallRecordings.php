@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\CallLog;
+use App\Support\VoiceConfig;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 
@@ -27,10 +28,10 @@ class PruneCallRecordings extends Command
 
     public function handle(): int
     {
-        $days = (int) config('voice.recording_retention_days', 0);
+        $days = VoiceConfig::recordingRetentionDays();
 
         if ($days <= 0) {
-            $this->info('Recording retention is disabled (voice.recording_retention_days = 0).');
+            $this->info('Recording retention is disabled (retention days = 0).');
 
             return self::SUCCESS;
         }
