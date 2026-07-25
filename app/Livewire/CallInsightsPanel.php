@@ -6,6 +6,7 @@ namespace App\Livewire;
 
 use App\Jobs\TranscribeCallRecording;
 use App\Models\CallLog;
+use App\Support\GeminiConfig;
 use Illuminate\Support\Collection;
 use Livewire\Component;
 
@@ -73,7 +74,7 @@ class CallInsightsPanel extends Component
 
         // Nothing to do without a recording or a configured Gemini key, and never
         // stack a second job while one is already in flight.
-        if (! $call->hasRecording() || ! filled(config('services.gemini.key'))) {
+        if (! $call->hasRecording() || ! filled(GeminiConfig::key())) {
             return;
         }
         if (in_array($call->ai_status, [CallLog::AI_STATUS_PENDING, CallLog::AI_STATUS_PROCESSING], true)) {
@@ -91,7 +92,7 @@ class CallInsightsPanel extends Component
         return view('livewire.call-insights-panel', [
             'call' => $call,
             'context' => $call ? $this->buildContext($call) : null,
-            'aiConfigured' => filled(config('services.gemini.key')),
+            'aiConfigured' => filled(GeminiConfig::key()),
         ]);
     }
 

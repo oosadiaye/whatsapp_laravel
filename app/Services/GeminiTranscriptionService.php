@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Exceptions\TranscriptionException;
+use App\Support\GeminiConfig;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -37,9 +38,9 @@ TXT;
      */
     public function transcribeAndSummarize(string $audioContents, string $mimeType): array
     {
-        $key = (string) config('services.gemini.key');
+        $key = (string) GeminiConfig::key();
         if ($key === '') {
-            throw new TranscriptionException('Gemini API key is not configured (set GEMINI_API_KEY).');
+            throw new TranscriptionException('Gemini API key is not configured (set it on the Settings page or GEMINI_API_KEY).');
         }
 
         $model = (string) config('services.gemini.model', 'gemini-2.0-flash');

@@ -19,6 +19,7 @@ use App\Models\Setting;
 use App\Services\AfricasTalkingVoiceService;
 use App\Services\CallQualityCalculator;
 use App\Services\WhatsAppCloudApiService;
+use App\Support\GeminiConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -170,7 +171,7 @@ class CallController extends Controller
             'calls' => $calls,
             'selectedCallId' => $selected?->id,
             'recordingEnabled' => (bool) config('voice.call_recording_enabled'),
-            'aiConfigured' => filled(config('services.gemini.key')),
+            'aiConfigured' => filled(GeminiConfig::key()),
         ]);
     }
 
@@ -441,7 +442,7 @@ class CallController extends Controller
         // so the audio is never web-accessible; it streams only via download().
         $path = $request->file('audio')->store('call-recordings');
 
-        $hasKey = filled(config('services.gemini.key'));
+        $hasKey = filled(GeminiConfig::key());
 
         $call->update([
             'recording_path' => $path,

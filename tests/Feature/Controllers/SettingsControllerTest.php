@@ -195,6 +195,58 @@ class SettingsControllerTest extends TestCase
         $this->assertSame('800', Setting::get('africastalking_rate_per_minute_kobo'));
     }
 
+    public function test_settings_page_shows_the_gemini_api_key_field(): void
+    {
+        $this->actingAs($this->makeAdmin())
+            ->get(route('settings.index'))
+            ->assertOk()
+            ->assertSee('Call transcription')
+            ->assertSee('gemini_api_key', false);
+    }
+
+    public function test_gemini_api_key_is_saved_encrypted_and_resolves_via_config(): void
+    {
+        $admin = $this->makeAdmin();
+        $secret = 'AIzaSy-super-secret-gemini-key-000111';
+
+        $this->actingAs($admin)
+            ->put(route('settings.update'), ['gemini_api_key' => $secret])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        // Stored as ciphertext, not plaintext.
+        $raw = Setting::where('key', 'gemini_api_key')->value('value');
+        $this->assertNotSame($secret, $raw);
+        $this->assertSame($secret, Crypt::decryptString($raw));
+
+        // The resolver (used across the call-AI pipeline) returns it.
+        $this->assertSame($secret, \App\Support\GeminiConfig::key());
+    }
+
+    public function test_blank_gemini_key_does_not_overwrite_the_existing_one(): void
+    {
+        $admin = $this->makeAdmin();
+        Setting::setEncrypted('gemini_api_key', 'existing-gemini-key-123456');
+
+        $this->actingAs($admin)
+            ->put(route('settings.update'), ['gemini_api_key' => ''])
+            ->assertRedirect();
+
+        $this->assertSame('existing-gemini-key-123456', \App\Support\GeminiConfig::key());
+    }
+
+    public function test_gemini_setting_takes_precedence_over_the_env_key(): void
+    {
+        config(['services.gemini.key' => 'env-fallback-key-abcdef']);
+
+        // No DB setting → env fallback.
+        $this->assertSame('env-fallback-key-abcdef', \App\Support\GeminiConfig::key());
+
+        // DB setting wins.
+        Setting::setEncrypted('gemini_api_key', 'db-key-wins-999888');
+        $this->assertSame('db-key-wins-999888', \App\Support\GeminiConfig::key());
+    }
+
     private function makeAdmin(): User
     {
         $admin = User::factory()->create([

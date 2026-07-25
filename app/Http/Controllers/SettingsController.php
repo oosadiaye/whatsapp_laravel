@@ -8,6 +8,7 @@ use App\Exceptions\WhatsAppApiException;
 use App\Models\Setting;
 use App\Models\WhatsAppInstance;
 use App\Services\WhatsAppCloudApiService;
+use App\Support\GeminiConfig;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -33,7 +34,7 @@ class SettingsController extends Controller
      * it will get '1' instead — failing loudly instead of silently echoing
      * encrypted bytes into the page source.
      */
-    private const ENCRYPTED_SETTING_KEYS = ['africastalking_api_key'];
+    private const ENCRYPTED_SETTING_KEYS = ['africastalking_api_key', 'gemini_api_key'];
 
     public function index(): View
     {
@@ -49,6 +50,8 @@ class SettingsController extends Controller
             'settings' => $settings,
             // Single-instance app: the one WhatsApp number is configured here.
             'instance' => WhatsAppInstance::primary(),
+            // Whether the Call Workspace AI has a usable key (Settings or env).
+            'geminiConfigured' => filled(GeminiConfig::key()),
         ]);
     }
 
@@ -63,6 +66,7 @@ class SettingsController extends Controller
             'africastalking_api_key' => ['nullable', 'string', 'min:10', 'max:512'],
             'africastalking_virtual_number' => ['nullable', 'string', 'regex:/^\+\d{10,15}$/'],
             'africastalking_rate_per_minute_kobo' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'gemini_api_key' => ['nullable', 'string', 'min:10', 'max:512'],
         ]);
 
         foreach ($validated as $key => $value) {
@@ -72,7 +76,7 @@ class SettingsController extends Controller
                 continue;
             }
 
-            if ($key === 'africastalking_api_key') {
+            if (in_array($key, self::ENCRYPTED_SETTING_KEYS, true)) {
                 Setting::setEncrypted($key, (string) $value);
             } else {
                 Setting::set($key, (string) $value);

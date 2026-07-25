@@ -7,6 +7,7 @@
         $atUsername = $settings['africastalking_username'] ?? '';
         $atKeySet   = (string) ($settings['africastalking_api_key'] ?? '') !== '';
         $atNumber   = $settings['africastalking_virtual_number'] ?? '';
+        $geminiKeySet = (string) ($settings['gemini_api_key'] ?? '') !== '';
         $atConfigured = $atUsername !== '' && $atKeySet && $atNumber !== '';
         $atStarted = $atUsername !== '' || $atKeySet || $atNumber !== '';
         $health = $atConfigured
@@ -188,6 +189,38 @@
                                        class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
                                 <p class="mt-1 text-xs text-gray-500">{{ __('Per-minute cost estimate (₦6 = 600 kobo). Used for /calls cost tracking.') }}</p>
                             </div>
+                        </div>
+                    </div>
+
+                    {{-- Gemini AI — call transcription --}}
+                    <div x-data="{ showGemini: false }" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                        <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
+                            <span class="grid place-items-center w-9 h-9 rounded-lg bg-violet-50 text-violet-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"/></svg>
+                            </span>
+                            <div>
+                                <h3 class="text-base font-bold text-gray-900">{{ __('AI — Call transcription (Gemini)') }}</h3>
+                                <p class="text-xs text-gray-500">{{ __('Powers the Call Workspace transcript, summary & key points. Also requires call recording to be enabled.') }}</p>
+                            </div>
+                        </div>
+                        <div class="p-6">
+                            <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Gemini API Key') }}</label>
+                            <div class="relative sm:w-2/3">
+                                <input :type="showGemini ? 'text' : 'password'" name="gemini_api_key"
+                                       placeholder="{{ $geminiKeySet ? '••••••••••••••••' : __('Enter key') }}"
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-mono focus:border-[#25D366] focus:ring-[#25D366]">
+                                <button type="button" @click="showGemini = !showGemini"
+                                        class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
+                                        :title="showGemini ? '{{ __('Hide') }}' : '{{ __('Show') }}'">
+                                    <svg x-show="!showGemini" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                    <svg x-show="showGemini" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
+                                </button>
+                            </div>
+                            @error('gemini_api_key')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                            <p class="mt-1 text-xs text-gray-500">{{ __('Leave blank to keep existing key. New value is encrypted at rest. Get one free at aistudio.google.com.') }}</p>
+                            <p class="mt-2 text-xs {{ $geminiConfigured ? 'text-emerald-600' : 'text-gray-400' }}">
+                                {{ $geminiConfigured ? __('✓ Gemini is configured — AI summaries will run once recording is on.') : __('No key set — AI call summaries are off.') }}
+                            </p>
                         </div>
                     </div>
 
