@@ -1,7 +1,8 @@
 @php($campaign = $campaign ?? null)
 @php($selectedGroups = old('groups', $campaign?->contactGroups->pluck('id')->all() ?? []))
 <form method="POST" action="{{ $campaign ? route('email-campaigns.update', $campaign) : route('email-campaigns.store') }}"
-      x-data="{ recurrence: '{{ old('recurrence', $campaign?->recurrence ?? 'none') }}', schedule: {{ old('scheduled_at', $campaign?->scheduled_at) ? 'true' : 'false' }} }"
+      x-data="{ recurrence: '{{ old('recurrence', $campaign?->recurrence ?? 'none') }}', schedule: {{ old('scheduled_at', $campaign?->scheduled_at) ? 'true' : 'false' }}, busy: false }"
+      @submit="busy = true"
       class="space-y-6">
     @csrf
     @if($campaign) @method('PUT') @endif
@@ -149,17 +150,20 @@
             </div>
 
             <div class="flex flex-col gap-2">
-                <button type="submit" name="action" value="send" x-show="!schedule"
-                        class="w-full px-4 py-2.5 rounded-lg bg-[#4f46e5] text-white font-semibold text-sm hover:bg-[#4338ca] transition">
-                    {{ __('Send now') }}
+                <button type="submit" name="action" value="send" x-show="!schedule" :disabled="busy"
+                        class="w-full px-4 py-2.5 rounded-lg bg-[#4f46e5] text-white font-semibold text-sm hover:bg-[#4338ca] transition disabled:opacity-60 disabled:cursor-not-allowed">
+                    <span x-show="!busy">{{ __('Send now') }}</span>
+                    <span x-show="busy" x-cloak>{{ __('Sending…') }}</span>
                 </button>
-                <button type="submit" name="action" value="schedule" x-show="schedule" x-cloak
-                        class="w-full px-4 py-2.5 rounded-lg bg-[#4f46e5] text-white font-semibold text-sm hover:bg-[#4338ca] transition">
-                    {{ __('Schedule') }}
+                <button type="submit" name="action" value="schedule" x-show="schedule" x-cloak :disabled="busy"
+                        class="w-full px-4 py-2.5 rounded-lg bg-[#4f46e5] text-white font-semibold text-sm hover:bg-[#4338ca] transition disabled:opacity-60 disabled:cursor-not-allowed">
+                    <span x-show="!busy">{{ __('Schedule') }}</span>
+                    <span x-show="busy" x-cloak>{{ __('Scheduling…') }}</span>
                 </button>
-                <button type="submit" name="action" value="draft"
-                        class="w-full px-4 py-2.5 rounded-lg bg-white border border-gray-300 text-gray-700 font-semibold text-sm hover:bg-gray-50 transition">
-                    {{ __('Save as draft') }}
+                <button type="submit" name="action" value="draft" :disabled="busy"
+                        class="w-full px-4 py-2.5 rounded-lg bg-white border border-gray-300 text-gray-700 font-semibold text-sm hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed">
+                    <span x-show="!busy">{{ __('Save as draft') }}</span>
+                    <span x-show="busy" x-cloak>{{ __('Saving…') }}</span>
                 </button>
             </div>
         </div>

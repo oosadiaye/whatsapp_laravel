@@ -18,15 +18,15 @@
 
     <div class="grid sm:grid-cols-2 gap-4">
         <div>
-            <label class="block text-sm font-medium text-gray-700">{{ __('Template name') }} *</label>
-            <input type="text" name="name" value="{{ old('name', $template?->name) }}" required
+            <label for="tpl-name" class="block text-sm font-medium text-gray-700">{{ __('Template name') }} *</label>
+            <input type="text" id="tpl-name" name="name" value="{{ old('name', $template?->name) }}" required
                    class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                    placeholder="{{ __('e.g. Monthly newsletter') }}">
             @error('name')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
         </div>
         <div>
-            <label class="block text-sm font-medium text-gray-700">{{ __('Default subject (optional)') }}</label>
-            <input type="text" name="subject" value="{{ old('subject', $template?->subject) }}"
+            <label for="tpl-subject" class="block text-sm font-medium text-gray-700">{{ __('Default subject (optional)') }}</label>
+            <input type="text" id="tpl-subject" name="subject" value="{{ old('subject', $template?->subject) }}"
                    class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                    placeholder="{{ __('Suggested subject line') }}">
             @error('subject')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
@@ -54,8 +54,8 @@
 
     <div class="grid lg:grid-cols-2 gap-4">
         <div>
-            <label class="block text-sm font-medium text-gray-700">{{ __('HTML') }} *</label>
-            <textarea name="body_html" x-model="body" rows="18" required
+            <label for="tpl-html" class="block text-sm font-medium text-gray-700">{{ __('HTML') }} *</label>
+            <textarea id="tpl-html" name="body_html" x-model="body" rows="18" required
                       class="mt-1 block w-full h-[640px] rounded-lg border-gray-300 shadow-sm font-mono text-xs focus:border-indigo-500 focus:ring-indigo-500"></textarea>
             <p class="mt-1 text-xs text-gray-400">{{ __('Personalize with') }} <code>@{{name}}</code> {{ __('and') }} <code>@{{email}}</code>.</p>
             @error('body_html')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror

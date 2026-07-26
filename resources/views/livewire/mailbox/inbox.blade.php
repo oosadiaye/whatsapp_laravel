@@ -21,8 +21,13 @@
                 @endif
             </div>
 
-            <input type="search" wire:model.live.debounce.300ms="search" placeholder="{{ __('Search mail…') }}"
-                class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] mb-3" />
+            <div class="relative mb-3">
+                <input type="search" wire:model.live.debounce.300ms="search" placeholder="{{ __('Search mail…') }}"
+                    aria-label="{{ __('Search mail') }}"
+                    class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]" />
+                <span wire:loading.delay wire:target="search, selectThread"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{{ __('Loading…') }}</span>
+            </div>
 
             <ul class="divide-y divide-gray-100">
                 @forelse($threads as $thread)
@@ -39,7 +44,15 @@
                         </button>
                     </li>
                 @empty
-                    <li class="py-8 text-center text-sm text-gray-400">{{ __('No mail.') }}</li>
+                    <li class="py-8 text-center text-sm text-gray-400">
+                        @if($myAccounts->isEmpty())
+                            <span class="block mb-2">{{ __('No mailbox connected yet.') }}</span>
+                            <a href="{{ route('mailbox.accounts.index') }}"
+                               class="inline-flex items-center font-medium text-[#25D366] hover:text-[#1da851]">{{ __('Connect a mailbox to get started →') }}</a>
+                        @else
+                            {{ __('No mail.') }}
+                        @endif
+                    </li>
                 @endforelse
             </ul>
 
@@ -107,7 +120,7 @@
                     </div>
 
                     @if($composeMode === 'new' && $myAccounts->count() > 1)
-                        <select wire:model="composeAccountId" class="w-full text-sm rounded-md border-gray-300 shadow-sm">
+                        <select wire:model="composeAccountId" aria-label="{{ __('Send from account') }}" class="w-full text-sm rounded-md border-gray-300 shadow-sm">
                             @foreach($myAccounts as $account)
                                 <option value="{{ $account->id }}">{{ $account->email }}</option>
                             @endforeach
@@ -115,25 +128,25 @@
                     @endif
 
                     <div>
-                        <input type="text" wire:model="composeTo" placeholder="{{ __('To') }}"
+                        <input type="text" wire:model="composeTo" placeholder="{{ __('To') }}" aria-label="{{ __('To') }}"
                             class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]" />
                         @error('composeTo') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                     </div>
 
-                    <input type="text" wire:model="composeCc" placeholder="{{ __('Cc (optional)') }}"
+                    <input type="text" wire:model="composeCc" placeholder="{{ __('Cc (optional)') }}" aria-label="{{ __('Cc') }}"
                         class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]" />
 
                     <div>
-                        <input type="text" wire:model="composeSubject" placeholder="{{ __('Subject') }}"
+                        <input type="text" wire:model="composeSubject" placeholder="{{ __('Subject') }}" aria-label="{{ __('Subject') }}"
                             class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]" />
                         @error('composeSubject') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                     </div>
 
-                    <textarea wire:model="composeBody" rows="6" placeholder="{{ __('Write your message…') }}"
+                    <textarea wire:model="composeBody" rows="6" placeholder="{{ __('Write your message…') }}" aria-label="{{ __('Message body') }}"
                         class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]"></textarea>
 
                     <div>
-                        <input type="file" wire:model="composeFiles" multiple class="text-xs text-gray-600" />
+                        <input type="file" wire:model="composeFiles" multiple aria-label="{{ __('Attach files') }}" class="text-xs text-gray-600" />
                         <span wire:loading wire:target="composeFiles" class="ml-2 text-xs text-gray-400">{{ __('Uploading…') }}</span>
                         @error('composeFiles.*') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                         @if(! empty($composeFiles))
@@ -147,7 +160,10 @@
 
                     <div class="flex items-center gap-2">
                         <button type="submit" wire:loading.attr="disabled" wire:target="send"
-                            class="text-sm font-medium px-3 py-1.5 rounded bg-[#25D366] text-white hover:bg-[#1da851] disabled:opacity-50">{{ __('Send') }}</button>
+                            class="text-sm font-medium px-3 py-1.5 rounded bg-[#25D366] text-white hover:bg-[#1da851] disabled:opacity-50">
+                            <span wire:loading.remove wire:target="send">{{ __('Send') }}</span>
+                            <span wire:loading wire:target="send">{{ __('Sending…') }}</span>
+                        </button>
                         <button type="button" wire:click="cancelCompose"
                             class="text-sm px-3 py-1.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">{{ __('Cancel') }}</button>
                     </div>

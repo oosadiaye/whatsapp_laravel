@@ -16,9 +16,7 @@
     </x-slot>
 
     <div class="py-6 max-w-6xl mx-auto sm:px-6 lg:px-8">
-        @if(session('success'))
-            <div class="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
-        @endif
+        {{-- Flash messages are rendered once by the app layout; no in-page duplicate. --}}
 
         @can('email.create')
             @if(! empty($templates ?? []))

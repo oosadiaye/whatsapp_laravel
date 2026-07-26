@@ -19,17 +19,7 @@
 
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            @if (session('success'))
-                <div class="mb-4 rounded-lg bg-green-50 border border-green-200 p-4 text-sm text-green-700">
-                    {{ session('success') }}
-                </div>
-            @endif
-
-            @if (session('error'))
-                <div class="mb-4 rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-700">
-                    {{ session('error') }}
-                </div>
-            @endif
+            {{-- Flash messages are rendered once by the app layout; no in-page duplicate. --}}
 
             @if ($groups->isEmpty())
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">

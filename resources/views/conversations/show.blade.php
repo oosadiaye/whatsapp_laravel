@@ -182,10 +182,7 @@
     <div class="py-6">
         <div class="max-w-3xl mx-auto sm:px-6 lg:px-8 space-y-4">
 
-            {{-- Flash messages --}}
-            @if(session('error'))
-                <div class="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-800">{{ session('error') }}</div>
-            @endif
+            {{-- Flash messages are rendered once by the app layout; no in-page duplicate. --}}
 
             {{-- Chat thread — live-updating via Livewire poll (inbound replies
                  appear without a manual refresh). --}}

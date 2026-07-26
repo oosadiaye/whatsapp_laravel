@@ -48,10 +48,14 @@ class DashboardController extends Controller
             ->orderBy('date')
             ->get();
 
+        // Array-of-objects shape ([{status, count}, …]) to match the doughnut
+        // chart JS (which maps over item.status/item.count) and the sibling
+        // messagesPerDay series. A keyed pluck() would json_encode to an object
+        // and break the chart's .map() once any status rows exist.
         $statusBreakdown = MessageLog::query()
             ->select('status', DB::raw('COUNT(*) as count'))
             ->groupBy('status')
-            ->pluck('count', 'status');
+            ->get();
 
         return view('dashboard', [
             'totalCampaigns' => $totalCampaigns,

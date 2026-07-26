@@ -69,7 +69,12 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                     <h3 class="text-lg font-semibold text-gray-800 mb-4">Messages Sent (Last 30 Days)</h3>
                     <div class="relative" style="height: 300px;">
-                        <canvas id="messagesPerDayChart" data-series="{{ json_encode($messagesPerDay) }}"></canvas>
+                        @if($messagesPerDay->isEmpty())
+                            <div class="absolute inset-0 grid place-items-center text-sm text-gray-400">{{ __('No messages sent in the last 30 days yet.') }}</div>
+                        @else
+                            <canvas id="messagesPerDayChart" data-series="{{ json_encode($messagesPerDay) }}"
+                                    role="img" aria-label="{{ __('Line chart of messages sent per day over the last 30 days') }}"></canvas>
+                        @endif
                     </div>
                 </div>
 
@@ -77,7 +82,12 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                     <h3 class="text-lg font-semibold text-gray-800 mb-4">Message Status Breakdown</h3>
                     <div class="relative" style="height: 300px;">
-                        <canvas id="statusBreakdownChart" data-series="{{ json_encode($statusBreakdown) }}"></canvas>
+                        @if($statusBreakdown->isEmpty())
+                            <div class="absolute inset-0 grid place-items-center text-sm text-gray-400">{{ __('No message status data yet.') }}</div>
+                        @else
+                            <canvas id="statusBreakdownChart" data-series="{{ json_encode($statusBreakdown) }}"
+                                    role="img" aria-label="{{ __('Doughnut chart of message delivery status breakdown') }}"></canvas>
+                        @endif
                     </div>
                 </div>
             </div>

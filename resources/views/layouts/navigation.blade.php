@@ -3,7 +3,8 @@
     On mobile (<lg) the sidebar is a drawer triggered from the topbar hamburger;
     desktop shows it always-visible at left, 256px wide. --}}
 
-<aside x-data="{ mobileOpen: false }"
+<aside x-data="{ mobileOpen: false, isDesktop: window.matchMedia('(min-width: 1024px)').matches }"
+       x-init="window.matchMedia('(min-width: 1024px)').addEventListener('change', e => isDesktop = e.matches)"
        @open-sidebar.window="mobileOpen = true"
        @keydown.escape.window="mobileOpen = false"
        class="z-30">
@@ -20,8 +21,11 @@
          @click="mobileOpen = false"
          class="fixed inset-0 z-30 bg-gray-900/50 lg:hidden"></div>
 
-    {{-- Sidebar drawer --}}
+    {{-- Sidebar drawer. When collapsed off-screen on mobile it is `inert` so
+         keyboard/screen-reader users don't tab into the hidden menu; on desktop
+         (isDesktop) it is always active. --}}
     <div :class="mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+         x-bind:inert="!isDesktop && !mobileOpen"
          class="fixed top-0 left-0 z-40 h-screen w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 ease-in-out lg:translate-x-0 flex flex-col">
 
         {{-- Brand / Logo --}}
@@ -35,9 +39,9 @@
             </a>
 
             {{-- Mobile close button --}}
-            <button @click="mobileOpen = false"
-                    class="ml-auto lg:hidden text-gray-400 hover:text-gray-600">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            <button @click="mobileOpen = false" type="button" aria-label="{{ __('Close menu') }}"
+                    class="ml-auto lg:hidden text-gray-400 hover:text-gray-600 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </div>
 

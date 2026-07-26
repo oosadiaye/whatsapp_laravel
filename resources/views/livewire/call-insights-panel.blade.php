@@ -192,7 +192,7 @@
                 </div>
 
                 <form wire:submit="addNote" class="space-y-2">
-                    <textarea wire:model="noteBody" rows="2" maxlength="5000"
+                    <textarea wire:model="noteBody" rows="2" maxlength="5000" aria-label="{{ __('Add a note') }}"
                               placeholder="{{ __('Add a note — logged with your name and the time…') }}"
                               class="block w-full rounded-lg border-gray-200 text-sm shadow-sm focus:border-[#25D366] focus:ring-[#25D366] resize-none"></textarea>
                     @error('noteBody') <p class="text-xs text-red-600">{{ $message }}</p> @enderror

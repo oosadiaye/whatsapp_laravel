@@ -22,9 +22,7 @@
     @endphp
 
     <div class="py-6 max-w-4xl mx-auto sm:px-6 lg:px-8 space-y-6">
-        @if(session('success'))
-            <div class="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
-        @endif
+        {{-- Flash messages are rendered once by the app layout; no in-page duplicate. --}}
 
         <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
             <div class="flex items-start justify-between gap-4">

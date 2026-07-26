@@ -31,16 +31,6 @@ class CallInsightsPanel extends Component
         $this->callId = $callId;
     }
 
-    /**
-     * Switch the panel to another call (clicked in the left-hand list).
-     */
-    public function selectCall(int $callId): void
-    {
-        $this->callId = $callId;
-        $this->noteBody = '';
-        $this->resetErrorBag();
-    }
-
     public function addNote(): void
     {
         $call = $this->authorizedCall();
