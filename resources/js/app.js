@@ -251,9 +251,23 @@ window.bqStopRingtone = () => {
  * without intervention. We listen on the capture phase so the gesture
  * counts even if the click target's own handler stops propagation.
  */
+/** localStorage flag: the user has opted into sound at least once. */
+const BQ_SOUND_PREF = 'bq:sound-enabled';
+function bqRememberSound() {
+    try { localStorage.setItem(BQ_SOUND_PREF, '1'); } catch (_) {}
+}
+function bqSoundRemembered() {
+    try { return localStorage.getItem(BQ_SOUND_PREF) === '1'; } catch (_) { return false; }
+}
+
 (() => {
     const unlock = () => {
         bqAcquireAudioCtx();
+        // Enabling once is remembered forever — the browser still needs a
+        // gesture to resume the AudioContext after a full page load, but we no
+        // longer re-prompt: the pill stays hidden and this same listener
+        // silently re-unlocks on the first interaction of each page.
+        bqRememberSound();
         // Also unlock the mp3 element with the muted-play trick — gives
         // the option-1 codepath a chance to succeed too.
         ['bq-ringtone', 'bq-message-ping'].forEach(id => {
@@ -266,6 +280,12 @@ window.bqStopRingtone = () => {
     window.addEventListener('click', unlock, { once: true, capture: true });
     window.addEventListener('keydown', unlock, { once: true, capture: true });
     window.addEventListener('touchstart', unlock, { once: true, capture: true });
+
+    // Previously enabled? Try to resume straight away. Browsers that have
+    // granted this origin autoplay (via media-engagement) resume without a
+    // gesture, so sound just works on load; otherwise the listener above
+    // catches the first interaction.
+    if (bqSoundRemembered()) bqAcquireAudioCtx();
 })();
 
 /**
@@ -277,6 +297,13 @@ window.bqStopRingtone = () => {
 window.bqSoundIndicator = () => ({
     locked: true,
     init() {
+        // Enabled before? Never nag again. Resume best-effort now; the global
+        // first-gesture listener guarantees unlock on the next interaction.
+        if (bqSoundRemembered()) {
+            bqAcquireAudioCtx();
+            this.locked = false;
+            return;
+        }
         this.refresh();
         this._timer = setInterval(() => this.refresh(), 1000);
     },
@@ -286,9 +313,10 @@ window.bqSoundIndicator = () => ({
     },
     enable() {
         // The click event itself counts as the gesture that resumes the
-        // AudioContext. Acquire-then-refresh once to flip locked=false.
+        // AudioContext; remember the choice so we never prompt again.
         bqAcquireAudioCtx();
-        setTimeout(() => this.refresh(), 100);
+        bqRememberSound();
+        this.locked = false;
     },
 });
 
