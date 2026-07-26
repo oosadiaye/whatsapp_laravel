@@ -69,7 +69,7 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                     <h3 class="text-lg font-semibold text-gray-800 mb-4">Messages Sent (Last 30 Days)</h3>
                     <div class="relative" style="height: 300px;">
-                        <canvas id="messagesPerDayChart"></canvas>
+                        <canvas id="messagesPerDayChart" data-series="{{ json_encode($messagesPerDay) }}"></canvas>
                     </div>
                 </div>
 
@@ -77,7 +77,7 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                     <h3 class="text-lg font-semibold text-gray-800 mb-4">Message Status Breakdown</h3>
                     <div class="relative" style="height: 300px;">
-                        <canvas id="statusBreakdownChart"></canvas>
+                        <canvas id="statusBreakdownChart" data-series="{{ json_encode($statusBreakdown) }}"></canvas>
                     </div>
                 </div>
             </div>
@@ -144,16 +144,20 @@
 
     @push('scripts')
     <script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
-        document.addEventListener('DOMContentLoaded', function () {
-            // Messages Per Day - Line Chart
-            const messagesData = @json($messagesPerDay);
+        function bqDrawDashboardCharts() {
+            if (typeof Chart === 'undefined') return;
+
+            const lineEl = document.getElementById('messagesPerDayChart');
+            if (lineEl) {
+            Chart.getChart(lineEl)?.destroy();
+            const messagesData = JSON.parse(lineEl.dataset.series || '[]');
             const messagesLabels = messagesData.map(item => {
                 const date = new Date(item.date);
                 return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             });
             const messagesCounts = messagesData.map(item => item.count);
 
-            new Chart(document.getElementById('messagesPerDayChart'), {
+            new Chart(lineEl, {
                 type: 'line',
                 data: {
                     labels: messagesLabels,
@@ -204,9 +208,12 @@
                     }
                 }
             });
+            }
 
-            // Status Breakdown - Doughnut Chart
-            const statusData = @json($statusBreakdown);
+            const statusEl = document.getElementById('statusBreakdownChart');
+            if (statusEl) {
+            Chart.getChart(statusEl)?.destroy();
+            const statusData = JSON.parse(statusEl.dataset.series || '[]');
             const statusColorMap = {
                 'SENT': '#3B82F6',
                 'DELIVERED': '#25D366',
@@ -217,7 +224,7 @@
             const statusCounts = statusData.map(item => item.count);
             const statusColors = statusData.map(item => statusColorMap[item.status] || '#9ca3af');
 
-            new Chart(document.getElementById('statusBreakdownChart'), {
+            new Chart(statusEl, {
                 type: 'doughnut',
                 data: {
                     labels: statusLabels,
@@ -253,7 +260,18 @@
                     }
                 }
             });
-        });
+            }
+        }
+
+        // Draw on initial load (the canvases exist — this script is at end of
+        // body) and on every SPA navigation. wire:navigate doesn't fire
+        // DOMContentLoaded, and the redraw reads fresh per-page data from the
+        // canvas data-series, so navigating back to the dashboard is correct.
+        bqDrawDashboardCharts();
+        if (! window.__bqDashboardChartsBound) {
+            window.__bqDashboardChartsBound = true;
+            document.addEventListener('livewire:navigated', bqDrawDashboardCharts);
+        }
     </script>
     @endpush
 </x-app-layout>

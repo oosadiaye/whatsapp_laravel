@@ -11,6 +11,6 @@
         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50';
 @endphp
 
-<a href="{{ $href }}" {{ $attributes->class("$base $state") }}>
+<a href="{{ $href }}" wire:navigate {{ $attributes->class("$base $state") }}>
     {{ $slot }}
 </a>
