@@ -18,7 +18,7 @@
                     </span>
                 </div>
                 <p class="mt-4 text-lg font-bold text-gray-900 text-center" x-text="contactName"></p>
-                <p class="text-sm text-gray-500 font-mono" x-text="customerPhone"></p>
+                <p class="text-sm text-gray-500 font-data" x-text="customerPhone"></p>
                 <div class="mt-2 flex items-center gap-1.5 text-amber-600">
                     <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
                     <span class="text-sm font-semibold">
@@ -56,7 +56,7 @@
                     </div>
                     <button type="button" @click="dismiss()" class="text-sm text-gray-500 hover:text-gray-700 font-medium">{{ __('Dismiss') }}</button>
                 </div>
-                <p class="mt-2 text-xs font-mono text-red-800/70 break-all" x-show="errorMessage" x-cloak x-text="errorMessage"></p>
+                <p class="mt-2 text-xs font-data text-red-800/70 break-all" x-show="errorMessage" x-cloak x-text="errorMessage"></p>
             </div>
         </div>
     </template>

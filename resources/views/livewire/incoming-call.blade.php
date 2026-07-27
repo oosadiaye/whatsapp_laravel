@@ -52,7 +52,7 @@
                 </div>
                 <p class="mt-4 text-[11px] font-bold uppercase tracking-widest text-emerald-600">{{ __('Incoming call') }}</p>
                 <p class="mt-1 text-lg font-bold text-gray-900 text-center" x-text="contactName"></p>
-                <p class="text-sm text-gray-500 font-mono" x-text="phone"></p>
+                <p class="text-sm text-gray-500 font-data" x-text="phone"></p>
             </div>
             <div class="px-6 pb-6 grid grid-cols-2 gap-3">
                 <button type="button" @click="declineCall()"
@@ -120,7 +120,7 @@
                         <p class="text-xs text-gray-500 mt-0.5">{{ __('The customer may still be ringing — try again, or decline to release.') }}</p>
                     </div>
                 </div>
-                <p class="mt-2 text-xs font-mono text-amber-800/70 break-all" x-show="errorMessage" x-cloak x-text="errorMessage"></p>
+                <p class="mt-2 text-xs font-data text-amber-800/70 break-all" x-show="errorMessage" x-cloak x-text="errorMessage"></p>
                 <div class="mt-4 grid grid-cols-2 gap-3">
                     <button type="button" @click="declineCall()" class="h-11 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition">{{ __('Decline') }}</button>
                     <button type="button" @click="retryAccept()" class="h-11 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition">{{ __('Try again') }}</button>

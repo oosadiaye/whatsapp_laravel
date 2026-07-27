@@ -27,7 +27,7 @@
                 </div>
                 <div class="min-w-0 flex-1">
                     <h2 class="text-base font-bold text-gray-900 truncate">{{ $call->contact?->name ?? __('Unknown') }}</h2>
-                    <p class="text-xs text-gray-500 font-mono truncate">{{ $call->contact?->phone ?? $call->to_phone }}</p>
+                    <p class="text-xs text-gray-500 font-data truncate">{{ $call->contact?->phone ?? $call->to_phone }}</p>
                 </div>
                 @if($context['engaged'])
                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">{{ __('Engaged') }}</span>

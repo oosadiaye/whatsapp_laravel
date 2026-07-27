@@ -51,13 +51,13 @@
         {{-- Timer --}}
         <div class="mt-5 w-full rounded-xl bg-gray-50 border border-gray-100 py-4 flex items-end justify-center gap-2.5">
             <div class="flex flex-col items-center">
-                <span class="text-3xl font-bold font-mono tabular-nums text-gray-900 leading-none"
+                <span class="text-3xl font-bold font-data tabular-nums text-gray-900 leading-none"
                       x-text="String(Math.floor(durationSeconds / 60)).padStart(2, '0')"></span>
                 <span class="text-[10px] uppercase font-bold tracking-widest text-gray-400 mt-1.5">{{ __('Min') }}</span>
             </div>
-            <span class="text-3xl font-bold font-mono text-gray-300 leading-none animate-pulse">:</span>
+            <span class="text-3xl font-bold font-data text-gray-300 leading-none animate-pulse">:</span>
             <div class="flex flex-col items-center">
-                <span class="text-3xl font-bold font-mono tabular-nums text-gray-900 leading-none"
+                <span class="text-3xl font-bold font-data tabular-nums text-gray-900 leading-none"
                       x-text="String(durationSeconds % 60).padStart(2, '0')"></span>
                 <span class="text-[10px] uppercase font-bold tracking-widest text-gray-400 mt-1.5">{{ __('Sec') }}</span>
             </div>
@@ -68,7 +68,7 @@
             <div class="mt-4 w-full grid grid-cols-3 gap-2">
                 <template x-for="d in ['1','2','3','4','5','6','7','8','9','*','0','#']" :key="d">
                     <button type="button" @click="sendDtmf(d)"
-                            class="h-11 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-lg font-semibold font-mono active:scale-95 transition"
+                            class="h-11 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-lg font-semibold font-data active:scale-95 transition"
                             x-text="d"></button>
                 </template>
             </div>
