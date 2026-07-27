@@ -28,6 +28,16 @@ final class EmailTemplateLibrary
             ['key' => 'welcome', 'name' => 'Welcome', 'description' => 'A warm onboarding email with next steps.', 'accent' => '#10b981'],
             ['key' => 'code', 'name' => 'Verification code', 'description' => 'A one-time passcode (OTP) email.', 'accent' => '#7c3aed'],
             ['key' => 'simple', 'name' => 'Simple', 'description' => 'A clean, text-first layout for best deliverability.', 'accent' => '#334155'],
+
+            // Cold outreach to prospective clients — a full first-contact cadence.
+            // Deliberately plain/text-first (no hero band): personal-looking mail
+            // lands in the inbox and gets more replies than a designed blast. Copy
+            // is a proven framework with [bracketed] blanks to fill in per prospect.
+            ['key' => 'cold-intro', 'name' => 'Cold intro', 'description' => 'A short, personal first-touch to a new prospect.', 'accent' => '#2563eb'],
+            ['key' => 'cold-follow-up', 'name' => 'Cold follow-up', 'description' => 'A brief, polite nudge after no reply.', 'accent' => '#0d9488'],
+            ['key' => 'cold-case-study', 'name' => 'Case study / proof', 'description' => 'Lead with a concrete result to build trust.', 'accent' => '#c2410c'],
+            ['key' => 'cold-meeting', 'name' => 'Meeting request', 'description' => 'Ask for a quick call, with easy scheduling.', 'accent' => '#4338ca'],
+            ['key' => 'cold-breakup', 'name' => 'Break-up email', 'description' => 'A respectful final nudge that often gets a reply.', 'accent' => '#64748b'],
         ];
     }
 
