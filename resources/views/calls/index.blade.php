@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Calls') }}</h2>
+        <h2 class="font-display font-semibold text-xl text-gray-800 leading-tight">{{ __('Calls') }}</h2>
     </x-slot>
 
     <div class="py-6 max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-4">
@@ -8,7 +8,7 @@
         {{-- Header + filters --}}
         <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-5 space-y-4">
             <div class="flex items-center justify-between gap-3">
-                <h1 class="text-lg font-bold text-gray-900 tracking-tight">{{ __('Call History') }}</h1>
+                <h1 class="font-display text-2xl font-bold text-gray-900 tracking-tight">{{ __('Call History') }}</h1>
                 <span class="text-xs text-gray-400">{{ $calls->total() }} {{ __('total') }}</span>
             </div>
 
@@ -72,11 +72,11 @@
                                 };
                                 $isAt = $call->provider === \App\Models\CallLog::PROVIDER_AFRICAS_TALKING;
                             @endphp
-                            <tr class="group hover:bg-gray-50 transition-colors {{ $call->status === 'connected' ? 'bg-emerald-50/40' : '' }}">
+                            <tr class="group hover:bg-gray-50 transition-colors border-l-4 {{ $call->status === 'connected' ? 'bg-emerald-50/40 border-emerald-500' : 'border-transparent' }}">
                                 {{-- Date / time --}}
                                 <td class="px-5 py-3 whitespace-nowrap">
-                                    <div class="text-sm font-mono text-gray-800">{{ $call->created_at->format('M d, Y') }}</div>
-                                    <div class="text-[11px] text-gray-400 font-mono">{{ $call->created_at->format('H:i:s') }}</div>
+                                    <div class="text-sm font-data text-gray-800">{{ $call->created_at->format('M d, Y') }}</div>
+                                    <div class="text-[11px] text-gray-400 font-data">{{ $call->created_at->format('H:i:s') }}</div>
                                 </td>
                                 {{-- Direction --}}
                                 <td class="px-5 py-3 whitespace-nowrap">
@@ -100,7 +100,7 @@
                                 {{-- Participant --}}
                                 <td class="px-5 py-3 whitespace-nowrap">
                                     <div class="font-semibold text-gray-900">{{ $call->contact ? $call->contact->display_name : ($call->isInbound() ? $call->from_phone : $call->to_phone) }}</div>
-                                    <div class="text-xs text-gray-400 font-mono">{{ $call->isInbound() ? $call->from_phone : $call->to_phone }}</div>
+                                    <div class="text-xs text-gray-400 font-data">{{ $call->isInbound() ? $call->from_phone : $call->to_phone }}</div>
                                 </td>
                                 {{-- Trunk / instance --}}
                                 <td class="px-5 py-3 whitespace-nowrap">
@@ -111,7 +111,7 @@
                                     <div class="text-[11px] text-gray-400 mt-0.5">{{ $call->whatsappInstance->display_name ?? $call->whatsappInstance->instance_name ?? '—' }}</div>
                                 </td>
                                 {{-- Duration --}}
-                                <td class="px-5 py-3 whitespace-nowrap text-right font-mono text-sm text-gray-700">
+                                <td class="px-5 py-3 whitespace-nowrap text-right font-data text-sm text-gray-700">
                                     {{ $call->duration_seconds ? gmdate('H:i:s', $call->duration_seconds) : '—' }}
                                 </td>
                                 {{-- Status --}}
@@ -187,7 +187,7 @@
                     <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Calls today') }}</span>
                     <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941"/></svg>
                 </div>
-                <div class="mt-3 text-3xl font-bold text-gray-900 tabular-nums">{{ $stats['todayCount'] }}</div>
+                <div class="mt-3 font-display text-3xl font-bold text-gray-900 tabular-nums">{{ $stats['todayCount'] }}</div>
             </div>
             {{-- Avg duration --}}
             <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
@@ -195,7 +195,7 @@
                     <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Avg. duration') }}</span>
                     <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 </div>
-                <div class="mt-3 text-3xl font-bold text-gray-900 font-mono tabular-nums">
+                <div class="mt-3 font-display text-3xl font-bold text-gray-900 font-data tabular-nums">
                     {{ $stats['avgDurationSeconds'] ? gmdate('i:s', $stats['avgDurationSeconds']) : '—' }}
                 </div>
             </div>
@@ -229,16 +229,16 @@
         <div class="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
                 <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Answer rate') }}</span>
-                <div class="mt-3 text-3xl font-bold text-gray-900 tabular-nums">{{ $stats['answerRate'] === null ? '—' : $stats['answerRate'].'%' }}</div>
+                <div class="mt-3 font-display text-3xl font-bold text-gray-900 tabular-nums">{{ $stats['answerRate'] === null ? '—' : $stats['answerRate'].'%' }}</div>
                 <div class="text-xs text-gray-400 mt-1">{{ $stats['answered'] }} {{ __('answered') }} · {{ $stats['missed'] }} {{ __('missed') }}</div>
             </div>
             <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
                 <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Avg. time to answer') }}</span>
-                <div class="mt-3 text-3xl font-bold text-gray-900 font-mono tabular-nums">{{ $stats['avgTimeToAnswerSeconds'] === null ? '—' : gmdate('i:s', $stats['avgTimeToAnswerSeconds']) }}</div>
+                <div class="mt-3 font-display text-3xl font-bold text-gray-900 font-data tabular-nums">{{ $stats['avgTimeToAnswerSeconds'] === null ? '—' : gmdate('i:s', $stats['avgTimeToAnswerSeconds']) }}</div>
             </div>
             <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
                 <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Avg. MOS') }}</span>
-                <div class="mt-3 text-3xl font-bold tabular-nums {{ $stats['avgMos'] === null ? 'text-gray-900' : ($stats['avgMos'] >= 4 ? 'text-emerald-600' : ($stats['avgMos'] >= 3 ? 'text-amber-600' : 'text-red-600')) }}">{{ $stats['avgMos'] ?? '—' }}</div>
+                <div class="mt-3 font-display text-3xl font-bold tabular-nums {{ $stats['avgMos'] === null ? 'text-gray-900' : ($stats['avgMos'] >= 4 ? 'text-emerald-600' : ($stats['avgMos'] >= 3 ? 'text-amber-600' : 'text-red-600')) }}">{{ $stats['avgMos'] ?? '—' }}</div>
                 <div class="text-xs text-gray-400 mt-1">{{ __('call quality (1–5)') }}</div>
             </div>
             <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">

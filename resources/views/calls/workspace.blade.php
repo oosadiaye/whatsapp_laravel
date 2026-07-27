@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between gap-3 flex-wrap">
-            <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('Call Workspace') }}</h2>
+            <h2 class="font-display text-xl font-semibold leading-tight text-gray-800">{{ __('Call Workspace') }}</h2>
             <a href="{{ route('calls.index') }}" class="text-sm font-medium text-gray-500 hover:text-gray-800">{{ __('Full history →') }}</a>
         </div>
     </x-slot>
@@ -26,8 +26,8 @@
                 <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
                 <div>
                     {{ __('Call recording is off, so AI summaries won\'t generate. Set') }}
-                    <code class="font-mono text-xs bg-amber-100 px-1 rounded">VOICE_CALL_RECORDING_ENABLED=true</code>
-                    @unless($aiConfigured) {{ __('and add a') }} <code class="font-mono text-xs bg-amber-100 px-1 rounded">GEMINI_API_KEY</code> @endunless
+                    <code class="font-data text-xs bg-amber-100 px-1 rounded">VOICE_CALL_RECORDING_ENABLED=true</code>
+                    @unless($aiConfigured) {{ __('and add a') }} <code class="font-data text-xs bg-amber-100 px-1 rounded">GEMINI_API_KEY</code> @endunless
                     {{ __('once you have a "call may be recorded" consent notice in place. Notes and history work regardless.') }}
                 </div>
             </div>
@@ -49,7 +49,7 @@
                         <label for="bq-dial-number" class="sr-only">{{ __('Phone number or contact') }}</label>
                         <input type="text" id="bq-dial-number" name="phone" x-model="number" list="bq-dial-contacts"
                                inputmode="tel" autocomplete="off" placeholder="{{ __('+234… or a contact name') }}"
-                               class="w-full text-lg font-mono tracking-wide rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                               class="w-full text-lg font-data tracking-wide rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
                         <datalist id="bq-dial-contacts">
                             @foreach($dialContacts ?? [] as $c)
                                 <option value="{{ $c->phone }}">{{ $c->name }}</option>
@@ -116,7 +116,7 @@
                                 @if(isset($aiDot[$call->ai_status]))
                                     <span class="w-2 h-2 rounded-full {{ $aiDot[$call->ai_status] }}" title="{{ __('AI') }}: {{ $call->ai_status }}"></span>
                                 @endif
-                                <span class="text-xs font-mono text-gray-500">{{ sprintf('%d:%02d', intdiv((int) $call->duration_seconds, 60), (int) $call->duration_seconds % 60) }}</span>
+                                <span class="text-xs font-data text-gray-500">{{ sprintf('%d:%02d', intdiv((int) $call->duration_seconds, 60), (int) $call->duration_seconds % 60) }}</span>
                             </div>
                         </a>
                     @empty

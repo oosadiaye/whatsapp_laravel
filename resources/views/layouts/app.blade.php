@@ -46,6 +46,11 @@
 
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+        {{-- Enterprise-Modern typography for the call surfaces: Hanken Grotesk
+             (display headers) + JetBrains Mono (numbers/timestamps). Applied via
+             the .font-display / .font-data utilities so the rest of the app keeps
+             Figtree. Same already-allowed host — no new CDN. --}}
+        <link href="https://fonts.bunny.net/css?family=hanken-grotesk:500,600,700,800|jetbrains-mono:400,500&display=swap" rel="stylesheet" />
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         {{-- Self-hosted (audit M8): no third-party CDN, so no supply-chain risk
