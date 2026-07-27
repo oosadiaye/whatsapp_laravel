@@ -22,6 +22,14 @@ echo "[2/11] Removing Vite hot file (created if dev server ever ran here)..."
 rm -f public/hot
 
 echo "[3/11] Installing PHP deps..."
+# Clear the stale package-discovery manifest BEFORE composer install. Composer
+# runs `artisan package:discover` as a post-autoload-dump script, which boots the
+# framework — and if a manifest from a previous WITH-dev install still lists a
+# dev-only provider (e.g. Laravel\Pail\PailServiceProvider, which --no-dev does
+# NOT install), that boot dies with "class not found", package:discover can't
+# rewrite the manifest, and every web request then 500s during BootProviders.
+# Deleting the manifests first breaks that chicken-and-egg so discovery succeeds.
+rm -f bootstrap/cache/packages.php bootstrap/cache/services.php
 composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
 # Smoke-test that Reverb's runtime deps are present. If a previous deploy

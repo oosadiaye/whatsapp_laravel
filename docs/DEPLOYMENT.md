@@ -384,6 +384,36 @@ sudo supervisorctl restart blastiq-worker:*
 
 Either install `php-redis` extension (`sudo apt install php8.3-redis && systemctl restart php8.3-fpm`) **or** switch `.env` to `predis` (pure-PHP, slower) by setting `REDIS_CLIENT=predis`.
 
+### `composer install` aborts: "iconv OR mbstring extension is required"
+
+Composer (and Laravel) need `mbstring`. Install it for the PHP that `php -v`
+resolves to, then re-run — an aborted install leaves `vendor/` incomplete, which
+itself 500s every page:
+
+```bash
+sudo dnf install -y php-mbstring php-common   # or php83-php-mbstring on Remi
+php -m | grep -iE 'mbstring|iconv'            # confirm present
+composer install --no-dev --optimize-autoloader
+```
+
+### 500 on every page: `Class "Laravel\Pail\PailServiceProvider" not found`
+
+(or any other dev-only provider — Telescope, Pint, etc.) A stale
+`bootstrap/cache/packages.php` from a previous WITH-dev install still lists a
+package that `--no-dev` didn't install, so the app dies during `BootProviders`
+on every request — and even the 500 page fails to render (`Target class
+[translator] does not exist`). `php artisan` fails the same way, so you must
+delete the manifest by hand, then let composer regenerate it:
+
+```bash
+rm -f bootstrap/cache/packages.php bootstrap/cache/services.php
+composer install --no-dev --optimize-autoloader   # regenerates a clean manifest
+grep -c Pail bootstrap/cache/packages.php || echo "pail gone ✓"   # expect 0 / "gone"
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+```
+
+`deploy.sh` now clears these manifests before `composer install` to prevent this.
+
 ### Webhook verification fails
 
 - Confirm the URL in Meta's webhook config matches exactly what BlastIQ shows on the instance page
