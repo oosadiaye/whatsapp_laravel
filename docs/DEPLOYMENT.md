@@ -177,7 +177,7 @@ Auto-renews every 90 days via the certbot timer.
 ```ini
 [program:blastiq-worker]
 process_name=%(program_name)s_%(process_num)02d
-command=php /home/BlastIQ/artisan queue:work --queue=messages,imports,default --tries=3 --backoff=30 --max-time=3600
+command=php /home/BlastIQ/artisan queue:work --queue=messages,imports,default,mail-sync,mail-send --tries=3 --backoff=30 --max-time=3600
 autostart=true
 autorestart=true
 user=www-data
@@ -195,7 +195,9 @@ sudo supervisorctl start blastiq-worker:*
 
 > **The `--queue` list MUST include every queue the app dispatches onto:
 > `messages` (sends), `imports` (contact imports), `default` (campaign fan-out,
-> email). Omit one and those jobs sit queued forever with no error.**
+> bulk email), and `mail-sync` + `mail-send` (the per-employee email client —
+> only used when `MAIL_CLIENT_ENABLED=true`, but harmless to list always).
+> Omit one and those jobs sit queued forever with no error.**
 >
 > Caveat: a single `queue:work` drains queues left-to-right, so a large import
 > can starve message sends. For anything beyond low volume, **use Horizon
@@ -206,8 +208,10 @@ sudo supervisorctl start blastiq-worker:*
 
 Production uses `QUEUE_CONNECTION=redis`; run **Horizon** rather than raw
 `queue:work`. Horizon already defines per-queue supervisors (`messages`,
-`imports`, `default`) in `config/horizon.php`, so no `--queue` list to keep in
-sync and no cross-queue starvation.
+`imports`, `default`, `mail-sync`, `mail-send`) in `config/horizon.php` — for
+the `production` AND `staging` environments (audit H2: Horizon only starts
+supervisors matching `APP_ENV`) — so there's no `--queue` list to keep in sync
+and no cross-queue starvation.
 
 ```bash
 php artisan horizon:install        # one-time, already done in this repo
@@ -266,6 +270,26 @@ php artisan storage:link
   with context instead of only landing in `storage/logs/laravel.log`.
 - **Non-delivering mail:** if `MAIL_MAILER=log`/`array`, email campaigns report
   SENT but nothing is delivered — the UI warns on launch and it's logged.
+
+---
+
+## Email delivery (SMTP)
+
+Bulk email campaigns (`/email-campaigns`) need a real mail transport. Configure
+it **either** way — they resolve to the same thing, DB winning:
+
+1. **In the UI (recommended):** Settings → **Email delivery (SMTP)** → pick SMTP,
+   enter host/port/encryption/username/password + from address, Save, then use
+   **Send test email** to verify. Stored encrypted in the DB; overrides `.env`
+   at send time. No redeploy or `config:cache` needed.
+2. **In `.env`:** set `MAIL_MAILER=smtp` (or `postmark`/`resend` with an API key)
+   and the `MAIL_*` values, then `php artisan config:cache`.
+
+If neither is set (`MAIL_MAILER=log`, the default), campaigns report SENT but
+nothing is delivered — the launch UI warns and it's logged.
+
+> The **per-employee mailbox** (`/mailbox`, `MAIL_CLIENT_ENABLED`) is a separate
+> feature with its own per-user IMAP/SMTP connection — not this transport.
 
 ---
 
