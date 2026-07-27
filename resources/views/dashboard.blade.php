@@ -18,8 +18,8 @@
                         </svg>
                     </div>
                     <div>
-                        <p class="text-sm font-medium text-gray-500">Total Campaigns</p>
-                        <p class="text-3xl font-bold text-gray-900 mt-1">{{ number_format($totalCampaigns) }}</p>
+                        <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Total Campaigns</p>
+                        <p class="font-display text-3xl font-bold text-gray-900 mt-1 tabular-nums">{{ number_format($totalCampaigns) }}</p>
                     </div>
                 </div>
 
@@ -31,8 +31,8 @@
                         </svg>
                     </div>
                     <div>
-                        <p class="text-sm font-medium text-gray-500">Total Contacts</p>
-                        <p class="text-3xl font-bold text-gray-900 mt-1">{{ number_format($totalContacts) }}</p>
+                        <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Total Contacts</p>
+                        <p class="font-display text-3xl font-bold text-gray-900 mt-1 tabular-nums">{{ number_format($totalContacts) }}</p>
                     </div>
                 </div>
 
@@ -44,8 +44,8 @@
                         </svg>
                     </div>
                     <div>
-                        <p class="text-sm font-medium text-gray-500">Sent Today</p>
-                        <p class="text-3xl font-bold text-gray-900 mt-1">{{ number_format($messagesToday) }}</p>
+                        <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Sent Today</p>
+                        <p class="font-display text-3xl font-bold text-gray-900 mt-1 tabular-nums">{{ number_format($messagesToday) }}</p>
                     </div>
                 </div>
 
@@ -57,8 +57,8 @@
                         </svg>
                     </div>
                     <div>
-                        <p class="text-sm font-medium text-gray-500">Delivery Rate</p>
-                        <p class="text-3xl font-bold text-gray-900 mt-1">{{ number_format($deliveryRate, 1) }}%</p>
+                        <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Delivery Rate</p>
+                        <p class="font-display text-3xl font-bold text-gray-900 mt-1 tabular-nums">{{ number_format($deliveryRate, 1) }}%</p>
                     </div>
                 </div>
             </div>
@@ -67,7 +67,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {{-- Messages Per Day Line Chart --}}
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Messages Sent (Last 30 Days)</h3>
+                    <h3 class="font-display text-lg font-semibold text-gray-800 mb-4">Messages Sent (Last 30 Days)</h3>
                     <div class="relative" style="height: 300px;">
                         @if($messagesPerDay->isEmpty())
                             <div class="absolute inset-0 grid place-items-center text-sm text-gray-400">{{ __('No messages sent in the last 30 days yet.') }}</div>
@@ -80,7 +80,7 @@
 
                 {{-- Status Breakdown Doughnut Chart --}}
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Message Status Breakdown</h3>
+                    <h3 class="font-display text-lg font-semibold text-gray-800 mb-4">Message Status Breakdown</h3>
                     <div class="relative" style="height: 300px;">
                         @if($statusBreakdown->isEmpty())
                             <div class="absolute inset-0 grid place-items-center text-sm text-gray-400">{{ __('No message status data yet.') }}</div>
@@ -95,7 +95,7 @@
             {{-- Recent Campaigns Table --}}
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100">
-                    <h3 class="text-lg font-semibold text-gray-800">Recent Campaigns</h3>
+                    <h3 class="font-display text-lg font-semibold text-gray-800">Recent Campaigns</h3>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm text-left">
@@ -129,8 +129,8 @@
                                             {{ $campaign->status }}
                                         </span>
                                     </td>
-                                    <td class="px-6 py-4 text-right text-gray-600">{{ number_format($campaign->sent_count ?? 0) }}</td>
-                                    <td class="px-6 py-4 text-right text-gray-600">{{ number_format($campaign->delivered_count ?? 0) }}</td>
+                                    <td class="px-6 py-4 text-right text-gray-600 font-data">{{ number_format($campaign->sent_count ?? 0) }}</td>
+                                    <td class="px-6 py-4 text-right text-gray-600 font-data">{{ number_format($campaign->delivered_count ?? 0) }}</td>
                                     <td class="px-6 py-4 text-gray-500">{{ $campaign->created_at->format('M d, Y') }}</td>
                                 </tr>
                             @empty
