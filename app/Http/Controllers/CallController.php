@@ -14,14 +14,18 @@ use App\Jobs\TerminateProviderCall;
 use App\Jobs\TranscribeCallRecording;
 use App\Models\CallLog;
 use App\Models\CallNote;
+use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Setting;
+use App\Models\WhatsAppInstance;
 use App\Services\AfricasTalkingVoiceService;
 use App\Services\CallQualityCalculator;
+use App\Services\ContactImportService;
 use App\Services\WhatsAppCloudApiService;
 use App\Support\GeminiConfig;
 use App\Support\VoiceConfig;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -168,11 +172,24 @@ class CallController extends Controller
         $requestedId = (int) $request->query('call');
         $selected = $calls->firstWhere('id', $requestedId) ?? $calls->first();
 
+        // Dial pad (calls.dial): a bounded contact list to pick from. Scoped to
+        // this operator's contacts; bounded so the picker never full-scans.
+        $canDial = (bool) $user->can('calls.dial');
+        $dialContacts = $canDial
+            ? Contact::where('user_id', $user->id)
+                ->whereNotNull('phone')
+                ->orderBy('name')
+                ->limit(500)
+                ->get(['id', 'name', 'phone'])
+            : collect();
+
         return view('calls.workspace', [
             'calls' => $calls,
             'selectedCallId' => $selected?->id,
             'recordingEnabled' => VoiceConfig::recordingEnabled(),
             'aiConfigured' => filled(GeminiConfig::key()),
+            'canDial' => $canDial,
+            'dialContacts' => $dialContacts,
         ]);
     }
 
@@ -220,6 +237,65 @@ class CallController extends Controller
                 'error' => 'Invalid phone number for this contact.',
             ], 422);
         }
+    }
+
+    /**
+     * Workspace dial pad: place an outbound call to an arbitrary number or a
+     * chosen contact, without needing an existing conversation. Resolves (or
+     * creates, soft-delete-safe) the contact + conversation, assigns it to the
+     * dialer so they can view + control the call, then hands off to the
+     * conversation page which auto-starts the call through the proven softphone
+     * flow (?dial=1). The actual PSTN leg still goes through placeOutbound —
+     * this method only prepares the destination. Gated by calls.dial.
+     */
+    public function dial(Request $request, ContactImportService $normalizer): RedirectResponse
+    {
+        $data = $request->validate([
+            'phone' => ['nullable', 'string', 'max:32'],
+            'contact_id' => ['nullable', 'integer', 'exists:contacts,id'],
+        ]);
+
+        if (blank($data['phone'] ?? null) && blank($data['contact_id'] ?? null)) {
+            return back()->with('error', 'Enter a number or pick a contact to call.');
+        }
+
+        // Calls are recorded against the single WhatsApp number — without it
+        // there's no instance to key the contact/conversation to.
+        $instance = WhatsAppInstance::primary();
+        if ($instance === null) {
+            return back()->with('error', 'Configure your WhatsApp number in Settings first — calls are recorded against it.');
+        }
+
+        // An explicit contact pick wins; otherwise normalise the typed number
+        // and find-or-revive the contact for it (soft-delete-safe).
+        if (filled($data['contact_id'] ?? null)) {
+            $contact = Contact::where('user_id', $instance->user_id)->find($data['contact_id']);
+            if ($contact === null) {
+                return back()->with('error', 'That contact could not be found.');
+            }
+        } else {
+            $phone = $normalizer->normalizePhone((string) $data['phone'], Setting::get('default_country_code'));
+            if ($phone === null || $phone === '') {
+                return back()->with('error', 'That does not look like a valid phone number.');
+            }
+            $contact = Contact::firstOrCreateIncludingTrashed(
+                ['user_id' => $instance->user_id, 'phone' => $phone],
+                ['name' => $phone, 'is_active' => true],
+            );
+        }
+
+        $conversation = Conversation::firstOrCreate(
+            ['contact_id' => $contact->id, 'whatsapp_instance_id' => $instance->id],
+            ['user_id' => $instance->user_id, 'unread_count' => 0],
+        );
+
+        // Own the conversation so the dialer passes the outbound gate (view_all
+        // OR assigned-to-me). Only claims it when it isn't already someone's.
+        if ($conversation->assigned_to_user_id === null) {
+            $conversation->update(['assigned_to_user_id' => $request->user()->id]);
+        }
+
+        return redirect()->route('conversations.show', ['conversation' => $conversation, 'dial' => 1]);
     }
 
     /**

@@ -88,7 +88,16 @@ class RolesAndPermissionsSeeder extends Seeder
             'conversations.view_assigned', // see only assigned-to-me
             'conversations.reply',
             'conversations.assign',        // route a chat to a staff member
-            'conversations.call',          // initiate voice calls
+            'conversations.call',          // initiate voice calls (legacy gate — kept
+                                           // for the conversation-page Call button)
+
+            // Voice calls (feature-scoped) — the Call Workspace, history,
+            // voicemail, and the workspace dial pad. calls.view = access the
+            // voice surfaces; calls.dial = place an outbound PSTN call. Added so
+            // "calls" is a distinct feature you can grant like whatsapp/email,
+            // not only via conversations.*.
+            'calls.view',
+            'calls.dial',
 
             // Settings
             'settings.view',
@@ -168,6 +177,9 @@ class RolesAndPermissionsSeeder extends Seeder
             // conversation page (server-side gate on the /calls/outbound
             // route). Without it agents see the button but POSTing returns 403.
             'conversations.call',
+            // Voice: agents work the call workspace and place outbound calls.
+            'calls.view',
+            'calls.dial',
             // Own mailbox only (never view_all/admin).
             'mailbox.view',
         ]);

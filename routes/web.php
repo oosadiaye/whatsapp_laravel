@@ -290,6 +290,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/calls/outbound', [\App\Http\Controllers\CallController::class, 'placeOutbound'])
             ->name('calls.outbound');
     });
+    // Workspace dial pad — dial a raw number or a chosen contact (feature-scoped
+    // calls.dial permission). Resolves the destination + hands off to the
+    // conversation page, which places the call through the softphone.
+    Route::middleware('permission:calls.dial')->group(function () {
+        Route::post('/calls/dial', [\App\Http\Controllers\CallController::class, 'dial'])->name('calls.dial');
+    });
     Route::middleware('permission:conversations.call')->group(function () {
         Route::post('/contacts/{contact}/call', [ContactController::class, 'startCall'])
             ->name('contacts.startCall');

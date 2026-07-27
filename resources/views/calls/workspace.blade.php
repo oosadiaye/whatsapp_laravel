@@ -33,6 +33,53 @@
             </div>
         @endunless
 
+        {{-- Dial pad (calls.dial) — enter a number or pick a contact, then call.
+             Resolves the destination server-side and opens the conversation view,
+             which places the call through the browser softphone. --}}
+        @if($canDial ?? false)
+            <div class="mb-6 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
+                 x-data="{ number: '', press(k) { this.number += k }, back() { this.number = this.number.slice(0, -1) } }">
+                <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
+                    <h3 class="text-sm font-bold text-gray-700">{{ __('Dial a number') }}</h3>
+                </div>
+                <form method="POST" action="{{ route('calls.dial') }}" class="p-5 sm:flex sm:items-start sm:gap-8">
+                    @csrf
+                    <div class="sm:w-60">
+                        <label for="bq-dial-number" class="sr-only">{{ __('Phone number or contact') }}</label>
+                        <input type="text" id="bq-dial-number" name="phone" x-model="number" list="bq-dial-contacts"
+                               inputmode="tel" autocomplete="off" placeholder="{{ __('+234… or a contact name') }}"
+                               class="w-full text-lg font-mono tracking-wide rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                        <datalist id="bq-dial-contacts">
+                            @foreach($dialContacts ?? [] as $c)
+                                <option value="{{ $c->phone }}">{{ $c->name }}</option>
+                            @endforeach
+                        </datalist>
+
+                        <div class="mt-3 grid grid-cols-3 gap-2 max-w-[220px]">
+                            @foreach(['1','2','3','4','5','6','7','8','9','*','0','#'] as $k)
+                                <button type="button" @click="press('{{ $k }}')"
+                                        class="py-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-gray-800 text-lg font-semibold transition">{{ $k }}</button>
+                            @endforeach
+                        </div>
+                        <div class="mt-2 flex gap-2 max-w-[220px]">
+                            <button type="button" @click="back()" class="flex-1 py-1.5 text-xs rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500">&#9003; {{ __('Delete') }}</button>
+                            <button type="button" @click="number = ''" class="flex-1 py-1.5 text-xs rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500">{{ __('Clear') }}</button>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 sm:mt-0 sm:flex-1">
+                        <p class="text-xs text-gray-500 mb-4 leading-relaxed">{{ __('Type a number, or start typing a contact name to pick one. Calling opens the conversation view, where the customer\'s phone rings and you talk through your browser.') }}</p>
+                        <button type="submit" x-bind:disabled="! number.trim()"
+                                class="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
+                            {{ __('Call') }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        @endif
+
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
 
             {{-- LEFT: call queue / history --}}

@@ -109,7 +109,13 @@
                             this.placing = false;
                         }
                     }
-                }">
+                }"
+                x-init="if (new URLSearchParams(window.location.search).get('dial') === '1') {
+                            // Arrived from the workspace dial pad — auto-place the call,
+                            // and strip the flag so a refresh doesn't dial again.
+                            history.replaceState({}, '', window.location.pathname + window.location.hash);
+                            $nextTick(() => placeCall());
+                        }">
                     <button type="button"
                             @click="open = true"
                             class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition"
