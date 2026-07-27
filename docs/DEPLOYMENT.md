@@ -386,15 +386,22 @@ Either install `php-redis` extension (`sudo apt install php8.3-redis && systemct
 
 ### `composer install` aborts: "iconv OR mbstring extension is required"
 
-Composer (and Laravel) need `mbstring`. Install it for the PHP that `php -v`
-resolves to, then re-run — an aborted install leaves `vendor/` incomplete, which
-itself 500s every page:
+Composer checks the PHP **it** runs under. If `php artisan` works but `composer`
+aborts here, the two are using **different PHP binaries** (common on
+cPanel/CloudLinux/RHEL — your shell `php` is `ea-php83`/`alt-php83` with mbstring,
+but the global `composer` shebang points at a minimal `/usr/bin/php` without it).
+Run composer with the PHP that already works instead of chasing the extension:
 
 ```bash
-sudo dnf install -y php-mbstring php-common   # or php83-php-mbstring on Remi
-php -m | grep -iE 'mbstring|iconv'            # confirm present
-composer install --no-dev --optimize-autoloader
+php -m | grep -i mbstring          # your shell php HAS it (artisan proves it)
+head -1 "$(command -v composer)"   # see which php composer's shebang uses
+php "$(command -v composer)" install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 ```
+
+If `php artisan` *also* fails, then the shell PHP genuinely lacks mbstring —
+install it (`sudo dnf install -y php-mbstring php-common`, or `php83-php-mbstring`
+on Remi) and re-run. Either way, an aborted install leaves `vendor/` incomplete,
+which itself 500s every page.
 
 ### 500 on every page: `Class "Laravel\Pail\PailServiceProvider" not found`
 
