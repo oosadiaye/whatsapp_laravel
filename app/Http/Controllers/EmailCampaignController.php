@@ -10,6 +10,7 @@ use App\Models\EmailCampaign;
 use App\Models\EmailTemplate;
 use App\Services\EmailCampaignService;
 use App\Support\EmailTemplateLibrary;
+use App\Support\MailConfig;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -229,15 +230,18 @@ class EmailCampaignController extends Controller
      */
     private function mailTransportWarning(): ?string
     {
+        // Reflect the transport the operator saved on the Settings page (DB), not
+        // just the .env default, so the warning matches what a send will use.
+        MailConfig::apply();
         $mailer = (string) config('mail.default');
 
         if (in_array($mailer, ['log', 'array', ''], true)) {
-            return "Emails are NOT being delivered: MAIL_MAILER is \"{$mailer}\". "
-                .'Configure a real mail transport (SMTP/SES/etc.) for messages to actually send.';
+            return "Emails are NOT being delivered: the mail transport is \"{$mailer}\". "
+                .'Configure SMTP under Settings → Email delivery for messages to actually send.';
         }
 
         if ($mailer === 'smtp' && blank(config('mail.mailers.smtp.host'))) {
-            return 'Emails may not be delivered: the SMTP transport has no host configured. Check your MAIL_* settings.';
+            return 'Emails may not be delivered: the SMTP transport has no host configured. Set it under Settings → Email delivery.';
         }
 
         return null;

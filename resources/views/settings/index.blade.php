@@ -8,6 +8,9 @@
         $atKeySet   = (string) ($settings['africastalking_api_key'] ?? '') !== '';
         $atNumber   = $settings['africastalking_virtual_number'] ?? '';
         $geminiKeySet = (string) ($settings['gemini_api_key'] ?? '') !== '';
+        $mailPasswordSet = (string) ($settings['mail_password'] ?? '') !== '';
+        $mailMailerSaved = (string) ($settings['mail_mailer'] ?? '');
+        $mailEncryption = (string) ($settings['mail_encryption'] ?? 'tls');
         $atConfigured = $atUsername !== '' && $atKeySet && $atNumber !== '';
         $atStarted = $atUsername !== '' || $atKeySet || $atNumber !== '';
         $health = $atConfigured
@@ -257,6 +260,113 @@
                         </div>
                     </div>
 
+                    {{-- Email delivery (SMTP) — outbound transport for bulk email campaigns --}}
+                    <div x-data="{ mailer: '{{ $mailMailerSaved }}', showMailPass: false }" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                        <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
+                            <span class="grid place-items-center w-9 h-9 rounded-lg bg-sky-50 text-sky-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/></svg>
+                            </span>
+                            <div>
+                                <h3 class="text-base font-bold text-gray-900">{{ __('Email delivery (SMTP)') }}</h3>
+                                <p class="text-xs text-gray-500">{{ __('Outbound transport for bulk email campaigns. Saved here overrides the .env MAIL_* config.') }}</p>
+                            </div>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <p class="text-xs {{ $mailDelivering ? 'text-emerald-600' : 'text-amber-600' }}">
+                                @if($mailDelivering)
+                                    {{ __('✓ Active transport:') }} <span class="font-mono">{{ $mailMailer }}</span> — {{ __('campaigns will deliver.') }}
+                                @else
+                                    {{ __('⚠ Current transport:') }} <span class="font-mono">{{ $mailMailer }}</span> — {{ __('this does not deliver (campaigns report sent, nothing arrives). Choose SMTP below.') }}
+                                @endif
+                            </p>
+
+                            <div class="sm:w-2/3">
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Transport') }}</label>
+                                <select name="mail_mailer" x-model="mailer" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                    <option value="">{{ __('Use .env default (MAIL_MAILER)') }}</option>
+                                    <option value="smtp">{{ __('SMTP server') }}</option>
+                                    <option value="log">{{ __('Log only (do not deliver)') }}</option>
+                                </select>
+                            </div>
+
+                            <div x-show="mailer !== 'log'" x-cloak class="space-y-4 border-t border-gray-100 pt-4">
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div class="sm:col-span-2">
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('SMTP host') }}</label>
+                                        <input type="text" name="mail_host" value="{{ $settings['mail_host'] ?? '' }}" placeholder="smtp.example.com"
+                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                        @error('mail_host')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Port') }}</label>
+                                        <input type="number" name="mail_port" min="1" max="65535" value="{{ $settings['mail_port'] ?? 587 }}"
+                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                        @error('mail_port')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Encryption') }}</label>
+                                        <select name="mail_encryption" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                            @foreach(['tls' => 'TLS (STARTTLS · 587)', 'ssl' => 'SSL (implicit · 465)', 'starttls' => 'STARTTLS', 'none' => __('None')] as $val => $label)
+                                                <option value="{{ $val }}" @selected($mailEncryption === $val)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Username') }}</label>
+                                        <input type="text" name="mail_username" value="{{ $settings['mail_username'] ?? '' }}" autocomplete="off"
+                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                        @error('mail_username')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Password') }}</label>
+                                        <div class="relative">
+                                            <input :type="showMailPass ? 'text' : 'password'" name="mail_password"
+                                                   placeholder="{{ $mailPasswordSet ? '••••••••••••' : __('SMTP password') }}" autocomplete="new-password"
+                                                   class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-mono focus:border-[#25D366] focus:ring-[#25D366]">
+                                            <button type="button" @click="showMailPass = !showMailPass"
+                                                    class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
+                                                    :title="showMailPass ? '{{ __('Hide') }}' : '{{ __('Show') }}'">
+                                                <svg x-show="!showMailPass" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                                <svg x-show="showMailPass" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
+                                            </button>
+                                        </div>
+                                        @error('mail_password')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('From address') }}</label>
+                                        <input type="email" name="mail_from_address" value="{{ $settings['mail_from_address'] ?? '' }}" placeholder="hello@yourdomain.com"
+                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                        @error('mail_from_address')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('From name') }}</label>
+                                        <input type="text" name="mail_from_name" value="{{ $settings['mail_from_name'] ?? '' }}" placeholder="{{ config('app.name') }}"
+                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                        @error('mail_from_name')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-500">{{ __('Password is stored encrypted; leave blank to keep the existing one.') }}</p>
+                            </div>
+
+                            {{-- Test send: posts to settings.test-email (a separate form, referenced by
+                                 the HTML5 form= attribute so we avoid an invalid nested <form>). --}}
+                            <div class="border-t border-gray-100 pt-4">
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Send a test email to') }}</label>
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <input type="email" name="test_email" form="settings-test-email" value="{{ auth()->user()->email }}"
+                                           class="flex-1 min-w-[220px] rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                    <button type="submit" form="settings-test-email"
+                                            class="px-4 py-2 rounded-lg bg-gray-800 text-white text-sm font-semibold hover:bg-gray-700">{{ __('Send test email') }}</button>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-400">{{ __('Uses your saved settings — save this page first, then send the test.') }}</p>
+                            </div>
+                        </div>
+                    </div>
+
                     {{-- Sending defaults --}}
                     <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                         <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
@@ -422,6 +532,13 @@
                     {{ __('Save Settings') }}
                 </button>
             </div>
+        </form>
+
+        {{-- Standalone form for the "Send test email" button (SMTP card). Kept
+             outside the settings form so it can POST to a different route; the
+             button + address input reference it via the HTML5 form= attribute. --}}
+        <form id="settings-test-email" action="{{ route('settings.test-email') }}" method="POST" class="hidden">
+            @csrf
         </form>
     </div>
 </x-app-layout>

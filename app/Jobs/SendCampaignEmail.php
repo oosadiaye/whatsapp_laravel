@@ -8,6 +8,7 @@ use App\Mail\CampaignEmail;
 use App\Models\EmailCampaign;
 use App\Models\EmailLog;
 use App\Models\EmailSuppression;
+use App\Support\MailConfig;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -40,6 +41,11 @@ class SendCampaignEmail implements ShouldQueue
 
     public function handle(): void
     {
+        // Use the transport configured on the Settings page (DB) when present,
+        // else the .env config. Applied here (point of use) rather than in a
+        // provider boot so `config:cache` never bakes DB secrets into the cache.
+        MailConfig::apply();
+
         $log = EmailLog::with(['campaign', 'contact'])->find($this->logId);
         if ($log === null || $log->campaign === null) {
             return;

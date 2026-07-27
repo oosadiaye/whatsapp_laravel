@@ -9,10 +9,12 @@ use App\Models\Setting;
 use App\Models\WhatsAppInstance;
 use App\Services\WhatsAppCloudApiService;
 use App\Support\GeminiConfig;
+use App\Support\MailConfig;
 use App\Support\VoiceConfig;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Throwable;
@@ -35,7 +37,7 @@ class SettingsController extends Controller
      * it will get '1' instead — failing loudly instead of silently echoing
      * encrypted bytes into the page source.
      */
-    private const ENCRYPTED_SETTING_KEYS = ['africastalking_api_key', 'gemini_api_key'];
+    private const ENCRYPTED_SETTING_KEYS = ['africastalking_api_key', 'gemini_api_key', 'mail_password'];
 
     public function index(): View
     {
@@ -57,6 +59,10 @@ class SettingsController extends Controller
             'recordingEnabled' => VoiceConfig::recordingEnabled(),
             'recordingConsent' => VoiceConfig::recordingConsentNotice() ?? '',
             'recordingRetentionDays' => VoiceConfig::recordingRetentionDays(),
+            // Bulk-email transport: the effective mailer + whether it delivers,
+            // so the SMTP card can show an honest status without leaking secrets.
+            'mailMailer' => MailConfig::mailer(),
+            'mailDelivering' => MailConfig::isDelivering(),
         ]);
     }
 
@@ -72,6 +78,17 @@ class SettingsController extends Controller
             'africastalking_virtual_number' => ['nullable', 'string', 'regex:/^\+\d{10,15}$/'],
             'africastalking_rate_per_minute_kobo' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'gemini_api_key' => ['nullable', 'string', 'min:10', 'max:512'],
+            // Bulk-email (SMTP) transport — drives campaign delivery. mail_password
+            // is encrypted at rest (see ENCRYPTED_SETTING_KEYS) and follows the
+            // "leave blank to keep existing" rule via the skip-empty loop below.
+            'mail_mailer' => ['nullable', 'in:smtp,log'],
+            'mail_host' => ['nullable', 'string', 'max:255'],
+            'mail_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
+            'mail_encryption' => ['nullable', 'in:tls,ssl,starttls,none'],
+            'mail_username' => ['nullable', 'string', 'max:255'],
+            'mail_password' => ['nullable', 'string', 'max:512'],
+            'mail_from_address' => ['nullable', 'email', 'max:255'],
+            'mail_from_name' => ['nullable', 'string', 'max:255'],
             // Recording is compliance-sensitive: you can't turn it on without
             // stating a consent notice.
             'voice_recording_enabled' => ['nullable', 'boolean'],
@@ -86,6 +103,15 @@ class SettingsController extends Controller
         Setting::set('voice_recording_enabled', $request->boolean('voice_recording_enabled') ? '1' : '0');
         Setting::set('voice_recording_consent_notice', (string) $request->input('voice_recording_consent_notice', ''));
         unset($validated['voice_recording_enabled'], $validated['voice_recording_consent_notice']);
+
+        // The mail transport is a select whose empty value means "use the .env
+        // default". Handle it explicitly (not via the skip-empty loop) so that
+        // choosing "Use .env default" actually clears a prior DB override — and
+        // so an unrelated settings save never persists an accidental "smtp" with
+        // no host that would silently hijack delivery. '' → MailConfig treats it
+        // as unconfigured and env config stands.
+        Setting::set('mail_mailer', (string) $request->input('mail_mailer', ''));
+        unset($validated['mail_mailer']);
 
         foreach ($validated as $key => $value) {
             if ($value === null || $value === '') {
@@ -106,6 +132,50 @@ class SettingsController extends Controller
         $redirect = redirect()->back()->with('success', 'Settings updated successfully.');
 
         return $warning !== null ? $redirect->with('warning', $warning) : $redirect;
+    }
+
+    /**
+     * Send a one-off test email through the SAVED transport so an operator can
+     * verify their SMTP settings actually deliver — the antidote to a "configured
+     * but silently broken" transport (audit M11). Uses the persisted settings, so
+     * save the SMTP card first, then test. Any transport error is surfaced as a
+     * flash message rather than swallowed.
+     */
+    public function sendTestEmail(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'test_email' => ['nullable', 'email', 'max:255'],
+        ]);
+
+        $to = $data['test_email'] ?? $request->user()?->email;
+        if (blank($to)) {
+            return redirect()->back()->with('error', 'No address to send the test to — add one and try again.');
+        }
+
+        // Deliver through whatever the operator saved on this page (DB), not just
+        // the .env default. Mirrors the campaign send path.
+        MailConfig::apply();
+
+        if (! MailConfig::isDelivering()) {
+            return redirect()->back()->with('warning',
+                'Test not sent: the mail transport is "'.MailConfig::mailer().'", which does not deliver. '
+                .'Choose SMTP and save before testing.');
+        }
+
+        try {
+            Mail::raw(
+                "This is a test email from BlastIQ.\n\nIf you received it, your outbound email settings are working.",
+                function ($message) use ($to): void {
+                    $message->to($to)->subject('BlastIQ — test email');
+                },
+            );
+        } catch (Throwable $e) {
+            Log::warning('Settings test email failed', ['error' => $e->getMessage()]);
+
+            return redirect()->back()->with('error', 'Test email failed: '.Str::limit($e->getMessage(), 300));
+        }
+
+        return redirect()->back()->with('success', 'Test email sent to '.$to.'. Check that inbox to confirm delivery.');
     }
 
     /**

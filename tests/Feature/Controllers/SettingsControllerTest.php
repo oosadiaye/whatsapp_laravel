@@ -9,6 +9,7 @@ use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
@@ -315,6 +316,110 @@ class SettingsControllerTest extends TestCase
 
         Setting::set('voice_recording_retention_days', '14');
         $this->assertSame(14, \App\Support\VoiceConfig::recordingRetentionDays());
+    }
+
+    public function test_settings_page_shows_the_email_smtp_card(): void
+    {
+        $this->actingAs($this->makeAdmin())
+            ->get(route('settings.index'))
+            ->assertOk()
+            ->assertSee('Email delivery')
+            ->assertSee('mail_host', false);
+    }
+
+    public function test_smtp_settings_are_saved_with_the_password_encrypted(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $this->actingAs($admin)
+            ->put(route('settings.update'), [
+                'mail_mailer' => 'smtp',
+                'mail_host' => 'smtp.mailhost.test',
+                'mail_port' => 587,
+                'mail_encryption' => 'tls',
+                'mail_username' => 'postmaster@blastiq.test',
+                'mail_password' => 'super-secret-smtp-pass',
+                'mail_from_address' => 'hello@blastiq.test',
+                'mail_from_name' => 'BlastIQ Mail',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        // Non-secret fields stored plain.
+        $this->assertSame('smtp', Setting::get('mail_mailer'));
+        $this->assertSame('smtp.mailhost.test', Setting::get('mail_host'));
+        $this->assertSame('587', Setting::get('mail_port'));
+        $this->assertSame('hello@blastiq.test', Setting::get('mail_from_address'));
+
+        // Password stored encrypted, not plaintext.
+        $raw = Setting::where('key', 'mail_password')->value('value');
+        $this->assertNotSame('super-secret-smtp-pass', $raw);
+        $this->assertSame('super-secret-smtp-pass', Crypt::decryptString($raw));
+
+        // The resolver applies them onto the runtime mail config.
+        \App\Support\MailConfig::apply();
+        $this->assertSame('smtp', config('mail.default'));
+        $this->assertSame('smtp.mailhost.test', config('mail.mailers.smtp.host'));
+        $this->assertSame(587, config('mail.mailers.smtp.port'));
+        $this->assertSame('super-secret-smtp-pass', config('mail.mailers.smtp.password'));
+        $this->assertSame('hello@blastiq.test', config('mail.from.address'));
+    }
+
+    public function test_blank_smtp_password_does_not_overwrite_the_existing_one(): void
+    {
+        $admin = $this->makeAdmin();
+        Setting::set('mail_mailer', 'smtp');
+        Setting::setEncrypted('mail_password', 'original-smtp-pass');
+
+        $this->actingAs($admin)
+            ->put(route('settings.update'), [
+                'mail_mailer' => 'smtp',
+                'mail_host' => 'smtp.mailhost.test',
+                'mail_password' => '', // blank → keep existing
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('original-smtp-pass', Setting::getEncrypted('mail_password'));
+        $this->assertSame('smtp.mailhost.test', Setting::get('mail_host'));
+    }
+
+    public function test_choosing_env_default_transport_clears_the_db_override(): void
+    {
+        $admin = $this->makeAdmin();
+        Setting::set('mail_mailer', 'smtp');
+        $this->assertTrue(\App\Support\MailConfig::isConfiguredInDb());
+
+        // Submitting with the "Use .env default" option (empty mailer) must clear
+        // the override — not leave it stuck at smtp via the skip-empty loop.
+        $this->actingAs($admin)
+            ->put(route('settings.update'), ['mail_mailer' => ''])
+            ->assertRedirect();
+
+        $this->assertFalse(\App\Support\MailConfig::isConfiguredInDb());
+    }
+
+    public function test_test_email_warns_when_the_transport_does_not_deliver(): void
+    {
+        $admin = $this->makeAdmin();
+        Setting::set('mail_mailer', 'log'); // non-delivering
+
+        $this->actingAs($admin)
+            ->post(route('settings.test-email'), ['test_email' => 'ops@blastiq.test'])
+            ->assertRedirect()
+            ->assertSessionHas('warning');
+    }
+
+    public function test_test_email_is_sent_when_the_transport_delivers(): void
+    {
+        Mail::fake();
+        $admin = $this->makeAdmin();
+        Setting::set('mail_mailer', 'smtp');
+        Setting::set('mail_host', 'smtp.mailhost.test');
+
+        $this->actingAs($admin)
+            ->post(route('settings.test-email'), ['test_email' => 'ops@blastiq.test'])
+            ->assertRedirect()
+            ->assertSessionHas('success');
     }
 
     private function makeAdmin(): User
