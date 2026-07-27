@@ -14,3 +14,10 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum' 1;
 }
+/* Every page's topbar title (the <x-slot name="header"> h1/h2) uses the display
+   face, so headings read consistently across the app, matching the call surfaces. */
+.bq-page-title h1,
+.bq-page-title h2 {
+    font-family: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.01em;
+}
