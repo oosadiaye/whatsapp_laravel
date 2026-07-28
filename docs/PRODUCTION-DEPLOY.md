@@ -81,7 +81,7 @@ Then edit `.env` and set production values:
 | `REVERB_APP_KEY` | random 32-char hex (see generation below) |
 | `REVERB_APP_SECRET` | random 32-char hex (different value) |
 | `REVERB_HOST` | `127.0.0.1` |
-| `REVERB_PORT` | `8080` |
+| `REVERB_PORT` | `8081` |
 | `REVERB_SCHEME` | `http` (internal — between nginx and Reverb) |
 | `VITE_REVERB_APP_KEY` | Same as `REVERB_APP_KEY` (uses interpolation) |
 | `VITE_REVERB_HOST` | `blast.dpluxtech.com` (your public domain, no protocol) |
@@ -255,7 +255,7 @@ sudo supervisorctl tail blastiq-reverb stderr
 # Common causes:
 #   - PHP version mismatch
 #   - Port 8080 already in use (someone else's daemon)
-#   - .env REVERB_PORT ≠ 8080
+#   - .env REVERB_PORT ≠ 8081
 #   - Permission issue on storage/logs/reverb.log
 ```
 
