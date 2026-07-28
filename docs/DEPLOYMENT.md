@@ -5,7 +5,7 @@
 | Component | Minimum | Recommended |
 |---|---|---|
 | OS | Linux (any) | Ubuntu 22.04+ or RHEL 9+ |
-| PHP | 8.3 | 8.3 |
+| PHP | 8.4 | 8.4 |
 | PHP extensions | bcmath, ctype, curl, fileinfo, mbstring, openssl, pdo_mysql, tokenizer, xml | + redis, intl, gd, zip |
 | Composer | 2.5+ | 2.7+ |
 | Node | 18+ (only for build) | 20+ |
@@ -142,7 +142,7 @@ server {
     error_page 404 /index.php;
 
     location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php8.4-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
         include fastcgi_params;
         fastcgi_hide_header X-Powered-By;
@@ -382,13 +382,13 @@ sudo supervisorctl restart blastiq-worker:*
 
 ### "Class 'Redis' not found"
 
-Either install `php-redis` extension (`sudo apt install php8.3-redis && systemctl restart php8.3-fpm`) **or** switch `.env` to `predis` (pure-PHP, slower) by setting `REDIS_CLIENT=predis`.
+Either install `php-redis` extension (`sudo apt install php8.4-redis && systemctl restart php8.4-fpm`) **or** switch `.env` to `predis` (pure-PHP, slower) by setting `REDIS_CLIENT=predis`.
 
 ### `composer install` aborts: "iconv OR mbstring extension is required"
 
 Composer checks the PHP **it** runs under. If `php artisan` works but `composer`
 aborts here, the two are using **different PHP binaries** (common on
-cPanel/CloudLinux/RHEL — your shell `php` is `ea-php83`/`alt-php83` with mbstring,
+cPanel/CloudLinux/RHEL — your shell `php` is `ea-php84`/`alt-php84` with mbstring,
 but the global `composer` shebang points at a minimal `/usr/bin/php` without it).
 Run composer with the PHP that already works instead of chasing the extension:
 
@@ -399,7 +399,7 @@ php "$(command -v composer)" install --no-interaction --prefer-dist --optimize-a
 ```
 
 If `php artisan` *also* fails, then the shell PHP genuinely lacks mbstring —
-install it (`sudo dnf install -y php-mbstring php-common`, or `php83-php-mbstring`
+install it (`sudo dnf install -y php-mbstring php-common`, or `php84-php-mbstring`
 on Remi) and re-run. Either way, an aborted install leaves `vendor/` incomplete,
 which itself 500s every page.
 
@@ -426,7 +426,7 @@ php artisan config:cache && php artisan route:cache && php artisan view:cache
 - Confirm the URL in Meta's webhook config matches exactly what BlastIQ shows on the instance page
 - Confirm the verify token matches exactly (case-sensitive, no trailing whitespace)
 - Confirm HTTPS works without certificate warnings (`curl -v https://blast.example.com` should show valid cert)
-- Check nginx + PHP-FPM logs: `tail -f /var/log/nginx/error.log /var/log/php8.3-fpm.log`
+- Check nginx + PHP-FPM logs: `tail -f /var/log/nginx/error.log /var/log/php8.4-fpm.log`
 
 ### Webhook signature mismatch
 

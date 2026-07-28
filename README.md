@@ -21,7 +21,7 @@ Direct integration with Meta's **WhatsApp Cloud API** at `graph.facebook.com/v20
 
 | Layer | Choice |
 |---|---|
-| Backend | PHP 8.3, Laravel 12 |
+| Backend | PHP 8.4, Laravel 12 |
 | Frontend | Blade + Alpine.js + Tailwind |
 | Real-time UI | Livewire v4 |
 | Queue | Database driver (production: Redis + Horizon) |
@@ -32,7 +32,7 @@ Direct integration with Meta's **WhatsApp Cloud API** at `graph.facebook.com/v20
 
 ## Quick start (local development)
 
-**Prerequisites:** PHP 8.3+, Composer 2, Node 20+, MySQL or SQLite
+**Prerequisites:** PHP 8.4+, Composer 2, Node 20+, MySQL or SQLite
 
 ```bash
 # 1. Clone and install
@@ -72,7 +72,7 @@ See **[docs/META_SETUP.md](docs/META_SETUP.md)** for the full step-by-step guide
 ## Production deployment
 
 See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for production setup including:
-- Server requirements (PHP 8.3, MySQL 8, Redis recommended)
+- Server requirements (PHP 8.4, MySQL 8, Redis recommended)
 - Nginx configuration
 - Supervisor setup for the queue worker
 - Cron entry for `schedule:run` (used by the 15-minute template-sync command)
