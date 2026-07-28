@@ -51,6 +51,34 @@ class MailboxAccountTest extends TestCase
         ];
     }
 
+    public function test_a_loopback_imap_host_is_rejected_as_ssrf(): void
+    {
+        // H1: an unvalidated host would let the server open a TCP connection to
+        // internal infrastructure. Validation must reject it before any connect.
+        $user = $this->user();
+        $form = $this->validForm();
+        $form['imap_host'] = '127.0.0.1';
+
+        $this->actingAs($user)
+            ->post(route('mailbox.accounts.store'), $form)
+            ->assertSessionHasErrors('imap_host');
+
+        $this->assertSame(0, EmailAccount::where('user_id', $user->id)->count());
+    }
+
+    public function test_a_cloud_metadata_smtp_host_is_rejected_as_ssrf(): void
+    {
+        $user = $this->user();
+        $form = $this->validForm();
+        $form['smtp_host'] = '169.254.169.254'; // link-local cloud metadata
+
+        $this->actingAs($user)
+            ->post(route('mailbox.accounts.store'), $form)
+            ->assertSessionHasErrors('smtp_host');
+
+        $this->assertSame(0, EmailAccount::where('user_id', $user->id)->count());
+    }
+
     private function stubProvider(bool $ok): void
     {
         $this->app->bind(MailAccountProviderFactory::class, function () use ($ok) {

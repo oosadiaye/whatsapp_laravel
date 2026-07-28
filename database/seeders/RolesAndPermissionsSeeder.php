@@ -112,6 +112,13 @@ class RolesAndPermissionsSeeder extends Seeder
             // an allowlist; we don't add team.view there).
             'team.view',
 
+            // Reports & Health page (ReportController). The /reports route is gated
+            // on reports.view, but the permission was never created — so the page
+            // 403'd for EVERYONE, including super_admin (L1). Granted to
+            // super_admin (via "all"), admin and manager (not in their exclusion
+            // lists); agent's allowlist omits it, so it stays manager+.
+            'reports.view',
+
             // Per-employee email client (mailbox.*), DELIBERATELY separate from
             // the bulk-campaign email.* perms. Default visibility is PRIVATE
             // per-user (inverse of conversations.*): mailbox.view = use your OWN

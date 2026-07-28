@@ -40,6 +40,24 @@ Schedule::command('horizon:snapshot')->everyFiveMinutes();
 // connection, so this is queue-driver agnostic (redis or database).
 Schedule::command('queue:monitor messages,imports,default --max=200')->everyFiveMinutes();
 
+// Email sequences: advance recipients whose delay has elapsed, sending the
+// next step in the sequence + scheduling the following.
+Schedule::command('email-sequences:process')->everyMinute()->withoutOverlapping();
+
+// Email warmup: send warmup emails from configured accounts to keep sender
+// reputation healthy.
+Schedule::command('email:warmup')->everyFiveMinutes()->withoutOverlapping();
+
+// Lead scoring: recalculate contact lead scores from email engagement.
+Schedule::command('email:score-leads')->hourly()->withoutOverlapping();
+
+// Auto-away: mark agents as away after 5 minutes of inactivity (RealtimePulse
+// touches last_seen_at every 30s). Keeps the RoundRobinAssigner from routing
+// new inbound calls to idle agents.
+Schedule::command('agents:auto-away --threshold=5')
+    ->everyMinute()
+    ->withoutOverlapping();
+
 // Inbound email-client sync (plan B3). Only runs while the feature is enabled;
 // interval from config (clamped to a valid */N cron). Each account syncs on the
 // mail-sync queue.

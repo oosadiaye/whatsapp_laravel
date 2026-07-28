@@ -74,6 +74,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/mailbox/accounts', [\App\Http\Controllers\EmailAccountController::class, 'index'])->name('mailbox.accounts.index');
         Route::get('/mailbox/accounts/connect', [\App\Http\Controllers\EmailAccountController::class, 'create'])->name('mailbox.accounts.create');
         Route::post('/mailbox/accounts', [\App\Http\Controllers\EmailAccountController::class, 'store'])->name('mailbox.accounts.store');
+        Route::get('/mailbox/accounts/{account}/edit', [\App\Http\Controllers\EmailAccountController::class, 'edit'])->name('mailbox.accounts.edit');
+        Route::put('/mailbox/accounts/{account}', [\App\Http\Controllers\EmailAccountController::class, 'update'])->name('mailbox.accounts.update');
         Route::delete('/mailbox/accounts/{account}', [\App\Http\Controllers\EmailAccountController::class, 'destroy'])->name('mailbox.accounts.destroy');
     });
 
@@ -212,6 +214,36 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::middleware('permission:email.delete')->group(function () {
         Route::delete('/email-campaigns/{emailCampaign}', [\App\Http\Controllers\EmailCampaignController::class, 'destroy'])->name('email-campaigns.destroy');
+    });
+
+    // ─── Reports & Health ────────────────────────────────────────────────
+    Route::middleware('permission:reports.view')->group(function () {
+        Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])->name('reports.index');
+    });
+
+    // ─── Email Sequences (cold email / follow-up automation) ─────────────
+    Route::middleware('permission:email.view')->group(function () {
+        Route::get('/email-sequences', [\App\Http\Controllers\EmailSequenceController::class, 'index'])->name('email-sequences.index');
+        Route::get('/email-sequences/create', [\App\Http\Controllers\EmailSequenceController::class, 'create'])->name('email-sequences.create');
+        Route::get('/email-sequences/{emailSequence}/edit', [\App\Http\Controllers\EmailSequenceController::class, 'edit'])->name('email-sequences.edit');
+    });
+    Route::middleware('permission:email.create')->group(function () {
+        Route::post('/email-sequences', [\App\Http\Controllers\EmailSequenceController::class, 'store'])->name('email-sequences.store');
+    });
+    Route::middleware('permission:email.edit')->group(function () {
+        Route::put('/email-sequences/{emailSequence}', [\App\Http\Controllers\EmailSequenceController::class, 'update'])->name('email-sequences.update');
+        Route::post('/email-sequences/{emailSequence}/steps', [\App\Http\Controllers\EmailSequenceController::class, 'storeStep'])->name('email-sequences.steps.store');
+        Route::put('/email-sequences/{emailSequence}/steps/{step}', [\App\Http\Controllers\EmailSequenceController::class, 'updateStep'])->name('email-sequences.steps.update');
+        Route::delete('/email-sequences/{emailSequence}/steps/{step}', [\App\Http\Controllers\EmailSequenceController::class, 'deleteStep'])->name('email-sequences.steps.destroy');
+        Route::post('/email-sequences/{emailSequence}/enroll', [\App\Http\Controllers\EmailSequenceController::class, 'enroll'])->name('email-sequences.enroll');
+    });
+    Route::middleware('permission:email.send')->group(function () {
+        Route::post('/email-sequences/{emailSequence}/launch', [\App\Http\Controllers\EmailSequenceController::class, 'launch'])->name('email-sequences.launch');
+        Route::post('/email-sequences/{emailSequence}/pause', [\App\Http\Controllers\EmailSequenceController::class, 'pause'])->name('email-sequences.pause');
+        Route::post('/email-sequences/{emailSequence}/cancel', [\App\Http\Controllers\EmailSequenceController::class, 'cancel'])->name('email-sequences.cancel');
+    });
+    Route::middleware('permission:email.delete')->group(function () {
+        Route::delete('/email-sequences/{emailSequence}', [\App\Http\Controllers\EmailSequenceController::class, 'destroy'])->name('email-sequences.destroy');
     });
 
     // ─── Email Templates ───────────────────────────────────────────────────

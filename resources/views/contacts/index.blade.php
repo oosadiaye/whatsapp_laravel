@@ -126,32 +126,17 @@
                                                 </form>
                                             @endcan
 
-                                            {{-- CALL button — gated by the Meta-calling feature flag (off until
-                                                 GA; the working call path is the in-chat Africa's Talking button),
-                                                 then by permission AND engagement --}}
-                                            @if(config('voice.meta_calling_enabled'))
+                                            {{-- CALL button — direct AT PSTN call, no chat needed. --}}
                                             @can('conversations.call')
-                                                @if($contact->is_engaged ?? false)
-                                                    <button type="button"
-                                                            @click="action = '{{ route('contacts.startCall', $contact) }}'; openCallConfirm = true"
-                                                            class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition"
-                                                            title="Call {{ $contact->name ?? $contact->phone }}">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
-                                                        </svg>
-                                                    </button>
-                                                @else
-                                                    {{-- Disabled state with policy tooltip --}}
-                                                    <button type="button" disabled
-                                                            class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 text-gray-400 cursor-not-allowed"
-                                                            title="Recipient must message you first (Meta opt-in policy)">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
-                                                        </svg>
-                                                    </button>
-                                                @endif
+                                                <button type="button"
+                                                        @click="action = '{{ route('contacts.startCall', $contact) }}'; openCallConfirm = true"
+                                                        class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition"
+                                                        title="Call {{ $contact->name ?? $contact->phone }}">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
+                                                    </svg>
+                                                </button>
                                             @endcan
-                                            @endif
 
                                             <a href="{{ route('contacts.edit', $contact) }}" class="text-[#25D366] hover:text-[#1da851] font-medium">{{ __('Edit') }}</a>
                                             <form method="POST" action="{{ route('contacts.destroy', $contact) }}" data-confirm="{{ __('Are you sure you want to delete this contact?') }}" class="inline">
@@ -169,8 +154,8 @@
                                                         <dl class="text-sm space-y-1 mb-4">
                                                             <div class="flex justify-between"><dt class="text-gray-500">{{ __('Number') }}:</dt><dd class="text-gray-900 font-data">{{ $contact->phone }}</dd></div>
                                                         </dl>
-                                                        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-4">
-                                                            {{ __('Counts toward your daily Meta call quota. Audio rings on the device where this WhatsApp Business number is registered.') }}
+                                                        <p class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2 mb-4">
+                                                            {{ __('Dials via Africa\'s Talking PSTN. Standard per-minute rates apply.') }}
                                                         </p>
                                                         <div class="flex justify-end gap-2">
                                                             <button type="button" @click="openCallConfirm = false" class="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">{{ __('Cancel') }}</button>

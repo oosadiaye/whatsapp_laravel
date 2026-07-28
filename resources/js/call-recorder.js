@@ -95,17 +95,15 @@ const recorder = {
 
         const mixed = buildMixedStream(peer);
         if (!mixed) {
-            console.debug('[BQ recorder] no capturable audio tracks — skipping recording');
-            return;
+            return; // no capturable audio tracks — skip recording
         }
 
         const mime = pickMimeType();
         let mr;
         try {
             mr = mime ? new MediaRecorder(mixed.stream, { mimeType: mime }) : new MediaRecorder(mixed.stream);
-        } catch (e) {
-            console.debug('[BQ recorder] MediaRecorder unavailable — skipping', e);
-            mixed.context.close?.();
+        } catch {
+            mixed.context.close?.(); // MediaRecorder unavailable — skip
             return;
         }
 
@@ -120,9 +118,8 @@ const recorder = {
 
         try {
             mr.start();
-        } catch (e) {
-            console.debug('[BQ recorder] start failed — skipping', e);
-            this._cleanup();
+        } catch {
+            this._cleanup(); // start failed — skip
         }
     },
 
@@ -132,9 +129,8 @@ const recorder = {
         try {
             if (this._recorder.state !== 'inactive') this._recorder.stop();
             else this._upload();
-        } catch (e) {
-            console.debug('[BQ recorder] stop failed', e);
-            this._cleanup();
+        } catch {
+            this._cleanup(); // stop failed
         }
     },
 

@@ -7,7 +7,6 @@ namespace App\Livewire;
 use App\Jobs\TranscribeCallRecording;
 use App\Models\CallLog;
 use App\Support\GeminiConfig;
-use Illuminate\Support\Collection;
 use Livewire\Component;
 
 /**
@@ -119,14 +118,10 @@ class CallInsightsPanel extends Component
      * panel shows even when there's no AI transcript (recording off, or the
      * contact never had a chat). Never fabricated.
      *
-     * @return array{engaged: bool, recentMessages: Collection, priorCalls: Collection}
+     * @return array{engaged: bool, priorCalls: Collection}
      */
     private function buildContext(CallLog $call): array
     {
-        $recentMessages = $call->conversation
-            ? $call->conversation->messages()->latest()->limit(5)->get()->reverse()->values()
-            : new Collection();
-
         $priorCalls = CallLog::query()
             ->where('contact_id', $call->contact_id)
             ->where('id', '!=', $call->id)
@@ -136,7 +131,6 @@ class CallInsightsPanel extends Component
 
         return [
             'engaged' => (bool) $call->contact?->isEngaged(),
-            'recentMessages' => $recentMessages,
             'priorCalls' => $priorCalls,
         ];
     }

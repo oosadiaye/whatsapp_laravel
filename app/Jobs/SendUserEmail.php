@@ -14,6 +14,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
 /**
@@ -24,12 +26,30 @@ use Illuminate\Support\Str;
  * A transient SMTP hiccup surfaces as a failed job the user can resend, never a
  * silent double-send. The sent copy is stored locally so it appears in the thread
  * immediately (re-sync later dedupes it by the Message-ID we generate here).
+ *
+ * The per-account rate limiter is the ONE place a retry is safe (nothing has been
+ * sent yet), so it uses release() — and {@see retryUntil()} gives that release a
+ * window to retry in, without which a released $tries=1 job would be marked
+ * permanently failed and the email silently dropped. The actual send is guarded
+ * by try/catch → {@see fail()} so a real send failure still never retries.
  */
 class SendUserEmail implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 1;
+
+    /**
+     * Retry window for the throttle-release path ONLY. A hard send failure
+     * short-circuits via $this->fail() and never gets here, so this can't turn
+     * a failed send into a double-send. While retryUntil() is set and unexpired,
+     * Laravel ignores $tries — that's exactly what lets the throttle release
+     * retry instead of dying on attempt 2.
+     */
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addMinutes(10);
+    }
 
     public function __construct(
         public readonly int $accountId,
@@ -46,6 +66,17 @@ class SendUserEmail implements ShouldQueue
             return;
         }
 
+        $rateKey = 'email-send:'.$account->id;
+        $maxPerMinute = (int) config('mail_client.send_rate_per_minute', 30);
+        if (RateLimiter::tooManyAttempts($rateKey, $maxPerMinute)) {
+            // Over the per-account rate. DEFER — nothing has been sent yet, so a
+            // retry is safe. release() (not drop): retryUntil() keeps this from
+            // becoming a permanent failure despite $tries = 1.
+            $this->release(RateLimiter::availableIn($rateKey) ?: 30);
+            return;
+        }
+        RateLimiter::hit($rateKey, 60);
+
         $sender = $factory->senderFor($account);
         if ($sender === null) {
             return;
@@ -55,9 +86,29 @@ class SendUserEmail implements ShouldQueue
         // stored copy match (and a re-synced Sent-folder copy dedupes cleanly).
         $email = $this->email->withMessageId($this->generateMessageId($account));
 
-        $sender->send($account, $email); // throws on a hard failure -> job fails, no retry
+        try {
+            $sender->send($account, $email);
+        } catch (\Throwable $e) {
+            // A hard send failure must NOT retry: there's no idempotency key on
+            // the wire, so a retry could deliver a SECOND copy. Fail permanently
+            // (and audibly) rather than releasing back into the retry window.
+            $this->fail($e);
+            return;
+        }
 
         $this->storeSentCopy($account, $email);
+    }
+
+    /**
+     * Surface a permanently-failed send so a dropped email is never silent — the
+     * operator can see it in the log and the user can resend.
+     */
+    public function failed(\Throwable $e): void
+    {
+        Log::error('SendUserEmail failed', [
+            'account_id' => $this->accountId,
+            'error' => $e->getMessage(),
+        ]);
     }
 
     private function generateMessageId(EmailAccount $account): string

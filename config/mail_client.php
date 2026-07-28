@@ -15,6 +15,9 @@ return [
     |
     */
 
+    // Defaults OFF to match .env.example and the "stays OFF until live-verified"
+    // note above — a deploy that forgets this key must NOT silently ship the
+    // per-employee mailbox (and its credential-storage/SSRF surface) enabled.
     'enabled' => (bool) env('MAIL_CLIENT_ENABLED', false),
 
     // Which provider adapter to offer for connecting accounts: gmail | graph | imap.

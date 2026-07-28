@@ -13,6 +13,7 @@ use App\Services\MailClient\MailAccountProviderFactory;
 use App\Services\MailClient\OutboundEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 use Tests\TestCase;
 
 /**
@@ -145,5 +146,33 @@ class SendUserEmailTest extends TestCase
         $job = new SendUserEmail(1, new OutboundEmail(to: ['x@example.com'], subject: 'x'));
 
         $this->assertSame(1, $job->tries);
+    }
+
+    public function test_it_defers_without_sending_when_the_per_account_rate_is_exceeded(): void
+    {
+        // H4: past the per-account rate the job must DEFER (release), not send —
+        // and not silently drop the email. Here we assert the send half: nothing
+        // goes out and no sent copy is stored.
+        Mail::fake();
+        $account = $this->account();
+        $max = (int) config('mail_client.send_rate_per_minute', 30);
+        for ($i = 0; $i < $max; $i++) {
+            RateLimiter::hit('email-send:'.$account->id, 60);
+        }
+
+        $this->dispatchJob($account, new OutboundEmail(to: ['x@example.com'], subject: 'throttled'));
+
+        Mail::assertNothingSent();
+        $this->assertDatabaseCount('email_messages', 0);
+    }
+
+    public function test_it_has_a_retry_window_so_a_throttle_release_is_not_a_permanent_drop(): void
+    {
+        // H4: retryUntil() is what lets the throttle-release retry despite
+        // $tries = 1 — without it, a released job would be marked permanently
+        // failed on the next pop and the email silently dropped.
+        $job = new SendUserEmail(1, new OutboundEmail(to: ['x@example.com'], subject: 'x'));
+
+        $this->assertGreaterThan(now(), $job->retryUntil());
     }
 }

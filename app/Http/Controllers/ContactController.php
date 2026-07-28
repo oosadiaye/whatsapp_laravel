@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Exceptions\WhatsAppApiException;
+use App\Exceptions\ConfigurationException;
+use App\Exceptions\VoiceProviderException;
 use App\Http\Requests\ImportContactsRequest;
 use App\Jobs\ProcessContactImport;
+use App\Models\CallLog;
 use App\Models\Contact;
 use App\Models\ContactGroup;
 use App\Models\Conversation;
 use App\Models\WhatsAppInstance;
+use App\Services\AfricasTalkingVoiceService;
 use App\Services\ContactImportService;
-use App\Services\OutboundCallService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -85,37 +87,16 @@ class ContactController extends Controller
     }
 
     /**
-     * Place an outbound call to this contact.
+     * Place an outbound PSTN call to this contact via Africa's Talking.
      *
-     * Defense in depth: the contact-list view already disables this button
-     * for non-engaged contacts (Meta opt-in policy proxy), but the server
-     * MUST re-check engagement so a misclick or bypassed UI cannot bypass
-     * the policy gate. Calls cost real money and have quality-rating risk.
-     *
-     * Reuses the Voice Phase A {@see OutboundCallService::initiate} flow
-     * after find-or-create on the conversation.
+     * Direct calling — no need to open a chat first. Creates or finds the
+     * conversation for audit/recording association, then dials via AT.
      */
     public function startCall(
         Request $request,
         Contact $contact,
-        OutboundCallService $outboundCallService,
+        AfricasTalkingVoiceService $voiceService,
     ): RedirectResponse {
-        // Meta Cloud Calling is not GA and cannot connect the agent's audio;
-        // this contact-initiated path is disabled until the feature ships.
-        // The working call path is the in-chat button (Africa's Talking).
-        if (! config('voice.meta_calling_enabled')) {
-            return back()->with('error',
-                'Contact-initiated calling is disabled (Meta Cloud Calling is not available in this build). Open the conversation and use the in-chat call button instead.');
-        }
-
-        if (! $contact->isEngaged()) {
-            return back()->with(
-                'error',
-                'Cannot call this contact yet — they must message you first '
-                .'(Meta opt-in policy). Wait for an inbound message or call.',
-            );
-        }
-
         ['instance' => $instance, 'error' => $instanceError] = $this->resolveInstanceOrError();
         if ($instance === null) {
             return back()->with('error', $instanceError);
@@ -126,27 +107,38 @@ class ContactController extends Controller
             ['user_id' => $contact->user_id, 'unread_count' => 0],
         );
 
+        if ($conversation->assigned_to_user_id === null) {
+            $conversation->update(['assigned_to_user_id' => $request->user()->id]);
+        }
+
         try {
-            $outboundCallService->initiate($conversation, $request->user());
-        } catch (WhatsAppApiException $e) {
-            // Log the full Meta response body server-side; flash a user-safe
-            // hint that explains the cause without leaking tokens/IDs. The
-            // userFacingCallError() helper on the base Controller is the
-            // single source of truth for this translation.
-            \Illuminate\Support\Facades\Log::error('Outbound call failed', [
+            $sessionId = $voiceService->placeCall($contact->phone);
+            CallLog::create([
                 'conversation_id' => $conversation->id,
+                'contact_id' => $contact->id,
+                'whatsapp_instance_id' => $instance->id,
+                'direction' => CallLog::DIRECTION_OUTBOUND,
+                'provider' => CallLog::PROVIDER_AFRICAS_TALKING,
+                'provider_session_id' => $sessionId,
+                'status' => CallLog::STATUS_INITIATED,
+                'started_at' => now(),
+                'placed_by_user_id' => $request->user()->id,
+                'from_phone' => \App\Models\Setting::get('africastalking_virtual_number'),
+                'to_phone' => $contact->phone,
+            ]);
+        } catch (VoiceProviderException | ConfigurationException | \InvalidArgumentException $e) {
+            // \InvalidArgumentException = the contact's stored phone can't be
+            // normalised to E.164 (bad import). Catch it too so a malformed
+            // number flashes an error instead of 500-ing the request.
+            \Illuminate\Support\Facades\Log::error('AT outbound call failed', [
                 'contact_id' => $contact->id,
                 'user_id' => $request->user()->id,
                 'error' => $e->getMessage(),
             ]);
-            return redirect()
-                ->route('conversations.show', $conversation)
-                ->with('error', $this->userFacingCallError($e->getMessage()));
+            return back()->with('error', 'Voice service unavailable. Try again in a moment.');
         }
 
-        return redirect()
-            ->route('conversations.show', $conversation)
-            ->with('success', "Calling {$contact->name}...");
+        return back()->with('success', "Calling {$contact->name}...");
     }
 
     /**

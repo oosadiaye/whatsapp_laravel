@@ -480,3 +480,43 @@ window.realtimePulse = () => ({
         this.lastUnread = currentUnread;
     },
 });
+
+/**
+ * bqMissedCallToast – bottom-right toast stack for newly-missed calls.
+ *
+ * Polls #bq-realtime-data · data-missed-calls every 3 s (same tick as
+ * RealtimePulse) and shows a dismissable toast for each +delta.
+ */
+window.bqMissedCallToast = () => ({
+    toasts: [],
+    lastCount: 0,
+    nextId: 1,
+
+    init() {
+        this.lastCount = this.currentCount();
+        setInterval(() => this.tick(), 3000);
+    },
+
+    currentCount() {
+        const el = document.getElementById('bq-realtime-data');
+        return el ? parseInt(el.dataset.missedCalls || '0', 10) : 0;
+    },
+
+    tick() {
+        const now = this.currentCount();
+        if (now > this.lastCount) {
+            const delta = now - this.lastCount;
+            const label = delta === 1 ? '1 missed call' : delta + ' missed calls';
+            this.toasts.push({ id: this.nextId++, label, visible: true });
+            // auto-dismiss after 6 s
+            setTimeout(() => this.dismiss(this.toasts[this.toasts.length - 1].id), 6000);
+        }
+        this.lastCount = now;
+    },
+
+    dismiss(id) {
+        const t = this.toasts.find(x => x.id === id);
+        if (t) t.visible = false;
+        setTimeout(() => { this.toasts = this.toasts.filter(x => x.id !== id); }, 300);
+    },
+});

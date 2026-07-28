@@ -107,6 +107,23 @@ class CallControllerOutboundTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_agent_cannot_dial_a_conversation_assigned_to_another_agent(): void
+    {
+        // IDOR: an agent with conversations.call + view_assigned must not be able
+        // to PSTN-dial a conversation assigned to a DIFFERENT agent by guessing
+        // its id. Access = view_all OR (view_assigned AND assigned to me).
+        Http::fake();
+        $agentA = $this->makeAgent();
+        $agentB = $this->makeAgent();
+        $conversationOfB = $this->makeConversation($agentB);
+
+        $this->actingAs($agentA)
+            ->postJson(route('calls.outbound'), ['conversation_id' => $conversationOfB->id])
+            ->assertForbidden();
+
+        $this->assertSame(0, CallLog::count());
+    }
+
     private function makeAgent(): User
     {
         $agent = User::factory()->create([

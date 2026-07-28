@@ -29,6 +29,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -164,6 +165,13 @@ class CallController extends Controller
         $calls = CallLog::query()->tap($scope)
             ->with(['contact', 'conversation', 'placedBy'])
             ->withCount('notes')
+            ->when($q = $request->query('q'), fn ($qry, $q) => $qry->where(function ($sub) use ($q) {
+                $sub->where('from_phone', 'like', "%{$q}%")
+                    ->orWhere('to_phone', 'like', "%{$q}%")
+                    ->orWhereHas('contact', fn ($c) => $c->where('name', 'like', "%{$q}%"));
+            }))
+            ->when($dir = $request->query('dir'), fn ($qry, $dir) => $qry->where('direction', $dir))
+            ->when($status = $request->query('status'), fn ($qry, $status) => $qry->where('status', $status))
             ->latest()
             ->limit(50)
             ->get();
@@ -172,16 +180,30 @@ class CallController extends Controller
         $requestedId = (int) $request->query('call');
         $selected = $calls->firstWhere('id', $requestedId) ?? $calls->first();
 
-        // Dial pad (calls.dial): a bounded contact list to pick from. Scoped to
-        // this operator's contacts; bounded so the picker never full-scans.
+        // Dial pad (calls.dial): a bounded contact list to pick from.
+        // Single-tenant: every user with calls.dial sees every contact.
         $canDial = (bool) $user->can('calls.dial');
         $dialContacts = $canDial
-            ? Contact::where('user_id', $user->id)
-                ->whereNotNull('phone')
+            ? Contact::whereNotNull('phone')
                 ->orderBy('name')
                 ->limit(500)
                 ->get(['id', 'name', 'phone'])
             : collect();
+
+        // Wrap-up prompt: only for a call THIS user just handled — one they placed
+        // or one on a conversation assigned to them — and only recently. Using the
+        // page $scope meant a view_all manager got a company-wide, never-expiring
+        // nag for anyone's undispositioned call on every page load (M3).
+        $activeCall = CallLog::query()
+            ->where(function ($q) use ($user) {
+                $q->where('placed_by_user_id', $user->id)
+                    ->orWhereHas('conversation', fn ($c) => $c->where('assigned_to_user_id', $user->id));
+            })
+            ->whereNull('disposition')
+            ->whereNotNull('ended_at')
+            ->where('ended_at', '>=', now()->subMinutes(15))
+            ->latest('ended_at')
+            ->first();
 
         return view('calls.workspace', [
             'calls' => $calls,
@@ -190,24 +212,63 @@ class CallController extends Controller
             'aiConfigured' => filled(GeminiConfig::key()),
             'canDial' => $canDial,
             'dialContacts' => $dialContacts,
+            'activeCall' => $activeCall,
         ]);
     }
 
     /**
      * Place an outbound PSTN call via Africa's Talking.
+     *
+     * Accepts conversation_id (existing flow) OR phone + optional contact_id
+     * for direct calling without needing a chat thread first.
      */
-    public function placeOutbound(Request $request, AfricasTalkingVoiceService $service): JsonResponse
+    public function placeOutbound(Request $request, AfricasTalkingVoiceService $service, ContactImportService $normalizer): JsonResponse
     {
+        $key = 'outbound-call:'.$request->user()->id;
+        if (RateLimiter::tooManyAttempts($key, 10)) {
+            return response()->json(['error' => 'rate_limit'], 429);
+        }
+        RateLimiter::hit($key, 60);
+
         $request->validate([
-            'conversation_id' => 'required|exists:conversations,id',
+            'conversation_id' => ['nullable', 'integer', 'exists:conversations,id'],
+            'phone' => ['nullable', 'string', 'max:32', 'required_without:conversation_id'],
+            'contact_id' => ['nullable', 'integer', 'exists:contacts,id'],
         ]);
 
-        $conversation = Conversation::findOrFail($request->input('conversation_id'));
-
-        // Authorize: must have conversations.call AND either view_all
-        // (any conversation in the company — single-tenant) or be
-        // assigned-to the conversation (agent workflow scope).
         $user = $request->user();
+
+        if ($conversationId = $request->input('conversation_id')) {
+            $conversation = Conversation::findOrFail($conversationId);
+        } else {
+            $instance = WhatsAppInstance::primary();
+            if ($instance === null) {
+                return response()->json(['error' => 'WhatsApp not configured.'], 503);
+            }
+
+            if ($contactId = $request->input('contact_id')) {
+                $contact = Contact::findOrFail($contactId);
+            } else {
+                $phone = $normalizer->normalizePhone((string) $request->input('phone'), Setting::get('default_country_code'));
+                if ($phone === null || $phone === '') {
+                    return response()->json(['error' => 'Invalid phone number.'], 422);
+                }
+                $contact = Contact::firstOrCreateIncludingTrashed(
+                    ['user_id' => $instance->user_id, 'phone' => $phone],
+                    ['name' => $phone, 'is_active' => true],
+                );
+            }
+
+            $conversation = Conversation::firstOrCreate(
+                ['contact_id' => $contact->id, 'whatsapp_instance_id' => $instance->id],
+                ['user_id' => $instance->user_id, 'unread_count' => 0],
+            );
+
+            if ($conversation->assigned_to_user_id === null) {
+                $conversation->update(['assigned_to_user_id' => $user->id]);
+            }
+        }
+
         if (!$user->can('conversations.call')) {
             return response()->json(['error' => 'forbidden'], 403);
         }
@@ -250,6 +311,13 @@ class CallController extends Controller
      */
     public function dial(Request $request, ContactImportService $normalizer): RedirectResponse
     {
+        $key = 'outbound-call:'.$request->user()->id;
+        if (RateLimiter::tooManyAttempts($key, 10)) {
+            $seconds = RateLimiter::availableIn($key);
+            return back()->with('error', "Rate limit reached. Try again in {$seconds} seconds.");
+        }
+        RateLimiter::hit($key, 60);
+
         $data = $request->validate([
             'phone' => ['nullable', 'string', 'max:32'],
             'contact_id' => ['nullable', 'integer', 'exists:contacts,id'],

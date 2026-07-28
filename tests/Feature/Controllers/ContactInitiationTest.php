@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Controllers;
 
+use App\Models\CallLog;
 use App\Models\Contact;
 use App\Models\Conversation;
+use App\Models\Setting;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ContactInitiationTest extends TestCase
@@ -20,27 +24,167 @@ class ContactInitiationTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolesAndPermissionsSeeder::class);
-        // startCall routes through the Meta-calling path, off by default until
-        // Meta Cloud Calling is GA. Enable it so the engagement/flow tests run;
-        // the disabled behaviour has its own test below.
-        config(['voice.meta_calling_enabled' => true]);
+
+        // startCall places a DIRECT Africa's Talking PSTN call — no Meta Cloud
+        // Calling, no engagement gate. This matches the Call Workspace dial pad
+        // and CallController::placeOutbound, which also let an operator dial any
+        // number without an "engaged within 30 days" precondition (that gate was
+        // a Meta-Cloud-Calling compliance requirement, and AT calling isn't
+        // subject to it). Configure AT so placeCall() succeeds and fake the /call
+        // endpoint by default; the failure-path test overrides this fake.
+        Setting::set('africastalking_username', 'sandbox');
+        Setting::set('africastalking_api_key', Crypt::encryptString('atsk_test_key'));
+        Setting::set('africastalking_virtual_number', '+2348100000000');
+        Setting::set('default_country_code', '234');
     }
 
-    public function test_startCall_is_disabled_when_meta_calling_is_off(): void
+    /**
+     * Fake a successful AT /call response. Registered per-test (not in setUp)
+     * because Http::fake() appends stubs and the FIRST registered match wins —
+     * a setUp stub would shadow a failure-path test's override.
+     */
+    private function fakeQueuedAtCall(string $sessionId = 'sess_contact_dial'): void
     {
-        config(['voice.meta_calling_enabled' => false]);
+        Http::fake([
+            'voice.africastalking.com/call' => Http::response([
+                'entries' => [['sessionId' => $sessionId, 'status' => 'Queued']],
+            ], 201),
+        ]);
+    }
 
+    // ---- startCall: direct Africa's Talking dial -----------------------------
+
+    public function test_startCall_places_an_at_call_and_logs_it(): void
+    {
+        $this->fakeQueuedAtCall();
         $admin = $this->makeUser('admin');
         WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
-        $contact = Contact::factory()->create(['user_id' => $admin->id]);
+        $contact = Contact::factory()->create([
+            'user_id' => $admin->id,
+            'phone' => '23480'.fake()->unique()->numerify('########'),
+        ]);
 
         $this->actingAs($admin)
             ->post(route('contacts.startCall', $contact))
             ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(1, CallLog::count());
+        $call = CallLog::first();
+        $this->assertSame('outbound', $call->direction);
+        $this->assertSame(CallLog::PROVIDER_AFRICAS_TALKING, $call->provider);
+        $this->assertSame(CallLog::STATUS_INITIATED, $call->status);
+        $this->assertSame('sess_contact_dial', $call->provider_session_id);
+        $this->assertSame($admin->id, $call->placed_by_user_id);
+    }
+
+    public function test_startCall_assigns_conversation_to_the_dialer_when_unassigned(): void
+    {
+        $this->fakeQueuedAtCall();
+        $admin = $this->makeUser('admin');
+        WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create([
+            'user_id' => $admin->id,
+            'phone' => '23480'.fake()->unique()->numerify('########'),
+        ]);
+
+        $this->actingAs($admin)->post(route('contacts.startCall', $contact));
+
+        $conv = Conversation::first();
+        $this->assertNotNull($conv);
+        $this->assertSame($admin->id, $conv->assigned_to_user_id);
+    }
+
+    public function test_startCall_flashes_setup_error_when_no_instance_configured(): void
+    {
+        $admin = $this->makeUser('admin');
+        $contact = Contact::factory()->create(['user_id' => $admin->id]);
+
+        $this->actingAs($admin)
+            ->from(route('contacts.index'))
+            ->post(route('contacts.startCall', $contact))
+            ->assertRedirect(route('contacts.index'))
             ->assertSessionHas('error');
 
-        $this->assertSame(0, \App\Models\CallLog::count());
+        $this->assertSame(0, CallLog::count());
     }
+
+    public function test_startCall_flashes_error_and_logs_nothing_when_voice_provider_fails(): void
+    {
+        Http::fake(['voice.africastalking.com/call' => Http::response(['error' => 'down'], 500)]);
+
+        $admin = $this->makeUser('admin');
+        WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create([
+            'user_id' => $admin->id,
+            'phone' => '23480'.fake()->unique()->numerify('########'),
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('contacts.index'))
+            ->post(route('contacts.startCall', $contact))
+            ->assertRedirect(route('contacts.index'))
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, CallLog::count());
+    }
+
+    public function test_startCall_flashes_error_for_a_contact_with_an_unnormalisable_phone(): void
+    {
+        // A bad import can leave a phone that can't be normalised to E.164;
+        // placeCall throws \InvalidArgumentException, which startCall must catch
+        // and surface as an error flash rather than a 500.
+        $admin = $this->makeUser('admin');
+        WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create(['user_id' => $admin->id, 'phone' => 'not-a-number']);
+
+        $this->actingAs($admin)
+            ->from(route('contacts.index'))
+            ->post(route('contacts.startCall', $contact))
+            ->assertRedirect(route('contacts.index'))
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, CallLog::count());
+    }
+
+    public function test_startCall_requires_conversations_call_permission(): void
+    {
+        // agent/manager/admin/super_admin all grant conversations.call by
+        // default, so use a role-less user to isolate the policy gate.
+        $user = User::factory()->create(['is_active' => true]);
+        WhatsAppInstance::factory()->create(['user_id' => $user->id, 'status' => 'CONNECTED']);
+        $contact = Contact::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAs($user)
+            ->post(route('contacts.startCall', $contact))
+            ->assertForbidden();
+
+        $this->assertSame(0, CallLog::count());
+    }
+
+    public function test_startCall_is_not_blocked_by_contact_ownership_in_single_tenant(): void
+    {
+        // Single-tenant: contacts are shared. An admin can dial a contact owned
+        // by another user — the old per-user ownership 403 is gone (route
+        // permission gating still applies).
+        $this->fakeQueuedAtCall();
+        $userA = $this->makeUser('admin');
+        $userB = $this->makeUser('admin', 'b@example.com');
+        WhatsAppInstance::factory()->create(['user_id' => $userA->id, 'status' => 'CONNECTED']);
+        $contactOfB = Contact::factory()->create([
+            'user_id' => $userB->id,
+            'phone' => '23480'.fake()->unique()->numerify('########'),
+        ]);
+
+        $response = $this->actingAs($userA)
+            ->post(route('contacts.startCall', $contactOfB));
+
+        $this->assertFalse($response->isForbidden(), 'ownership must not 403 in single-tenant');
+        $response->assertRedirect()->assertSessionHas('success');
+        $this->assertSame(1, CallLog::count());
+    }
+
+    // ---- startChat: open a WhatsApp thread (no message sent) -----------------
 
     public function test_startChat_creates_conversation_for_new_contact(): void
     {
@@ -108,191 +252,6 @@ class ContactInitiationTest extends TestCase
             ->assertRedirect(); // not 403
 
         $this->assertSame(1, Conversation::count());
-    }
-
-    public function test_startCall_blocked_when_contact_has_no_engagement(): void
-    {
-        $admin = $this->makeUser('admin');
-        WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
-        $contact = Contact::factory()->create(['user_id' => $admin->id]);
-
-        \Illuminate\Support\Facades\Http::fake();
-
-        $this->actingAs($admin)
-            ->from(route('contacts.index'))
-            ->post(route('contacts.startCall', $contact))
-            ->assertRedirect(route('contacts.index'))
-            ->assertSessionHas('error');
-
-        \Illuminate\Support\Facades\Http::assertNothingSent();
-        $this->assertSame(0, \App\Models\CallLog::count());
-    }
-
-    public function test_startCall_allowed_when_contact_messaged_within_30_days(): void
-    {
-        $admin = $this->makeUser('admin');
-        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
-        $contact = Contact::factory()->create(['user_id' => $admin->id]);
-        $conv = Conversation::factory()->create([
-            'user_id' => $admin->id,
-            'contact_id' => $contact->id,
-            'whatsapp_instance_id' => $instance->id,
-        ]);
-        \App\Models\ConversationMessage::create([
-            'conversation_id' => $conv->id,
-            'direction' => 'inbound',
-            'whatsapp_message_id' => 'wamid.engagement',
-            'type' => 'text',
-            'body' => 'hi',
-            'received_at' => now()->subDays(5),
-        ]);
-
-        \Illuminate\Support\Facades\Http::fake([
-            'graph.facebook.com/*' => \Illuminate\Support\Facades\Http::response([
-                'calls' => [['id' => 'wacid.contact_initiated']],
-            ], 200),
-        ]);
-
-        $this->actingAs($admin)
-            ->post(route('contacts.startCall', $contact))
-            ->assertRedirect(route('conversations.show', $conv))
-            ->assertSessionHas('success');
-
-        $this->assertSame(1, \App\Models\CallLog::count());
-        $call = \App\Models\CallLog::first();
-        $this->assertSame('outbound', $call->direction);
-        $this->assertSame($admin->id, $call->placed_by_user_id);
-        $this->assertSame('wacid.contact_initiated', $call->meta_call_id);
-    }
-
-    public function test_startCall_allowed_when_contact_called_within_30_days(): void
-    {
-        $admin = $this->makeUser('admin');
-        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
-        $contact = Contact::factory()->create(['user_id' => $admin->id]);
-        $conv = Conversation::factory()->create([
-            'user_id' => $admin->id,
-            'contact_id' => $contact->id,
-            'whatsapp_instance_id' => $instance->id,
-        ]);
-        \App\Models\CallLog::factory()->create([
-            'conversation_id' => $conv->id,
-            'contact_id' => $contact->id,
-            'whatsapp_instance_id' => $instance->id,
-            'direction' => 'inbound',
-            'created_at' => now()->subDays(10),
-        ]);
-
-        \Illuminate\Support\Facades\Http::fake([
-            'graph.facebook.com/*' => \Illuminate\Support\Facades\Http::response([
-                'calls' => [['id' => 'wacid.from_call']],
-            ], 200),
-        ]);
-
-        $this->actingAs($admin)
-            ->post(route('contacts.startCall', $contact))
-            ->assertRedirect()
-            ->assertSessionHas('success');
-
-        $this->assertSame(2, \App\Models\CallLog::count(), 'inbound + new outbound');
-    }
-
-    public function test_startCall_engagement_threshold_is_30_days(): void
-    {
-        $admin = $this->makeUser('admin');
-        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
-        $contact = Contact::factory()->create(['user_id' => $admin->id]);
-        $conv = Conversation::factory()->create([
-            'user_id' => $admin->id,
-            'contact_id' => $contact->id,
-            'whatsapp_instance_id' => $instance->id,
-        ]);
-        \App\Models\ConversationMessage::create([
-            'conversation_id' => $conv->id,
-            'direction' => 'inbound',
-            'whatsapp_message_id' => 'wamid.too_old',
-            'type' => 'text',
-            'body' => 'old',
-            'received_at' => now()->subDays(31),
-        ]);
-
-        \Illuminate\Support\Facades\Http::fake();
-
-        $this->actingAs($admin)
-            ->from(route('contacts.index'))
-            ->post(route('contacts.startCall', $contact))
-            ->assertRedirect(route('contacts.index'))
-            ->assertSessionHas('error');
-
-        $this->assertSame(0, \App\Models\CallLog::count());
-    }
-
-    public function test_startCall_allowed_at_exactly_29_days_engagement_boundary(): void
-    {
-        $admin = $this->makeUser('admin');
-        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id, 'status' => 'CONNECTED']);
-        $contact = Contact::factory()->create(['user_id' => $admin->id]);
-        $conv = Conversation::factory()->create([
-            'user_id' => $admin->id,
-            'contact_id' => $contact->id,
-            'whatsapp_instance_id' => $instance->id,
-        ]);
-        \App\Models\ConversationMessage::create([
-            'conversation_id' => $conv->id,
-            'direction' => 'inbound',
-            'whatsapp_message_id' => 'wamid.boundary_29',
-            'type' => 'text',
-            'body' => 'just inside the boundary',
-            'received_at' => now()->subDays(29),
-        ]);
-
-        \Illuminate\Support\Facades\Http::fake([
-            'graph.facebook.com/*' => \Illuminate\Support\Facades\Http::response([
-                'calls' => [['id' => 'wacid.boundary']],
-            ], 200),
-        ]);
-
-        $this->actingAs($admin)
-            ->post(route('contacts.startCall', $contact))
-            ->assertRedirect()
-            ->assertSessionHas('success');
-
-        $this->assertSame(1, \App\Models\CallLog::count(),
-            '29-day-old inbound message MUST keep contact within engagement window'
-        );
-    }
-
-    public function test_startCall_requires_conversations_call_permission(): void
-    {
-        // Phase 19a deploy update: agent/manager/admin/super_admin roles ALL
-        // grant conversations.call by default. Use a role-less user so the
-        // policy gate test is independent of role default permissions.
-        $user = User::factory()->create(['is_active' => true]);
-
-        WhatsAppInstance::factory()->create(['user_id' => $user->id, 'status' => 'CONNECTED']);
-        $contact = Contact::factory()->create(['user_id' => $user->id]);
-
-        $this->actingAs($user)
-            ->post(route('contacts.startCall', $contact))
-            ->assertForbidden();
-    }
-
-    public function test_startCall_is_not_blocked_by_contact_ownership_in_single_tenant(): void
-    {
-        // Single-tenant: contacts are shared, so the old per-user ownership 403
-        // is gone. An admin acting on another user's (not-yet-engaged) contact
-        // is NOT forbidden — it proceeds and stops at the engagement gate,
-        // redirecting back with an error rather than a 403.
-        $userA = $this->makeUser('admin');
-        $userB = $this->makeUser('admin', 'b@example.com');
-        WhatsAppInstance::factory()->create(['user_id' => $userA->id, 'status' => 'CONNECTED']);
-        $contactOfB = Contact::factory()->create(['user_id' => $userB->id]);
-
-        $response = $this->actingAs($userA)
-            ->post(route('contacts.startCall', $contactOfB));
-
-        $this->assertFalse($response->isForbidden(), 'ownership must not 403 in single-tenant');
-        $response->assertRedirect();
     }
 
     public function test_startChat_uses_the_primary_instance_without_a_picker(): void

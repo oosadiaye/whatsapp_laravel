@@ -198,6 +198,11 @@ class Contact extends Model
      * Two short-circuiting `exists()` queries instead of one UNION because
      * each runs against an indexed column and the first true wins.
      */
+    public function emailSequenceRecipients(): HasMany
+    {
+        return $this->hasMany(EmailSequenceRecipient::class);
+    }
+
     public function isEngaged(): bool
     {
         $threshold = now()->subDays(self::ENGAGEMENT_WINDOW_DAYS);

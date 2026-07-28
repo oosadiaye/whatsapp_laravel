@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Events\Calling\CallRinging;
 use App\Events\Calling\CallTerminated;
 use App\Models\CallLog;
+use App\Models\CallQueueEntry;
 use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Setting;
@@ -18,6 +19,7 @@ use App\Services\RoundRobinAssigner;
 use App\Support\VoiceXml;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -163,6 +165,26 @@ class AfricasTalkingWebhookController extends Controller
             'to_phone' => $event['destinationNumber'] ?? '',
         ]);
 
+        if (config('voice.queue_enabled')) {
+            // Serialise the read-then-write position calc so two inbound calls
+            // webhooked concurrently don't both read N and both claim position N+1
+            // (M5). The lock holds the WAITING set for the duration of the insert.
+            DB::transaction(function () use ($event, $callerPhone): void {
+                $position = CallQueueEntry::where('status', CallQueueEntry::STATUS_WAITING)
+                    ->lockForUpdate()
+                    ->count() + 1;
+
+                CallQueueEntry::create([
+                    'session_id' => $event['sessionId'] ?? 'unknown',
+                    'caller_number' => $callerPhone,
+                    'queue_name' => (string) config('voice.queue.default_name', 'support'),
+                    'position' => $position,
+                    'status' => CallQueueEntry::STATUS_WAITING,
+                    'entered_at' => now(),
+                ]);
+            });
+        }
+
         $conversation->refresh();
         if ($conversation->assigned_to_user_id !== null) {
             CallRinging::dispatch($call);
@@ -176,6 +198,20 @@ class AfricasTalkingWebhookController extends Controller
         $duration = (int) ($event['durationInSeconds'] ?? 0);
         $rateKobo = (int) Setting::get('africastalking_rate_per_minute_kobo', 600);
         $costKobo = (int) ceil($duration * $rateKobo / 60);
+
+        // Queue lifecycle: connected when ended, left when missed.
+        if ($call->provider_session_id) {
+            $queueStatus = match ($endStatus) {
+                CallLog::STATUS_ENDED => ['status' => CallQueueEntry::STATUS_CONNECTED, 'connected_at' => now()],
+                CallLog::STATUS_MISSED => ['status' => CallQueueEntry::STATUS_LEFT],
+                default => null,
+            };
+            if ($queueStatus) {
+                CallQueueEntry::where('session_id', $call->provider_session_id)
+                    ->where('status', CallQueueEntry::STATUS_WAITING)
+                    ->update($queueStatus);
+            }
+        }
 
         $update = [
             'status' => $endStatus,

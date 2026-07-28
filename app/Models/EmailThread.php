@@ -61,4 +61,11 @@ class EmailThread extends Model
     {
         return $this->belongsTo(User::class, 'assigned_to_user_id');
     }
+
+    public function getSenderPreview(): ?string
+    {
+        $latest = $this->messages()->latest('id')->first();
+
+        return $latest?->from_email;
+    }
 }

@@ -43,27 +43,76 @@
             </div>
         @endunless
 
-        {{-- Quick Dial modal (calls.dial). Opened by the header button via the
-             'open-quick-dial' window event. Resolves the number/contact server-
-             side and opens the conversation view, which places the call through
-             the browser softphone. --}}
+        {{-- Quick Dial modal — places a direct AT call from the workspace.
+             Agent can type a number or pick a contact from the searchable list. --}}
         @if($canDial ?? false)
             @php
-                // Digit → letter sub-label (T9 layout), à la the 3CX Quick Dial.
                 $dialKeys = [['1', ''], ['2', 'ABC'], ['3', 'DEF'], ['4', 'GHI'], ['5', 'JKL'],
                              ['6', 'MNO'], ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'], ['*', ''], ['0', '+'], ['#', '']];
             @endphp
-            <div x-data="{ open: false, number: '', press(k) { this.number += k }, back() { this.number = this.number.slice(0, -1) } }"
-                 @open-quick-dial.window="open = true; $nextTick(() => $refs.dialInput && $refs.dialInput.focus())"
+            <div x-data="{
+                open: false,
+                number: '',
+                contactId: null,
+                calling: false,
+                error: '',
+                search: '',
+                showContacts: false,
+                selectedContactName: '',
+                get displayLabel() {
+                    return this.selectedContactName || this.number || '';
+                },
+                get filteredContacts() {
+                    const all = {{ Js::from($dialContacts?->map(fn ($c) => ['id' => $c->id, 'name' => $c->name ?? $c->phone, 'phone' => $c->phone])->values() ?? []) }};
+                    if (!this.search) return all;
+                    const q = this.search.toLowerCase();
+                    return all.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
+                },
+                press(k) { this.number += k; this.contactId = null; this.selectedContactName = ''; },
+                back() { this.number = this.number.slice(0, -1); this.contactId = null; this.selectedContactName = ''; },
+                selectContact(c) {
+                    this.contactId = c.id;
+                    this.number = c.phone;
+                    this.selectedContactName = c.name;
+                    this.showContacts = false;
+                    this.search = '';
+                },
+                async placeCall() {
+                    if (this.calling || !this.number.trim()) return;
+                    this.calling = true;
+                    this.error = '';
+                    const payload = { phone: this.number };
+                    if (this.contactId) payload.contact_id = this.contactId;
+                    try {
+                        const res = await fetch(@js(route('calls.outbound')), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()), 'Accept': 'application/json' },
+                            body: JSON.stringify(payload),
+                        });
+                        if (res.ok) {
+                            this.open = false;
+                            this.number = '';
+                            this.contactId = null;
+                            this.selectedContactName = '';
+                        } else {
+                            const b = await res.json();
+                            this.error = b?.error || 'Call failed.';
+                        }
+                    } catch {
+                        this.error = 'Network error.';
+                    } finally {
+                        this.calling = false;
+                    }
+                }
+            }"
+                 @open-quick-dial.window="open = true; $nextTick(() => $refs.searchInput && $refs.searchInput.focus())"
                  @keydown.escape.window="open = false">
                 <template x-teleport="body">
                     <div x-show="open" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4"
                          role="dialog" aria-modal="true" aria-label="{{ __('Quick Dial') }}">
-                        {{-- Backdrop --}}
                         <div x-show="open" x-transition.opacity
                              class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="open = false"></div>
 
-                        {{-- Panel --}}
                         <div x-show="open"
                              x-transition:enter="transition ease-out duration-200"
                              x-transition:enter-start="opacity-0 scale-95 translate-y-2"
@@ -72,7 +121,6 @@
                              x-transition:leave-start="opacity-100 scale-100"
                              x-transition:leave-end="opacity-0 scale-95"
                              class="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl ring-1 ring-slate-900/5 overflow-hidden">
-                            {{-- Header (navy — Enterprise Modern) --}}
                             <div class="flex items-center justify-between px-5 py-4 bg-slate-900 text-white">
                                 <div class="flex items-center gap-2">
                                     <svg class="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 24 24"><path d="M6 8a2 2 0 100-4 2 2 0 000 4zM6 14a2 2 0 100-4 2 2 0 000 4zM6 20a2 2 0 100-4 2 2 0 000 4zM12 8a2 2 0 100-4 2 2 0 000 4zM12 14a2 2 0 100-4 2 2 0 000 4zM12 20a2 2 0 100-4 2 2 0 000 4zM18 8a2 2 0 100-4 2 2 0 000 4zM18 14a2 2 0 100-4 2 2 0 000 4zM18 20a2 2 0 100-4 2 2 0 000 4z"/></svg>
@@ -84,28 +132,57 @@
                                 </button>
                             </div>
 
-                            {{-- Dialer body --}}
-                            <form method="POST" action="{{ route('calls.dial') }}" class="p-5">
-                                @csrf
-                                {{-- Number display — right-aligned mono, with a backspace. --}}
-                                <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-3 mb-4">
-                                    <input type="text" name="phone" x-model="number" x-ref="dialInput" list="bq-dial-contacts"
-                                           inputmode="tel" autocomplete="off" placeholder="{{ __('Enter number…') }}"
-                                           aria-label="{{ __('Phone number or contact') }}"
-                                           class="flex-1 min-w-0 bg-transparent border-none p-0 text-right font-data text-2xl text-slate-900 focus:ring-0 placeholder:text-slate-400">
+                            <div class="p-5">
+                                {{-- Search input with dropdown --}}
+                                <div class="relative mb-3" @click.outside="showContacts = false">
+                                    <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5"
+                                         :class="showContacts && 'border-emerald-400 ring-1 ring-emerald-200'">
+                                        <svg class="w-4 h-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+                                        <input type="text" x-model="search" x-ref="searchInput"
+                                               autocomplete="off"
+                                               placeholder="{{ __('Search contacts…') }}"
+                                               @focus="showContacts = true"
+                                               @keydown.escape="showContacts = false"
+                                               @keydown.down.prevent="$focus.wrap().next($refs.contactList?.querySelector('button'))"
+                                               class="flex-1 min-w-0 bg-transparent border-none p-0 text-sm text-slate-900 focus:ring-0 placeholder:text-slate-400">
+                                    </div>
+
+                                    {{-- Dropdown --}}
+                                    <div x-show="showContacts" x-cloak x-ref="contactList"
+                                         class="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                                        <template x-for="c in filteredContacts" :key="c.id">
+                                            <button type="button" @click="selectContact(c)"
+                                                    @keydown.arrow-up.prevent="$focus.wrap().prev($el)"
+                                                    @keydown.arrow-down.prevent="$focus.wrap().next($el)"
+                                                    class="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-emerald-50 border-b border-slate-50 last:border-0 transition text-sm"
+                                                    :class="number === c.phone && 'bg-emerald-50'">
+                                                <span class="grid place-items-center w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs shrink-0" x-text="(c.name || c.phone).charAt(0).toUpperCase()"></span>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="block font-medium text-slate-900 truncate" x-text="c.name || c.phone"></span>
+                                                    <span class="block text-xs text-slate-400 font-data" x-text="c.name ? c.phone : ''"></span>
+                                                </span>
+                                            </button>
+                                        </template>
+                                        <p x-show="filteredContacts.length === 0" class="px-3 py-4 text-xs text-slate-400 text-center">{{ __('No contacts match.') }}</p>
+                                    </div>
+                                </div>
+
+                                {{-- Number display --}}
+                                <div class="flex items-center justify-between bg-slate-900/5 rounded-lg px-4 py-3 mb-3 min-h-[3rem]">
+                                    <div class="min-w-0 flex-1 text-right">
+                                        <template x-if="selectedContactName">
+                                            <span class="block text-xs text-slate-500 truncate" x-text="selectedContactName"></span>
+                                        </template>
+                                        <span class="font-data text-2xl text-slate-900" x-text="number || '0'"></span>
+                                    </div>
                                     <button type="button" @click="back()" x-show="number" x-cloak
-                                            class="shrink-0 text-slate-400 hover:text-slate-600" aria-label="{{ __('Backspace') }}">
+                                            class="shrink-0 ml-2 text-slate-400 hover:text-slate-600">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9.75L14.25 12m0 0l2.25 2.25M14.25 12l2.25-2.25M14.25 12L12 14.25m-2.58 4.92l-6.375-6.375a1.125 1.125 0 010-1.59L9.42 4.83c.211-.211.498-.33.796-.33H19.5a2.25 2.25 0 012.25 2.25v10.5a2.25 2.25 0 01-2.25 2.25h-9.284c-.298 0-.585-.119-.796-.33z"/></svg>
                                     </button>
                                 </div>
-                                <datalist id="bq-dial-contacts">
-                                    @foreach($dialContacts ?? [] as $c)
-                                        <option value="{{ $c->phone }}">{{ $c->name }}</option>
-                                    @endforeach
-                                </datalist>
 
-                                {{-- Keypad — digit + T9 letters. --}}
-                                <div class="grid grid-cols-3 gap-2.5 mb-4">
+                                {{-- Keypad --}}
+                                <div class="grid grid-cols-3 gap-2 mb-4">
                                     @foreach($dialKeys as [$digit, $letters])
                                         <button type="button" @click="press('{{ $digit }}')"
                                                 class="h-14 flex flex-col items-center justify-center rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 transition group">
@@ -115,25 +192,39 @@
                                     @endforeach
                                 </div>
 
-                                {{-- Actions — Clear (neutral) + Start Call (emerald). --}}
-                                <div class="grid grid-cols-3 gap-2.5">
-                                    <button type="button" @click="number = ''"
+                                {{-- Actions --}}
+                                <div class="grid grid-cols-3 gap-2">
+                                    <button type="button" @click="number = ''; contactId = null; selectedContactName = ''"
                                             class="py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-semibold hover:bg-slate-200 transition">{{ __('Clear') }}</button>
-                                    <button type="submit" x-bind:disabled="! number.trim()"
+                                    <button type="button" @click="placeCall()" x-bind:disabled="!number.trim() || calling"
                                             class="col-span-2 inline-flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm shadow-emerald-600/20">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
-                                        {{ __('Start Call') }}
+                                        <span x-text="calling ? '{{ __('Calling…') }}' : '{{ __('Start Call') }}'"></span>
                                     </button>
                                 </div>
-                                <p class="mt-3 text-center text-xs text-slate-400">{{ __('Type or pick a contact — the call opens in the conversation view.') }}</p>
-                            </form>
+                                <p x-show="error" x-cloak x-text="error"
+                                   class="mt-2 text-center text-xs text-red-600"></p>
+                            </div>
                         </div>
                     </div>
                 </template>
             </div>
         @endif
 
+        @if(config('voice.queue_enabled'))
+            <div class="mb-6 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                @livewire('call-queue', key('call-queue'))
+            </div>
+        @endif
+
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+
+            {{-- WRAP-UP — shown when a recently-ended call has no disposition --}}
+            @if($activeCall && !$activeCall->disposition && $activeCall->ended_at)
+                <div class="lg:col-span-2">
+                    @livewire('call-wrap-up', ['call' => $activeCall], key('wrap-up-'.$activeCall->id))
+                </div>
+            @endif
 
             {{-- LEFT: call queue / history --}}
             <div class="lg:col-span-3 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
@@ -141,6 +232,26 @@
                     <h3 class="text-sm font-bold text-gray-700">{{ __('Recent calls') }}</h3>
                     <span class="text-xs text-gray-400">{{ $calls->count() }}</span>
                 </div>
+
+                {{-- Search + filter --}}
+                <form method="GET" action="{{ route('calls.workspace') }}" class="px-5 py-3 border-b border-gray-50 flex flex-col sm:flex-row gap-2">
+                    <div class="relative flex-1">
+                        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+                        <input type="search" name="q" value="{{ request('q') }}" placeholder="{{ __('Search calls…') }}"
+                               class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-blue-400 focus:ring focus:ring-blue-200">
+                    </div>
+                    <select name="dir" class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:border-blue-400 focus:ring focus:ring-blue-200">
+                        <option value="">{{ __('All directions') }}</option>
+                        <option value="inbound" @selected(request('dir') === 'inbound')>{{ __('Inbound') }}</option>
+                        <option value="outbound" @selected(request('dir') === 'outbound')>{{ __('Outbound') }}</option>
+                    </select>
+                    <select name="status" class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:border-blue-400 focus:ring focus:ring-blue-200">
+                        <option value="">{{ __('All statuses') }}</option>
+                        <option value="ended" @selected(request('status') === 'ended')>{{ __('Ended') }}</option>
+                        <option value="missed" @selected(request('status') === 'missed')>{{ __('Missed') }}</option>
+                        <option value="ringing" @selected(request('status') === 'ringing')>{{ __('Ringing') }}</option>
+                    </select>
+                </form>
 
                 <div class="divide-y divide-gray-50 max-h-[70vh] overflow-y-auto">
                     @forelse($calls as $call)

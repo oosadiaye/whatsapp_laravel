@@ -54,14 +54,48 @@
                 @if($call->placedBy) · {{ __('by') }} {{ $call->placedBy->name }} @endif
             </p>
 
-            {{-- Call back — opens the conversation, where the working softphone
-                 + call button live. Most useful on a missed inbound call. --}}
-            @if($call->conversation)
-                <a href="{{ route('conversations.show', $call->conversation) }}"
-                   class="mt-3 inline-flex items-center justify-center gap-1.5 w-full px-4 py-2 rounded-lg bg-[#25D366] text-white text-sm font-semibold hover:bg-[#1da851] transition">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
-                    {{ $call->isInbound() && $call->status === 'missed' ? __('Call back') : __('Open chat to call') }}
-                </a>
+            {{-- Call back — places a direct AT call from the workspace, no chat needed. --}}
+            @if($call->contact?->phone)
+                <div x-data="{
+                    calling: false,
+                    msg: '',
+                    ok: false,
+                    async callBack() {
+                        if (this.calling) return;
+                        this.calling = true;
+                        this.msg = '';
+                        try {
+                            const res = await fetch(@js(route('calls.outbound')), {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()), 'Accept': 'application/json' },
+                                body: JSON.stringify({ phone: @js($call->contact->phone), contact_id: @js($call->contact_id) }),
+                            });
+                            if (res.ok) {
+                                this.ok = true;
+                                this.msg = @js(__('Calling…'));
+                            } else {
+                                this.ok = false;
+                                this.msg = res.status === 429 ? @js(__('Too many calls — wait a moment and try again.'))
+                                    : res.status === 503 ? @js(__('Voice service is unavailable right now.'))
+                                    : res.status === 422 ? @js(__('That number can’t be dialled.'))
+                                    : @js(__('Could not place the call.'));
+                            }
+                        } catch (e) {
+                            this.ok = false;
+                            this.msg = @js(__('Could not place the call.'));
+                        } finally {
+                            this.calling = false;
+                        }
+                    }
+                }" class="mt-3">
+                    <button type="button" @click="callBack()" :disabled="calling"
+                        class="inline-flex items-center justify-center gap-1.5 w-full px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition disabled:opacity-60">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
+                        <span x-text="calling ? @js(__('Calling…')) : @js(__('Call back'))"></span>
+                    </button>
+                    <p x-cloak x-show="msg" x-text="msg"
+                       class="mt-1.5 text-center text-[11px]" :class="ok ? 'text-emerald-600' : 'text-red-600'"></p>
+                </div>
             @endif
         </div>
 
@@ -149,26 +183,14 @@
                 </section>
             @endif
 
-            {{-- ── CONTEXT: recent messages + prior calls ─────────────── --}}
-            @if($context['recentMessages']->isNotEmpty() || $context['priorCalls']->isNotEmpty())
+            {{-- ── CONTEXT: prior calls only (no chat messages in Call Workspace) ── --}}
+            @if($context['priorCalls']->isNotEmpty())
                 <section>
                     <h3 class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">{{ __('Context') }}</h3>
-                    @if($context['recentMessages']->isNotEmpty())
-                        <div class="space-y-1.5 mb-3">
-                            @foreach($context['recentMessages'] as $msg)
-                                <div class="flex gap-2 text-xs">
-                                    <span class="shrink-0 font-semibold {{ $msg->isInbound() ? 'text-sky-600' : 'text-[#128C7E]' }}">{{ $msg->isInbound() ? __('Them') : __('Us') }}:</span>
-                                    <span class="text-gray-600 truncate">{{ \Illuminate\Support\Str::limit($msg->body ?: '['.$msg->type.']', 80) }}</span>
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-                    @if($context['priorCalls']->isNotEmpty())
-                        <p class="text-[11px] text-gray-400">
-                            {{ trans_choice('{1} :count earlier call|[2,*] :count earlier calls', $context['priorCalls']->count(), ['count' => $context['priorCalls']->count()]) }}
-                            {{ __('with this contact') }}
-                        </p>
-                    @endif
+                    <p class="text-[11px] text-gray-400">
+                        {{ trans_choice('{1} :count earlier call|[2,*] :count earlier calls', $context['priorCalls']->count(), ['count' => $context['priorCalls']->count()]) }}
+                        {{ __('with this contact') }}
+                    </p>
                 </section>
             @endif
 

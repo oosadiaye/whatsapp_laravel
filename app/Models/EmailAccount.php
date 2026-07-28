@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -77,6 +78,16 @@ class EmailAccount extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(EmailMessage::class);
+    }
+
+    public function warmupLogs(): HasMany
+    {
+        return $this->hasMany(EmailWarmupLog::class, 'email_account_id');
+    }
+
+    public function warmupSetting(): HasOne
+    {
+        return $this->hasOne(EmailWarmupSetting::class, 'email_account_id');
     }
 
     /**

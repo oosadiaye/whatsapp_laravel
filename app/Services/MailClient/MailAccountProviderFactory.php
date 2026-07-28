@@ -17,8 +17,8 @@ class MailAccountProviderFactory
     {
         return match ($provider) {
             EmailAccount::PROVIDER_IMAP => new ImapSmtpProvider(),
-            // EmailAccount::PROVIDER_GMAIL => new GmailProvider(),  // OAuth (future)
-            // EmailAccount::PROVIDER_GRAPH => new GraphProvider(),  // OAuth (future)
+            EmailAccount::PROVIDER_GMAIL => new GmailProvider(),
+            EmailAccount::PROVIDER_GRAPH => new GraphProvider(),
             default => null,
         };
     }
@@ -28,26 +28,22 @@ class MailAccountProviderFactory
         return $this->make($account->provider);
     }
 
-    /**
-     * The inbound fetcher (plan B3) for an account's provider, or null if the
-     * provider is unsupported.
-     */
     public function fetcherFor(EmailAccount $account): ?MailFetcher
     {
         return match ($account->provider) {
             EmailAccount::PROVIDER_IMAP => new ImapFetcher(),
+            EmailAccount::PROVIDER_GMAIL => new ImapFetcher(),
+            EmailAccount::PROVIDER_GRAPH => new ImapFetcher(),
             default => null,
         };
     }
 
-    /**
-     * The outbound sender (plan B5a) for an account's provider, or null if the
-     * provider is unsupported.
-     */
     public function senderFor(EmailAccount $account): ?MailSender
     {
         return match ($account->provider) {
             EmailAccount::PROVIDER_IMAP => new SmtpSender(),
+            EmailAccount::PROVIDER_GMAIL => new SmtpSender(),
+            EmailAccount::PROVIDER_GRAPH => new SmtpSender(),
             default => null,
         };
     }

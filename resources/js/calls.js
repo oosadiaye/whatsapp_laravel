@@ -123,10 +123,6 @@ window.incomingCall = (data) => ({
             // any (rare, but cheap to guard against).
             let sdp = this.sdpOffer.replace(/﻿/g, '');
             sdp = sdp.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
-            // Surface to console so DevTools shows the EXACT bytes Chrome
-            // sees on the next failure — invaluable when normalising still
-            // isn't enough (e.g. the SDP is structurally missing an m= line).
-            console.debug('[BlastIQ incoming-call] setRemoteDescription with SDP:\n' + sdp);
             await this.peer.setRemoteDescription({ type: 'offer', sdp });
             const answer = await this.peer.createAnswer();
             await this.peer.setLocalDescription(answer);
