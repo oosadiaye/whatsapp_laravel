@@ -198,8 +198,12 @@ class AfricasTalkingVoiceService
             'username' => $username,
             'clientName' => $clientName,
             'phoneNumber' => $phoneNumber,
-            'incoming' => true,
-            'outgoing' => true,
+            // AT's capability-token API (a Play/Scala service) expects these as
+            // STRINGS, not JSON booleans — sending a boolean triggers a 400
+            // "The request content was malformed: Expected String as JsString,
+            // but got true".
+            'incoming' => 'true',
+            'outgoing' => 'true',
         ]);
 
         if ($response->failed()) {

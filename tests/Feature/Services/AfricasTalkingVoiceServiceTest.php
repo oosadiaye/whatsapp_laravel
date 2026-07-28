@@ -155,6 +155,10 @@ class AfricasTalkingVoiceServiceTest extends TestCase
                 && $data['username'] === 'sandbox'
                 && $data['clientName'] === 'agent_7'
                 && $data['phoneNumber'] === '+2348100000000'
+                // AT rejects JSON booleans here (400 "Expected String as JsString")
+                // — incoming/outgoing MUST go out as the strings "true"/"false".
+                && $data['incoming'] === 'true'
+                && $data['outgoing'] === 'true'
                 && $request->header('apiKey')[0] === 'atsk_test_key';
         });
     }
