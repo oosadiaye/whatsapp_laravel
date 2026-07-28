@@ -79,6 +79,58 @@ class MailboxAccountTest extends TestCase
         $this->assertSame(0, EmailAccount::where('user_id', $user->id)->count());
     }
 
+    public function test_a_non_owner_cannot_edit_or_update_another_users_mailbox(): void
+    {
+        // edit/update are strictly owner-only — not even an admin may touch
+        // another user's stored mail credentials.
+        $owner = $this->user();
+        $account = EmailAccount::factory()->for($owner)->create(['email' => 'owner@work.test']);
+        $intruder = $this->user('admin');
+
+        $this->actingAs($intruder)->get(route('mailbox.accounts.edit', $account))->assertForbidden();
+        $this->actingAs($intruder)->put(route('mailbox.accounts.update', $account), $this->validForm())->assertForbidden();
+    }
+
+    public function test_update_with_a_blank_password_preserves_the_existing_credential(): void
+    {
+        $this->stubProvider(ok: true);
+        $owner = $this->user();
+        $account = EmailAccount::factory()->for($owner)->create([
+            'email' => 'owner@work.test',
+            'credentials' => [
+                'imap_host' => 'imap.work.test', 'imap_port' => 993, 'imap_encryption' => 'ssl',
+                'smtp_host' => 'smtp.work.test', 'smtp_port' => 465, 'smtp_encryption' => 'ssl',
+                'username' => 'owner@work.test', 'password' => 'ORIGINAL-SECRET',
+            ],
+        ]);
+
+        $form = $this->validForm();
+        $form['password'] = ''; // blank on edit -> keep the stored secret
+
+        $this->actingAs($owner)
+            ->put(route('mailbox.accounts.update', $account), $form)
+            ->assertRedirect(route('mailbox.accounts.index'));
+
+        $this->assertSame('ORIGINAL-SECRET', $account->fresh()->credentials['password']);
+    }
+
+    public function test_update_persists_new_host_settings(): void
+    {
+        $this->stubProvider(ok: true);
+        $owner = $this->user();
+        $account = EmailAccount::factory()->for($owner)->create(['email' => 'owner@work.test']);
+
+        $form = $this->validForm();
+        $form['imap_host'] = 'imap.newhost.test';
+        $form['password'] = 'newpass';
+
+        $this->actingAs($owner)
+            ->put(route('mailbox.accounts.update', $account), $form)
+            ->assertRedirect(route('mailbox.accounts.index'));
+
+        $this->assertSame('imap.newhost.test', $account->fresh()->credentials['imap_host']);
+    }
+
     private function stubProvider(bool $ok): void
     {
         $this->app->bind(MailAccountProviderFactory::class, function () use ($ok) {

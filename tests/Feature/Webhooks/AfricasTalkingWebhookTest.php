@@ -312,6 +312,30 @@ class AfricasTalkingWebhookTest extends TestCase
         ])->assertStatus(401);
     }
 
+    public function test_inbound_call_revives_a_soft_deleted_contact(): void
+    {
+        // A call from a previously-deleted number must revive that contact in
+        // place, not collide on the unversioned unique (user_id, phone) index.
+        $owner = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
+        $owner->assignRole(User::ROLE_ADMIN);
+        WhatsAppInstance::factory()->create(['user_id' => $owner->id]);
+
+        $contact = Contact::factory()->create(['user_id' => $owner->id, 'phone' => '2348055556666']);
+        $contact->delete();
+        $this->assertSoftDeleted('contacts', ['id' => $contact->id]);
+
+        $this->postWebhook([
+            'isActive' => '1',
+            'sessionId' => 'sess_revive',
+            'direction' => 'Inbound',
+            'callerNumber' => '+2348055556666', // ltrim('+') => matches stored phone
+            'destinationNumber' => '+2348100000000',
+        ])->assertOk();
+
+        $this->assertSame(1, Contact::withTrashed()->where('phone', '2348055556666')->count());
+        $this->assertNull(Contact::find($contact->id)?->deleted_at);
+    }
+
     private function postWebhook(array $payload)
     {
         // AT posts form-encoded callbacks to the URL carrying the secret path

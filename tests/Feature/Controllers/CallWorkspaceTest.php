@@ -159,6 +159,61 @@ class CallWorkspaceTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_workspace_filters_calls_by_direction_and_status(): void
+    {
+        $admin = $this->makeUser('admin');
+        $inboundMissed = CallLog::factory()->create(['direction' => 'inbound', 'status' => CallLog::STATUS_MISSED]);
+        $outboundEnded = CallLog::factory()->create(['direction' => 'outbound', 'status' => CallLog::STATUS_ENDED]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('calls.workspace', ['dir' => 'inbound', 'status' => CallLog::STATUS_MISSED]));
+
+        $response->assertOk();
+        $ids = $response->viewData('calls')->pluck('id');
+        $this->assertTrue($ids->contains($inboundMissed->id));
+        $this->assertFalse($ids->contains($outboundEnded->id), 'filtered-out call must not appear');
+    }
+
+    public function test_wrap_up_prompt_excludes_calls_placed_by_other_users(): void
+    {
+        // M3: a view_all manager must only be nagged to wrap up calls THEY handled,
+        // not any undispositioned call company-wide.
+        $admin = $this->makeUser('admin'); // has conversations.view_all
+        $other = $this->makeUser('agent', 'other@example.com');
+
+        CallLog::factory()->create([
+            'placed_by_user_id' => $other->id,
+            'disposition' => null,
+            'ended_at' => now()->subMinute(),
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('calls.workspace'));
+        $this->assertNull($response->viewData('activeCall'));
+
+        $mine = CallLog::factory()->create([
+            'placed_by_user_id' => $admin->id,
+            'disposition' => null,
+            'ended_at' => now()->subMinute(),
+        ]);
+
+        $response2 = $this->actingAs($admin)->get(route('calls.workspace'));
+        $this->assertSame($mine->id, $response2->viewData('activeCall')?->id);
+    }
+
+    public function test_wrap_up_prompt_ignores_calls_older_than_the_recency_window(): void
+    {
+        // M3: a stale undispositioned call must stop nagging, not resurface forever.
+        $admin = $this->makeUser('admin');
+        CallLog::factory()->create([
+            'placed_by_user_id' => $admin->id,
+            'disposition' => null,
+            'ended_at' => now()->subMinutes(30), // outside the 15-minute window
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('calls.workspace'));
+        $this->assertNull($response->viewData('activeCall'));
+    }
+
     private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([

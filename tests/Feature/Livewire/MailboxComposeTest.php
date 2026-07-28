@@ -7,6 +7,7 @@ namespace Tests\Feature\Livewire;
 use App\Jobs\SendUserEmail;
 use App\Livewire\Mailbox\Inbox;
 use App\Models\EmailAccount;
+use App\Services\AiEmailDraftService;
 use App\Models\EmailMessage;
 use App\Models\EmailThread;
 use App\Models\User;
@@ -14,8 +15,10 @@ use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use Mockery;
 use Tests\TestCase;
 
 /**
@@ -192,5 +195,41 @@ class MailboxComposeTest extends TestCase
         $this->assertSame('doc.pdf', $job->email->attachments[0]->filename);
         Storage::disk('local')->assertExists($job->email->attachments[0]->diskPath);
         $this->assertStringStartsWith('mailbox/outbox/'.$account->id.'/', $job->email->attachments[0]->diskPath);
+    }
+
+    public function test_draft_with_ai_is_rate_limited(): void
+    {
+        // M7: repeated "Generate Draft" clicks must not burn Gemini quota once
+        // the per-user bucket is exhausted — the AI is never reached.
+        $me = $this->user();
+        $this->accountFor($me);
+
+        $service = Mockery::mock(AiEmailDraftService::class);
+        $service->shouldNotReceive('draft');
+        $this->app->instance(AiEmailDraftService::class, $service);
+
+        for ($i = 0; $i < 10; $i++) {
+            RateLimiter::hit('ai-draft:'.$me->id, 60);
+        }
+
+        Livewire::actingAs($me)->test(Inbox::class)
+            ->set('aiDraftGoal', 'Book a demo')
+            ->call('draftWithAi')
+            ->assertDispatched('notify');
+    }
+
+    public function test_draft_with_ai_generates_a_body_when_within_the_rate(): void
+    {
+        $me = $this->user();
+        $this->accountFor($me);
+
+        $service = Mockery::mock(AiEmailDraftService::class);
+        $service->shouldReceive('draft')->once()->andReturn('Generated body.');
+        $this->app->instance(AiEmailDraftService::class, $service);
+
+        Livewire::actingAs($me)->test(Inbox::class)
+            ->set('aiDraftGoal', 'Book a demo')
+            ->call('draftWithAi')
+            ->assertSet('composeBody', 'Generated body.');
     }
 }

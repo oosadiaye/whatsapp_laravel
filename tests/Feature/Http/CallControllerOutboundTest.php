@@ -16,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 use Tests\TestCase;
 
 class CallControllerOutboundTest extends TestCase
@@ -122,6 +123,31 @@ class CallControllerOutboundTest extends TestCase
             ->assertForbidden();
 
         $this->assertSame(0, CallLog::count());
+    }
+
+    public function test_outbound_is_rate_limited_per_user_after_ten_attempts(): void
+    {
+        Http::fake([
+            'voice.africastalking.com/call' => Http::response(['entries' => [['sessionId' => 's', 'status' => 'Queued']]], 201),
+        ]);
+        $agent = $this->makeAgent();
+        $conversation = $this->makeConversation($agent);
+
+        // Exhaust the 10/60s bucket for THIS user only.
+        for ($i = 0; $i < 10; $i++) {
+            RateLimiter::hit('outbound-call:'.$agent->id, 60);
+        }
+
+        $this->actingAs($agent)
+            ->postJson(route('calls.outbound'), ['conversation_id' => $conversation->id])
+            ->assertStatus(429);
+
+        // A different user is NOT locked out by the first user's activity.
+        $other = $this->makeAgent();
+        $otherConversation = $this->makeConversation($other);
+        $this->actingAs($other)
+            ->postJson(route('calls.outbound'), ['conversation_id' => $otherConversation->id])
+            ->assertOk();
     }
 
     private function makeAgent(): User
