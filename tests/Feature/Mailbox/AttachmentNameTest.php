@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Mailbox;
 
 use App\Services\MailClient\AttachmentName;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -33,9 +34,7 @@ class AttachmentNameTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider names
-     */
+    #[DataProvider('names')]
     public function test_it_reduces_a_name_to_a_safe_basename(string $input, string $expected): void
     {
         $this->assertSame($expected, AttachmentName::safe($input));
