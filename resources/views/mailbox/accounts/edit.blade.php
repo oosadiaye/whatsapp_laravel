@@ -16,6 +16,7 @@
                             <div class="col-span-2">
                                 <x-input-label for="imap_host" :value="__('Host')" />
                                 <x-text-input id="imap_host" name="imap_host" type="text" class="mt-1 block w-full" :value="old('imap_host', $account->credentials['imap_host'] ?? '')" required />
+                                <x-input-error :messages="$errors->get('imap_host')" class="mt-2" />
                             </div>
                             <div>
                                 <x-input-label for="imap_port" :value="__('Port')" />
@@ -38,6 +39,7 @@
                             <div class="col-span-2">
                                 <x-input-label for="smtp_host" :value="__('Host')" />
                                 <x-text-input id="smtp_host" name="smtp_host" type="text" class="mt-1 block w-full" :value="old('smtp_host', $account->credentials['smtp_host'] ?? '')" required />
+                                <x-input-error :messages="$errors->get('smtp_host')" class="mt-2" />
                             </div>
                             <div>
                                 <x-input-label for="smtp_port" :value="__('Port')" />
