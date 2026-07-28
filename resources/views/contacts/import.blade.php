@@ -152,7 +152,7 @@
                                           x-model="manualInput"
                                           rows="8"
                                           placeholder="628123456789, John Doe&#10;628987654321, Jane Smith&#10;628555111222"
-                                          class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm font-mono"></textarea>
+                                          class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm font-data"></textarea>
                             </div>
                         </div>
 

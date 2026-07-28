@@ -31,7 +31,7 @@
                             <div class="mt-1 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
                                 <span class="w-2 h-2 rounded-full {{ $instance->isReady() ? 'bg-emerald-500' : 'bg-amber-500' }}"></span>
                                 {{ $instance->display_name ?? $instance->instance_name }}
-                                @if($instance->business_phone_number)<span class="text-gray-400">·</span><span class="font-mono">{{ $instance->business_phone_number }}</span>@endif
+                                @if($instance->business_phone_number)<span class="text-gray-400">·</span><span class="font-data">{{ $instance->business_phone_number }}</span>@endif
                             </div>
                         @else
                             <p class="mt-1 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">

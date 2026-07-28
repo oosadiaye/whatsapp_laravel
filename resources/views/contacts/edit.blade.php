@@ -34,7 +34,7 @@
                                name="phone"
                                value="{{ old('phone', $contact->phone) }}"
                                readonly
-                               class="w-full rounded-md border-gray-300 bg-gray-50 shadow-sm sm:text-sm text-gray-500 font-mono cursor-not-allowed">
+                               class="w-full rounded-md border-gray-300 bg-gray-50 shadow-sm sm:text-sm text-gray-500 font-data cursor-not-allowed">
                         <p class="mt-1 text-xs text-gray-400">{{ __('Phone number cannot be changed.') }}</p>
                         @error('phone')
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>

@@ -67,7 +67,7 @@
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                         {{ $contact->name ?? '-' }}
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-data">
                                         {{ $contact->phone }}
                                     </td>
                                     <td class="px-6 py-4 text-sm text-gray-600">
@@ -167,7 +167,7 @@
                                                     <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
                                                         <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ __('Call') }} {{ $contact->name ?? $contact->phone }}?</h3>
                                                         <dl class="text-sm space-y-1 mb-4">
-                                                            <div class="flex justify-between"><dt class="text-gray-500">{{ __('Number') }}:</dt><dd class="text-gray-900 font-mono">{{ $contact->phone }}</dd></div>
+                                                            <div class="flex justify-between"><dt class="text-gray-500">{{ __('Number') }}:</dt><dd class="text-gray-900 font-data">{{ $contact->phone }}</dd></div>
                                                         </dl>
                                                         <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-4">
                                                             {{ __('Counts toward your daily Meta call quota. Audio rings on the device where this WhatsApp Business number is registered.') }}

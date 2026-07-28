@@ -56,7 +56,7 @@
                                     @foreach(['{{name}}', '{{phone}}', '{{first_name}}', '{{custom_field_1}}', '{{date}}', '{{campaign_name}}'] as $token)
                                         <button type="button"
                                                 @click="insertToken('{{ $token }}')"
-                                                class="inline-flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md text-xs font-mono text-gray-700 transition-colors duration-150">
+                                                class="inline-flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md text-xs font-data text-gray-700 transition-colors duration-150">
                                             {{ $token }}
                                         </button>
                                     @endforeach
@@ -77,7 +77,7 @@
                                           x-ref="content"
                                           x-model="content"
                                           rows="10"
-                                          class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm font-mono"
+                                          class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm font-data"
                                           placeholder="Type your message here. Use tokens like @{{name}} to personalize.">{{ old('content') }}</textarea>
                                 @error('content')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -143,12 +143,12 @@
                                 <div class="mt-4 text-xs text-gray-400">
                                     <p class="font-medium text-gray-500 mb-1">{{ __('Sample tokens:') }}</p>
                                     <ul class="space-y-0.5">
-                                        <li><span class="font-mono">@{{name}}</span> &rarr; John Doe</li>
-                                        <li><span class="font-mono">@{{phone}}</span> &rarr; 628123456789</li>
-                                        <li><span class="font-mono">@{{first_name}}</span> &rarr; John</li>
-                                        <li><span class="font-mono">@{{custom_field_1}}</span> &rarr; VIP</li>
-                                        <li><span class="font-mono">@{{date}}</span> &rarr; {{ now()->format('d M Y') }}</li>
-                                        <li><span class="font-mono">@{{campaign_name}}</span> &rarr; Spring Sale</li>
+                                        <li><span class="font-data">@{{name}}</span> &rarr; John Doe</li>
+                                        <li><span class="font-data">@{{phone}}</span> &rarr; 628123456789</li>
+                                        <li><span class="font-data">@{{first_name}}</span> &rarr; John</li>
+                                        <li><span class="font-data">@{{custom_field_1}}</span> &rarr; VIP</li>
+                                        <li><span class="font-data">@{{date}}</span> &rarr; {{ now()->format('d M Y') }}</li>
+                                        <li><span class="font-data">@{{campaign_name}}</span> &rarr; Spring Sale</li>
                                     </ul>
                                 </div>
                             </div>

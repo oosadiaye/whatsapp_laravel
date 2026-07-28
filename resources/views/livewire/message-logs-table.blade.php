@@ -45,7 +45,7 @@
                 <tbody class="divide-y divide-gray-100">
                     @forelse($logs as $log)
                         <tr class="hover:bg-gray-50 transition-colors">
-                            <td class="px-6 py-3 font-mono text-gray-900">{{ $log->phone }}</td>
+                            <td class="px-6 py-3 font-data text-gray-900">{{ $log->phone }}</td>
                             <td class="px-6 py-3 text-gray-700">{{ $log->contact_name ?? '-' }}</td>
                             <td class="px-6 py-3">
                                 @php

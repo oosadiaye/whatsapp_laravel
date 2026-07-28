@@ -135,7 +135,7 @@
                                 <dl class="text-sm space-y-1 mb-4">
                                     <div class="flex justify-between">
                                         <dt class="text-gray-500">Number:</dt>
-                                        <dd class="text-gray-900 font-mono">{{ $conversation->contact->phone }}</dd>
+                                        <dd class="text-gray-900 font-data">{{ $conversation->contact->phone }}</dd>
                                     </div>
                                     <div class="flex justify-between">
                                         <dt class="text-gray-500">From:</dt>

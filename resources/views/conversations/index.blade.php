@@ -34,7 +34,7 @@
                                 <h3 class="text-sm font-semibold text-gray-900 truncate">
                                     {{ $conversation->contact->display_name }}
                                 </h3>
-                                <span class="text-xs text-gray-400 flex-shrink-0">
+                                <span class="text-xs text-gray-400 flex-shrink-0 font-data">
                                     {{ $conversation->last_message_at?->diffForHumans(short: true) ?? '—' }}
                                 </span>
                             </div>

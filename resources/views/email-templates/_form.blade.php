@@ -56,7 +56,7 @@
         <div>
             <label for="tpl-html" class="block text-sm font-medium text-gray-700">{{ __('HTML') }} *</label>
             <textarea id="tpl-html" name="body_html" x-model="body" rows="18" required
-                      class="mt-1 block w-full h-[640px] rounded-lg border-gray-300 shadow-sm font-mono text-xs focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                      class="mt-1 block w-full h-[640px] rounded-lg border-gray-300 shadow-sm font-data text-xs focus:border-indigo-500 focus:ring-indigo-500"></textarea>
             <p class="mt-1 text-xs text-gray-400">{{ __('Personalize with') }} <code>@{{name}}</code> {{ __('and') }} <code>@{{email}}</code>.</p>
             @error('body_html')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
         </div>

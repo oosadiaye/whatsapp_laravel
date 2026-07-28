@@ -78,19 +78,19 @@
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Phone Number ID') }}</label>
                                 <input type="text" name="wa_phone_number_id" value="{{ old('wa_phone_number_id', $instance->phone_number_id ?? '') }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-mono focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-[#25D366] focus:ring-[#25D366]">
                                 @error('wa_phone_number_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('WABA ID') }}</label>
                                 <input type="text" name="wa_waba_id" value="{{ old('wa_waba_id', $instance->waba_id ?? '') }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-mono focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-[#25D366] focus:ring-[#25D366]">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Webhook Verify Token') }}</label>
                                 <input type="text" name="wa_webhook_verify_token" value="{{ old('wa_webhook_verify_token', $instance->webhook_verify_token ?? '') }}"
                                        placeholder="{{ __('auto-generated if blank') }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-mono focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-[#25D366] focus:ring-[#25D366]">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Access Token') }}</label>
@@ -126,7 +126,7 @@
                         <div class="px-6 pb-6 border-t border-gray-100 pt-4">
                             @if($webhookUrl)
                                 <p class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Webhook URL (paste into Meta → WhatsApp → Configuration)') }}</p>
-                                <code class="block w-full rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-xs font-mono text-gray-700 break-all">{{ $webhookUrl }}</code>
+                                <code class="block w-full rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-xs font-data text-gray-700 break-all">{{ $webhookUrl }}</code>
                             @else
                                 <p class="text-xs text-gray-500">{{ __('Save your credentials to generate the webhook URL for Meta.') }}</p>
                             @endif
@@ -171,7 +171,7 @@
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Virtual Number (E.164)') }}</label>
                                 <input type="text" name="africastalking_virtual_number"
                                        value="{{ old('africastalking_virtual_number', $atNumber) }}" placeholder="+234..."
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-mono focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-[#25D366] focus:ring-[#25D366]">
                                 @error('africastalking_virtual_number')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                             </div>
                             <div>
@@ -244,7 +244,7 @@
                             <div class="relative sm:w-2/3">
                                 <input :type="showGemini ? 'text' : 'password'" name="gemini_api_key"
                                        placeholder="{{ $geminiKeySet ? '••••••••••••••••' : __('Enter key') }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-mono focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-data focus:border-[#25D366] focus:ring-[#25D366]">
                                 <button type="button" @click="showGemini = !showGemini"
                                         class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
                                         :title="showGemini ? '{{ __('Hide') }}' : '{{ __('Show') }}'">
@@ -274,9 +274,9 @@
                         <div class="p-6 space-y-4">
                             <p class="text-xs {{ $mailDelivering ? 'text-emerald-600' : 'text-amber-600' }}">
                                 @if($mailDelivering)
-                                    {{ __('✓ Active transport:') }} <span class="font-mono">{{ $mailMailer }}</span> — {{ __('campaigns will deliver.') }}
+                                    {{ __('✓ Active transport:') }} <span class="font-data">{{ $mailMailer }}</span> — {{ __('campaigns will deliver.') }}
                                 @else
-                                    {{ __('⚠ Current transport:') }} <span class="font-mono">{{ $mailMailer }}</span> — {{ __('this does not deliver (campaigns report sent, nothing arrives). Choose SMTP below.') }}
+                                    {{ __('⚠ Current transport:') }} <span class="font-data">{{ $mailMailer }}</span> — {{ __('this does not deliver (campaigns report sent, nothing arrives). Choose SMTP below.') }}
                                 @endif
                             </p>
 
@@ -324,7 +324,7 @@
                                         <div class="relative">
                                             <input :type="showMailPass ? 'text' : 'password'" name="mail_password"
                                                    placeholder="{{ $mailPasswordSet ? '••••••••••••' : __('SMTP password') }}" autocomplete="new-password"
-                                                   class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-mono focus:border-[#25D366] focus:ring-[#25D366]">
+                                                   class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-data focus:border-[#25D366] focus:ring-[#25D366]">
                                             <button type="button" @click="showMailPass = !showMailPass"
                                                     class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
                                                     :title="showMailPass ? '{{ __('Hide') }}' : '{{ __('Show') }}'">

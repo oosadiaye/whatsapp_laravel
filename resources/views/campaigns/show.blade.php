@@ -110,7 +110,7 @@
                                     {{ __('This campaign started over 5 minutes ago but no messages have been sent yet.') }}
                                 @endif
                                 {{ __('On the server, run:') }}
-                                <code class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 font-mono text-xs">php artisan queue:work --queue=default,messages</code>
+                                <code class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 font-data text-xs">php artisan queue:work --queue=default,messages</code>
                                 {{ __('or check Horizon / supervisord status.') }}
                             </p>
                         </div>
