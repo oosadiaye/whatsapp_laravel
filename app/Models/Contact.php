@@ -36,6 +36,14 @@ class Contact extends Model
         'name',
         'custom_fields',
         'is_active',
+        // Email lead-scoring (written by EmailLeadScoringService). Without these
+        // in $fillable, update() silently dropped every score — computed but
+        // never persisted.
+        'email_lead_score',
+        'email_open_count',
+        'email_click_count',
+        'email_reply_count',
+        'last_email_engagement_at',
     ];
 
     protected function casts(): array
@@ -43,6 +51,11 @@ class Contact extends Model
         return [
             'custom_fields' => 'array',
             'is_active' => 'boolean',
+            'email_lead_score' => 'integer',
+            'email_open_count' => 'integer',
+            'email_click_count' => 'integer',
+            'email_reply_count' => 'integer',
+            'last_email_engagement_at' => 'datetime',
         ];
     }
 
