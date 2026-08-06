@@ -28,7 +28,8 @@ class VerifyVoiceLive extends Command
 {
     protected $signature = 'voice:verify-live
         {--to= : Optional customer number to place a real test outbound call to (E.164, e.g. +2348012345678)}
-        {--no-call : Skip placing the test call even when --to is passed}';
+        {--no-call : Skip placing the test call even when --to is passed}
+        {--watch : After placing the test call, follow its lifecycle with voice:watch}';
 
     protected $description = 'Phase 0 gate: verify the Africa\'s Talking voice integration against a live account';
 
@@ -100,6 +101,16 @@ class VerifyVoiceLive extends Command
                 $this->line('  The customer phone should ring. On answer, AT requests the voice');
                 $this->line('  callback; the webhook must return <Dial agent_{userId}/> and the');
                 $this->line('  agent\'s browser softphone must receive the bridged leg.');
+                $this->line('');
+                $this->line('  Follow the call live (status transitions + validation report):');
+                $this->line("      php artisan voice:watch --session={$sessionId}");
+
+                if ((bool) $this->option('watch')) {
+                    $this->newLine();
+                    $this->line('  Entering voice:watch — Ctrl+C to stop.');
+                    $exit = $this->call('voice:watch', ['--session' => $sessionId]);
+                    $failures += $exit === self::SUCCESS ? 0 : 1;
+                }
             } catch (ConfigurationException $e) {
                 $this->error("  ✗ Not configured: {$e->getMessage()}");
                 $failures++;

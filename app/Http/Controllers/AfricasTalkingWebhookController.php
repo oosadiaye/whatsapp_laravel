@@ -102,6 +102,12 @@ class AfricasTalkingWebhookController extends Controller
             return response('ok', 200);
         }
 
+        // Append the callback to the call's raw event timeline (parity with
+        // InboundCallProcessor on the Meta side) so the Phase 0 validator and
+        // the /calls debugging story can see exactly which statuses AT sent.
+        $call->appendRawEvent(strtolower((string) ($status ?? 'unknown')), $event);
+        $call->save();
+
         match ($status) {
             'Ringing' => $call->update(['status' => CallLog::STATUS_RINGING]),
             'InProgress' => $call->update([
@@ -175,6 +181,11 @@ class AfricasTalkingWebhookController extends Controller
             'from_phone' => $callerPhone,
             'to_phone' => $event['destinationNumber'] ?? '',
         ]);
+
+        // Seed the raw event timeline with the triggering callback so the
+        // Phase 0 validator can confirm the webhook actually reached the app.
+        $call->appendRawEvent('inbound_first', $event);
+        $call->save();
 
         if (config('voice.queue_enabled')) {
             // Serialise the read-then-write position calc so two inbound calls

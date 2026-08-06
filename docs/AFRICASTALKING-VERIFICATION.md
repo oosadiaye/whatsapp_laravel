@@ -18,11 +18,35 @@ prerequisite that needs no live call and prints the ordered checklist:
 php artisan voice:verify-live                                  # checks only
 php artisan voice:verify-live --to=+2348012345678              # also places a real test outbound call
 php artisan voice:verify-live --to=+2348012345678 --no-call    # checks, skip the test call
+php artisan voice:verify-live --to=+2348012345678 --watch      # places the call, then follows it live
 ```
 
 Exit code `0` = all hard checks pass (the checklist still applies); `1` = a
 blocking prerequisite is missing (fix it before going live). Source:
 `app/Console/Commands/VerifyVoiceLive.php`.
+
+### Watch a live call and auto-validate it — `voice:watch`
+
+Every AT callback is now recorded on the call (`call_logs.raw_event_log`, same
+as Meta inbound), and `php artisan voice:watch` polls a call to its terminal
+state, printing status transitions and then a **structured validation report**
+(callbacks received · terminal state · contact/conversation linked · round-robin
+assignment (inbound) · provider session id · connected/duration/cost · answered
+in-browser). Exit `0` = all checks pass, `1` = something failed.
+
+```bash
+php artisan voice:watch --session=<atSessionId>   # follow the call verify-live just placed
+php artisan voice:watch                           # newest call, or the next one created
+php artisan voice:watch --timeout=300             # wait up to 5 min for a terminal state
+```
+
+For the **inbound** leg, start `php artisan voice:watch` in one terminal, then
+dial the virtual number from your mobile — the watcher picks up the call as the
+webhook creates it and validates the whole inbound path (assignment, agent
+answered, duration, cost).
+
+The report validates **persisted state only** — it cannot hear audio, so the
+manual checks (two-way audio, both legs dropping on hangup) still apply.
 
 ## Prerequisites
 - A live Africa's Talking account (not sandbox) with **Voice** enabled.

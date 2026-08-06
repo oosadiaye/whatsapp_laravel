@@ -96,6 +96,46 @@ class AfricasTalkingWebhookTest extends TestCase
         $this->assertStringContainsString('NO_ANSWER', $fresh->failure_reason);
     }
 
+    public function test_status_callbacks_append_to_raw_event_log(): void
+    {
+        $call = $this->makeOutboundCall(CallLog::STATUS_INITIATED, 'sess_rawevents');
+
+        $this->postWebhook([
+            'sessionId' => 'sess_rawevents',
+            'status' => 'Ringing',
+            'direction' => 'Outbound',
+        ])->assertOk();
+        $this->postWebhook([
+            'sessionId' => 'sess_rawevents',
+            'status' => 'Completed',
+            'direction' => 'Outbound',
+            'durationInSeconds' => '45',
+        ])->assertOk();
+
+        $events = array_column($call->fresh()->raw_event_log ?? [], 'event');
+        $this->assertSame(['ringing', 'completed'], $events);
+    }
+
+    public function test_inbound_first_event_seeds_raw_event_log(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
+        $admin->assignRole(User::ROLE_ADMIN);
+        WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+
+        $this->postWebhook([
+            'sessionId' => 'sess_inbound_rawevent',
+            'status' => 'Ringing',
+            'direction' => 'Inbound',
+            'callerNumber' => '+2348022222222',
+            'destinationNumber' => '+2348100000000',
+        ])->assertOk();
+
+        $call = CallLog::where('provider_session_id', 'sess_inbound_rawevent')->first();
+        $this->assertNotNull($call);
+        $events = array_column($call->fresh()->raw_event_log ?? [], 'event');
+        $this->assertSame(['inbound_first'], $events);
+    }
+
     public function test_inbound_first_event_creates_conversation_and_broadcasts_call_ringing(): void
     {
         Event::fake([CallRinging::class]);
