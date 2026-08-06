@@ -28,7 +28,10 @@ class CallCostDashboard extends Component
         $totalCalls = (clone $query)->count();
         $totalCost = (clone $query)->sum('cost_estimate_kobo');
         $totalDuration = (clone $query)->sum('duration_seconds');
-        $avgCost = $totalCalls > 0 ? $totalCost / $totalCalls : 0;
+        // Average over BILLED calls (cost > 0) only — rows that never connected
+        // have no charged duration and would otherwise dilute the per-call figure.
+        $costedCalls = (clone $query)->where('cost_estimate_kobo', '>', 0)->count();
+        $avgCost = $costedCalls > 0 ? $totalCost / $costedCalls : 0;
 
         $recent = (clone $query)
             ->with('contact')

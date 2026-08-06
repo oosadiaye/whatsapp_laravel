@@ -98,6 +98,14 @@ const recorder = {
             return; // no capturable audio tracks — skip recording
         }
 
+        // resume() before capturing — a fresh AudioContext can start
+        // 'suspended' under the browser's autoplay policy, which would silently
+        // record silence. If the resume is still pending when MediaRecorder
+        // starts, the graph simply begins capturing once audio flows.
+        try {
+            if (mixed.context.state === 'suspended') mixed.context.resume();
+        } catch { /* context may already be closed */ }
+
         const mime = pickMimeType();
         let mr;
         try {
@@ -151,11 +159,17 @@ const recorder = {
         form.append('audio', blob, `call-${callId}.${ext}`);
 
         try {
+            // keepalive:true keeps the upload alive across the tab navigation
+            // that follows hangup — a plain fetch would be aborted and the
+            // recording lost. The keepalive payload budget is ~64KB; larger
+            // blobs fall back to a regular fetch (still best-effort).
+            const keepalive = blob.size <= 60 * 1024;
             await fetch(`/calls/${callId}/recording`, {
                 method: 'POST',
                 headers: { 'X-CSRF-TOKEN': csrfToken(), Accept: 'application/json' },
                 body: form,
                 credentials: 'same-origin',
+                keepalive,
             });
         } catch (e) {
             console.warn('[BQ recorder] recording upload failed', e);

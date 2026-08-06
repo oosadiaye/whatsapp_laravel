@@ -21,17 +21,25 @@
 // RUNTIME NOTE: africastalking-client@1.0.7 has a module-cache state-leak bug
 // where a static `import` retains broken WebSocket state across reconnect
 // attempts, creating a zombie client that never emits `ready`. To avoid this
-// the SDK is NOT imported via npm — it is loaded from CDN (see the <script>
-// tag in layouts/app.blade.php). On reconnect the script is removed and
-// re-loaded with a cache-busting query param so the module cache is bypassed.
+// the SDK is NOT imported via npm — it is loaded from the SELF-HOSTED script in
+// layouts/app.blade.php (vendor/africastalking-1.0.7.js), keeping the CSP
+// same-origin and the supply chain audited. On reconnect the script is removed
+// and re-loaded with a cache-busting query param so the module cache is bypassed.
 
 import { startStatsCollection, postQuality } from './call-stats-collector';
 import { createCallStateMixin } from './call-state-mixin';
 import { iceServers } from './ice-servers';
 
-const AT_SDK_URL = 'https://unpkg.com/africastalking-client@1.0.7/build/africastalking.js';
+// Reuse the already-loaded self-hosted SDK's URL for reloads (never an external
+// CDN — same-origin CSP + pinned/audited artifact). The layout's <script> tag
+// carries data-at-sdk; a page without it still resolves to the canonical path.
+const AT_SDK_SRC = (() => {
+    const existing = document.querySelector('script[data-at-sdk]')?.getAttribute('src');
+    return existing || '/vendor/africastalking-1.0.7.js';
+})();
 
-/** Load the AT WebRTC SDK from CDN (first load) or force-reload it (reconnect). */
+/** Load the AT WebRTC SDK from the self-hosted script (first load) or
+ *  force-reload it (reconnect). Resolves true when the SDK is present. */
 function loadAtSdk(forceReload = false) {
     if (!forceReload && typeof window.Africastalking?.Client !== 'undefined') {
         return Promise.resolve(true);
@@ -40,9 +48,8 @@ function loadAtSdk(forceReload = false) {
     delete window.Africastalking;
     return new Promise((resolve) => {
         const s = document.createElement('script');
-        s.src = `${AT_SDK_URL}?t=${Date.now()}`;
+        s.src = `${AT_SDK_SRC}?t=${Date.now()}`;
         s.async = true;
-        s.crossOrigin = 'anonymous';
         s.dataset.atSdk = '';
         const timer = setTimeout(() => { s.remove(); resolve(false); }, 15000);
         s.onload = () => { clearTimeout(timer); setTimeout(() => resolve(true), 100); };
@@ -52,19 +59,51 @@ function loadAtSdk(forceReload = false) {
 }
 
 // ─── Persistent softphone singleton ─────────────────────────────────────
-// One registered client per page. The per-call Alpine banners attach()
-// themselves so SDK events route to whichever call is currently on screen.
+// One registered client per page. Per-call Alpine banners register themselves
+// so SDK events route to the right call. Because the UI can show more than one
+// banner at once (e.g. an outbound call up while an inbound rings), routing
+// matches `incomingcall` to the banner expecting that caller's number instead
+// of blindly handing it to whichever banner attached last.
 window.bqVoiceClient = {
     client: null,
     ready: false,
-    banner: null,
     _booted: false,
+    // All attached banners, oldest first. The most recent is the "primary".
+    _banners: [],
     // Buffer the most recent incoming call from AT. The banner that handles
     // it (outbound auto-answer / inbound accept) is mounted by a 3s Livewire
     // poll, so AT's `incomingcall` event can arrive BEFORE the banner has
-    // attached to this client. We stash it and replay it on attach() so the
-    // call is never silently dropped.
+    // attached. We stash it and replay it on attach() so the call is never
+    // silently dropped.
     _lastIncoming: null,
+
+    _primaryBanner() {
+        return this._banners[this._banners.length - 1] ?? null;
+    },
+
+    /**
+     * Route an AT `incomingcall` to the banner that is expecting this caller.
+     * The SDK payload doesn't expose a stable call id across versions, but it
+     * does carry the far-party number — match that against each banner's
+     * phone (inbound) / customerPhone (outbound). Falls back to the primary
+     * banner when no number can be derived.
+     */
+    _routeIncoming(params) {
+        const phone = String(
+            params?.phoneNumber ?? params?.from ?? params?.callerNumber ?? params?.from_number ?? ''
+        ).replace(/\D/g, '');
+        if (phone) {
+            const expecting = this._banners.find((b) => {
+                const want = String(b.phone ?? b.customerPhone ?? '').replace(/\D/g, '');
+                return want !== '' && want === phone;
+            });
+            if (expecting) {
+                expecting.onIncoming?.(params);
+                return;
+            }
+        }
+        this._primaryBanner()?.onIncoming?.(params);
+    },
 
     /** Register the WebRTC client with a real AT capability token. Idempotent. */
     boot(token) {
@@ -77,8 +116,7 @@ window.bqVoiceClient = {
             // Pass ICE servers (STUN + optional TURN) best-effort. africastalking-
             // client@1.0.7's constructor is token-first; some builds read a second
             // options arg for iceServers, others ignore it. Harmless either way —
-            // if honoured, restrictive-NAT callers get a TURN relay. (Verify
-            // against a live AT account whether this build actually applies it.)
+            // if honoured, restrictive-NAT callers get a TURN relay.
             this.client = new window.Africastalking.Client(token, { iceServers: iceServers() });
         } catch (e) {
             console.error('[BQ Voice] failed to construct AT client', e);
@@ -100,45 +138,60 @@ window.bqVoiceClient = {
         });
         on('calling', () => {});
         on('closed', () => {});
-        // Route call lifecycle to the active banner (if any).
+        // Route call lifecycle to the banner that's expecting this call.
         on('incomingcall', (params) => {
             this._lastIncoming = params;
-            this.banner?.onIncoming?.(params);
+            this._routeIncoming(params);
         });
-        on('callaccepted', () => { this.banner?.onAccepted?.(); });
-        on('hangup', (cause) => { this.banner?.onHangup?.(cause); });
-        on('error', (err) => { console.error('[BQ Voice] SDK error', err); this.banner?.onError?.(err); });
+        on('callaccepted', () => { this._primaryBanner()?.onAccepted?.(); });
+        on('hangup', (cause) => { this._primaryBanner()?.onHangup?.(cause); });
+        on('error', (err) => { console.error('[BQ Voice] SDK error', err); this._primaryBanner()?.onError?.(err); });
     },
 
-    /** Tear down, force-reload the SDK from CDN (bypassing buggy module cache),
-     *  wait the recommended 5s, then re-boot with the meta tag token. */
+    /** Tear down, force-reload the SDK (bypassing the buggy module cache), wait
+     *  the recommended 5s, then re-boot — with bounded retries so a transient
+     *  network blip doesn't leave the softphone dead until a manual reload. */
     async _scheduleReboot() {
-        // Clean up existing client state.
         this.ready = false;
         this._booted = false;
         try { this.client?.hangup(); } catch { /* ignore */ }
         this.client = null;
-        this.banner = null;
+        // Banners stay registered: client.hangup() above fires `hangup` on any
+        // connected banner (which tears down + detaches itself), while ringing
+        // banners remain so an event arriving right after the client comes back
+        // isn't dropped. A stale buffered call, though, must not be replayed.
         this._lastIncoming = null;
 
         await new Promise(r => setTimeout(r, 5000));
         const token = document.querySelector('meta[name="at-voice-token"]')?.getAttribute('content');
         if (!token) return;
-        const ok = await loadAtSdk(true);
-        if (ok) this.boot(token);
+
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const ok = await loadAtSdk(true);
+            if (ok) {
+                this.boot(token);
+                if (this._booted) return; // construction succeeded; `ready` fires async
+            }
+            await new Promise(r => setTimeout(r, 5000));
+        }
     },
 
     attach(banner) {
-        this.banner = banner;
+        this._banners.push(banner);
         // Replay a call that reached us before this banner attached (the
         // poll that mounts the banner can lag AT's incomingcall event).
         if (this._lastIncoming) {
             const pending = this._lastIncoming;
             this._lastIncoming = null;
-            banner.onIncoming?.(pending);
+            this._routeIncoming(pending);
         }
     },
-    detach(banner) { if (this.banner === banner) this.banner = null; },
+    detach(banner) {
+        this._banners = this._banners.filter(b => b !== banner);
+        // A buffered call that outlived its banner is stale — drop it so a
+        // future attach doesn't deliver a ghost call.
+        this._lastIncoming = null;
+    },
 
     isAvailable() { return !!this.client; },
     answer() { try { this.client?.answer(); } catch (e) { console.warn('[BQ Voice] answer failed', e); } },
@@ -178,21 +231,42 @@ window.outgoingCall = (data) => ({
     held: false,
     keypadOpen: false,
     _statsHandle: null,
+    _echoChannel: null,
 
     init() {
         const vc = window.bqVoiceClient;
         if (!vc || !vc.isAvailable()) {
             this.state = 'failed';
             this.errorMessage = "Voice softphone not registered. Configure Africa's Talking in Settings, then reload.";
+            // The server already dialed the customer and is waiting for our leg
+            // to bridge; with no client registered it can never answer, so end
+            // the server-side call rather than leaving the customer ringing into
+            // a void. Best-effort.
+            this.safePost(`/calls/${this.callId}/hangup`, {});
             return;
         }
         vc.attach(this);
 
         // Server-side terminate (manager kill / natural end) clears the banner.
         if (window.userId && window.Echo) {
-            window.Echo.private(`user.${window.userId}`).listen('.call.terminated', (e) => {
+            this._echoChannel = window.Echo.private(`user.${window.userId}`);
+            this._echoChannel.listen('.call.terminated', (e) => {
                 if (e.call_id === this.callId) this.teardown('remote');
             });
+        }
+    },
+
+    /**
+     * Alpine destroy() — frees the Reverb listener and tears down when the
+     * banner's DOM is removed. Prevents handler accumulation on re-mounts.
+     */
+    destroy() {
+        if (this._echoChannel) {
+            try { this._echoChannel.stopListening('.call.terminated'); } catch (_) {}
+            this._echoChannel = null;
+        }
+        if (this.state !== 'ended' && this.state !== 'failed') {
+            this.teardown('component_destroyed');
         }
     },
 
@@ -213,8 +287,24 @@ window.outgoingCall = (data) => ({
     },
     onHangup() { this.teardown('remote'); },
     onError(err) {
+        // Mic permission denied surfaces as an SDK error on the auto-answer
+        // path. Give the agent a retry state instead of a dead-end 'failed'.
+        const raw = String(err?.message ?? err?.name ?? err ?? '');
+        if (this.state === 'connecting' && (/permission|microphone|notallowed/i.test(raw))) {
+            this.state = 'mic_denied';
+            this.errorMessage = '';
+            return;
+        }
         this.errorMessage = String(err?.message ?? err ?? 'unknown');
         if (this.state !== 'connected') this.state = 'failed';
+    },
+
+    /** Retry answer after the mic prompt was denied (re-prompts unless the
+     *  origin is permanently blocked in browser settings). */
+    retryAccept() {
+        this.errorMessage = '';
+        this.state = 'connecting';
+        window.bqVoiceClient?.answer();
     },
 
     _tryStats() {
@@ -237,13 +327,7 @@ window.outgoingCall = (data) => ({
     sendDtmf(digit) { window.bqVoiceClient.dtmf(digit); },
 
     async hangup() {
-        try {
-            await fetch(`/calls/${this.callId}/hangup`, {
-                method: 'POST',
-                headers: { 'X-CSRF-TOKEN': this.csrf, 'Accept': 'application/json' },
-                credentials: 'same-origin',
-            });
-        } catch (e) { console.warn('hangup post failed', e); }
+        await this.safePost(`/calls/${this.callId}/hangup`, {});
         window.bqVoiceClient.hangupCall();
         this.teardown('agent');
     },
@@ -272,6 +356,8 @@ window.incomingAtCall = (data) => ({
     _statsHandle: null,
     _incomingArrived: false,
     _answerPending: false,
+    _acceptTimeout: null,
+    _echoChannel: null,
 
     init() {
         if (this.state === 'ringing') window.bqStartRingtone?.();
@@ -280,17 +366,35 @@ window.incomingAtCall = (data) => ({
         if (vc?.isAvailable()) vc.attach(this);
 
         if (window.userId && window.Echo) {
-            const channel = window.Echo.private(`user.${window.userId}`);
-            channel.listen('.call.claimed', (event) => {
+            this._echoChannel = window.Echo.private(`user.${window.userId}`);
+            this._echoChannel.listen('.call.claimed', (event) => {
+                // State guard: a late claim event must not yank a live call.
                 if (event.call_id === this.callId
-                    && event.claimed_by_session_id !== this.sessionId) {
+                    && event.claimed_by_session_id !== this.sessionId
+                    && this.state === 'ringing') {
                     this.state = 'claimed_elsewhere';
                     window.bqStopRingtone?.();
                 }
             });
-            channel.listen('.call.terminated', (event) => {
+            this._echoChannel.listen('.call.terminated', (event) => {
                 if (event.call_id === this.callId) this.teardown('remote');
             });
+        }
+    },
+
+    /**
+     * Alpine destroy() — frees listeners/accept timer and tears down when the
+     * banner's DOM is removed. Prevents handler accumulation on re-mounts.
+     */
+    destroy() {
+        this._clearAcceptTimeout();
+        if (this._echoChannel) {
+            try { this._echoChannel.stopListening('.call.claimed'); } catch (_) {}
+            try { this._echoChannel.stopListening('.call.terminated'); } catch (_) {}
+            this._echoChannel = null;
+        }
+        if (this.state !== 'terminated') {
+            this.teardown('component_destroyed');
         }
     },
 
@@ -299,6 +403,7 @@ window.incomingAtCall = (data) => ({
     // Accept can answer immediately.
     onIncoming() {
         this._incomingArrived = true;
+        this._clearAcceptTimeout();
         if (this._answerPending) {
             this._answerPending = false;
             window.bqVoiceClient.answer();
@@ -314,6 +419,12 @@ window.incomingAtCall = (data) => ({
     },
     onHangup() { this.teardown('remote'); },
     onError(err) {
+        // Only pre-connect errors flip the card to connect_failed. A transient
+        // SDK error mid-call must NOT tear down a connected card.
+        if (this.state === 'connected') {
+            console.warn('[BQ incomingAtCall] SDK error during active call', err);
+            return;
+        }
         this.errorMessage = `AT SDK: ${err?.message ?? err ?? 'unknown'}`;
         this.state = 'connect_failed';
     },
@@ -321,6 +432,13 @@ window.incomingAtCall = (data) => ({
     _tryStats() {
         const peer = window.bqVoiceClient.peer();
         if (peer) this._statsHandle = startStatsCollection(peer);
+    },
+
+    _clearAcceptTimeout() {
+        if (this._acceptTimeout) {
+            clearTimeout(this._acceptTimeout);
+            this._acceptTimeout = null;
+        }
     },
 
     async acceptCall() {
@@ -343,9 +461,20 @@ window.incomingAtCall = (data) => ({
                 throw new Error("Voice softphone not registered — reload the page (check Africa's Talking settings / script blockers).");
             }
             // Answer the AT leg. If the incomingcall hasn't arrived yet, defer
-            // until onIncoming fires.
+            // until onIncoming fires — but bound the wait so a never-arriving
+            // leg can't leave the banner in 'connecting' forever.
             if (this._incomingArrived) vc.answer();
-            else this._answerPending = true;
+            else {
+                this._answerPending = true;
+                this._acceptTimeout = setTimeout(() => {
+                    this._answerPending = false;
+                    this._acceptTimeout = null;
+                    if (this.state === 'connecting') {
+                        this.state = 'connect_failed';
+                        this.errorMessage = 'The voice leg never arrived. Try again, or decline.';
+                    }
+                }, 20000);
+            }
         } catch (error) {
             const msg = error?.message ?? String(error);
             console.error(`[BQ incomingAtCall] phase=${phase} failed:`, error);
@@ -369,13 +498,13 @@ window.incomingAtCall = (data) => ({
 
     async declineCall() {
         window.bqStopRingtone?.();
-        await this.post(`/calls/${this.callId}/decline`, {});
+        await this.safePost(`/calls/${this.callId}/decline`, {});
         window.bqVoiceClient?.hangupCall();
         this.teardown('agent');
     },
 
     async hangup() {
-        await this.post(`/calls/${this.callId}/hangup`, {});
+        await this.safePost(`/calls/${this.callId}/hangup`, {});
         window.bqVoiceClient?.hangupCall();
         this.teardown('agent');
     },
@@ -396,6 +525,7 @@ window.incomingAtCall = (data) => ({
 
     teardown(reason) {
         window.bqStopRingtone?.();
+        this._clearAcceptTimeout();
         this.stopDurationTimer();
         window.bqCallRecorder?.stop();  // flush + upload the recording, if any
         const aggregate = this._statsHandle?.stop();

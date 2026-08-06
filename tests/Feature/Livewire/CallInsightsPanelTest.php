@@ -146,6 +146,26 @@ class CallInsightsPanelTest extends TestCase
         Bus::assertNotDispatched(TranscribeCallRecording::class);
     }
 
+    public function test_reanalyse_is_a_noop_while_a_job_is_already_in_flight(): void
+    {
+        Bus::fake();
+        config(['services.gemini.key' => 'k']);
+
+        $admin = $this->makeUser('admin');
+        $call = CallLog::factory()->create([
+            'recording_path' => 'call-recordings/rec.webm',
+            'ai_status' => CallLog::AI_STATUS_PROCESSING,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CallInsightsPanel::class, ['callId' => $call->id])
+            ->call('reanalyse');
+
+        // The atomic read-then-write guard must not stack a second job.
+        Bus::assertNotDispatched(TranscribeCallRecording::class);
+        $this->assertSame(CallLog::AI_STATUS_PROCESSING, $call->fresh()->ai_status);
+    }
+
     private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([

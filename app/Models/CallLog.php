@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\PreservedJsonArray;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,22 +16,34 @@ class CallLog extends Model
     use HasFactory;
 
     public const DIRECTION_INBOUND = 'inbound';
+
     public const DIRECTION_OUTBOUND = 'outbound';
 
     /** AI/transcription pipeline states driving the Call Workspace panel. */
     public const AI_STATUS_NONE = 'none';           // nothing captured yet
+
     public const AI_STATUS_PENDING = 'pending';     // recording uploaded, queued
+
     public const AI_STATUS_PROCESSING = 'processing'; // Gemini call in flight
+
     public const AI_STATUS_COMPLETED = 'completed';
+
     public const AI_STATUS_FAILED = 'failed';
+
     public const AI_STATUS_UNAVAILABLE = 'unavailable'; // recording disabled/unsupported
 
     public const STATUS_INITIATED = 'initiated';
+
     public const STATUS_RINGING = 'ringing';
+
     public const STATUS_CONNECTED = 'connected';
+
     public const STATUS_ENDED = 'ended';
+
     public const STATUS_MISSED = 'missed';
+
     public const STATUS_DECLINED = 'declined';
+
     public const STATUS_FAILED = 'failed';
 
     public const STATUSES_IN_FLIGHT = [
@@ -47,6 +60,7 @@ class CallLog extends Model
     ];
 
     public const PROVIDER_META_WHATSAPP = 'meta_whatsapp';
+
     public const PROVIDER_AFRICAS_TALKING = 'africas_talking';
 
     public const PROVIDERS = [
@@ -89,6 +103,8 @@ class CallLog extends Model
         'ai_key_points',
         'ai_status',
         'ai_error',
+        'disposition',
+        'wrap_up_at',
     ];
 
     protected function casts(): array
@@ -102,7 +118,7 @@ class CallLog extends Model
             'duration_seconds' => 'integer',
             'raw_event_log' => 'array',
             'ai_key_points' => 'array',
-            'quality_metrics' => \App\Casts\PreservedJsonArray::class,
+            'quality_metrics' => PreservedJsonArray::class,
         ];
     }
 

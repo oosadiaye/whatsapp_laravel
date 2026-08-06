@@ -22,7 +22,15 @@ export function startStatsCollection(peer) {
         try {
             const report = await peer.getStats();
             const sample = extractRelevantStats(report);
-            if (sample) samples.push(sample);
+            if (sample) {
+                samples.push(sample);
+                // Bound against the server's samples_captured cap (1000) so a
+                // very long call can't exceed it and 422 on hangup.
+                if (samples.length >= 1000) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                }
+            }
         } catch (e) {
             // Peer torn down between tick scheduling and getStats invocation.
             // Swallow — losing 1-2 samples is invisible to averages.
@@ -40,7 +48,7 @@ export function startStatsCollection(peer) {
 }
 
 function extractRelevantStats(report) {
-    let inboundRtp, candidatePair, codec;
+    let inboundRtp, candidatePair, codec, localCandidate;
     report.forEach((stat) => {
         if (stat.type === 'inbound-rtp' && stat.kind === 'audio') {
             inboundRtp = stat;
@@ -53,6 +61,14 @@ function extractRelevantStats(report) {
         }
     });
 
+    // Resolve the local candidate's TYPE from its own stat record. The
+    // candidate-pair only references the candidate by id, and Chrome's ids are
+    // "0"/"1" — string-matching the id (the old approach) always returned
+    // 'unknown'. The candidate stat's candidateType is the real value.
+    if (candidatePair?.localCandidateId) {
+        localCandidate = report.get(candidatePair.localCandidateId);
+    }
+
     if (!inboundRtp) return null;
 
     return {
@@ -60,7 +76,7 @@ function extractRelevantStats(report) {
         packets_lost: inboundRtp.packetsLost ?? 0,
         packets_received: inboundRtp.packetsReceived ?? 0,
         rtt_ms: (candidatePair?.currentRoundTripTime ?? 0) * 1000,
-        ice_local_id: candidatePair?.localCandidateId,
+        ice_candidate_type: localCandidate?.candidateType ?? 'unknown',
         codec_mime_type: codec?.mimeType,
     };
 }
@@ -88,23 +104,9 @@ function aggregate(samples) {
                 : 0,
         avg_rtt_ms: Math.round(avg('rtt_ms')),
         samples_captured: samples.length,
-        ice_candidate_type: deriveIceType(last.ice_local_id),
+        ice_candidate_type: last.ice_candidate_type || 'unknown',
         codec: deriveCodec(last.codec_mime_type),
     };
-}
-
-function deriveIceType(localCandidateId) {
-    // candidate-pair.localCandidateId references a separate stat in the report.
-    // For v1 we accept that ice_candidate_type may be 'unknown' if the browser
-    // doesn't surface the type in the candidate-pair sub-record. Most browsers
-    // do; Safari may delay.
-    if (!localCandidateId) return 'unknown';
-    const lower = localCandidateId.toLowerCase();
-    if (lower.includes('relay')) return 'relay';
-    if (lower.includes('srflx')) return 'srflx';
-    if (lower.includes('prflx')) return 'prflx';
-    if (lower.includes('host')) return 'host';
-    return 'unknown';
 }
 
 function deriveCodec(mimeType) {
@@ -134,6 +136,8 @@ export async function postQuality(callId, csrfToken, aggregate) {
             },
             credentials: 'same-origin',
             body: JSON.stringify(aggregate),
+            // Keep the post alive across the hangup-time navigation.
+            keepalive: true,
         });
     } catch (e) {
         console.warn('quality post failed (non-fatal)', e);

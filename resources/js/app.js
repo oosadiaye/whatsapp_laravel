@@ -27,6 +27,27 @@ window.Echo = new Echo({
 const userIdMeta = document.querySelector('meta[name="user-id"]');
 window.userId = userIdMeta ? parseInt(userIdMeta.getAttribute('content'), 10) : null;
 
+// Real-time ringing: the server broadcasts CallRinging on the agent's private
+// channel, but no client consumed it — inbound banners were entirely poll-bound
+// (up to 3s of latency). Subscribe ONCE here so a new INBOUND call rings
+// immediately, then asks RealtimePulse to re-render so the banner mounts now
+// rather than on the next tick. bqStartRingtone is idempotent, so the banner's
+// own start call later is a no-op, not a double-ring.
+//
+// Direction gate: CallRinging is also broadcast for calls the agent PLACED
+// (outbound) and for transfer targets. An agent who dialed a customer must not
+// hear "incoming call" ring for their own call, so we only act on inbound
+// events here — the outbound banner shows its own "Calling…" UI.
+if (window.userId && window.Echo) {
+    window.Echo.private(`user.${window.userId}`).listen('.call.ringing', (event) => {
+        if (!event?.call_id || event.direction !== 'inbound') return;
+        window.bqStartRingtone?.();
+
+        // Mount the banner immediately instead of waiting for the 3s poll tick.
+        window.Livewire?.dispatch('realtime-pulse:refresh');
+    });
+}
+
 // Idempotent Alpine bootstrap.
 //
 // Why the guard: Livewire 4 ships its own Alpine bundle internally and starts
@@ -405,12 +426,12 @@ window.realtimePulse = () => ({
         const currentIds = calls.map(c => c.id);
         const newIds = currentIds.filter(id => !this.seenCallIds.includes(id));
 
-        // New incoming call → ring + (optional) notification
+        // New incoming call → ring + (optional) notification. Use the idempotent
+        // bqStartRingtone (guarded by bqAudioState.ringingNow) instead of poking
+        // the <audio> element directly — the banner factory also rings, and the
+        // direct poke previously double-played the mp3.
         if (newIds.length > 0) {
-            const audio = document.getElementById('bq-ringtone');
-            if (audio && this.audioUnlocked) {
-                audio.play().catch(() => {});
-            }
+            window.bqStartRingtone?.();
 
             // Also fire a desktop notification for the new call (always,
             // not just when tab unfocused — calls are more important than chat)
@@ -433,11 +454,7 @@ window.realtimePulse = () => ({
 
         // No active calls → stop audio
         if (currentIds.length === 0) {
-            const audio = document.getElementById('bq-ringtone');
-            if (audio) {
-                audio.pause();
-                audio.currentTime = 0;
-            }
+            window.bqStopRingtone?.();
         }
 
         this.seenCallIds = currentIds;

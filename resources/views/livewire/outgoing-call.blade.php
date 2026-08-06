@@ -60,4 +60,25 @@
             </div>
         </div>
     </template>
+
+    {{-- Microphone denied (outbound auto-answer re-prompts on retry) --}}
+    <template x-if="state === 'mic_denied'">
+        <div class="fixed bottom-5 right-5 z-50 w-[360px] max-w-[calc(100vw-2.5rem)] bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 overflow-hidden">
+            <div class="px-5 py-5">
+                <div class="flex items-start gap-3">
+                    <span class="grid place-items-center w-10 h-10 rounded-full bg-red-100 text-red-600 shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M3 3l18 18M9.75 9.348A3 3 0 019 7.5V4.5a3 3 0 015.856-.917"/></svg>
+                    </span>
+                    <div class="flex-1 text-sm">
+                        <p class="font-semibold text-gray-900">{{ __('Microphone blocked') }}</p>
+                        <p class="text-xs text-gray-500 mt-0.5">{{ __('Allow mic access in the browser prompt (or the camera/mic icon in the address bar), then try again.') }}</p>
+                    </div>
+                </div>
+                <div class="mt-4 grid grid-cols-2 gap-3">
+                    <button type="button" @click="dismiss()" class="h-11 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition">{{ __('Close') }}</button>
+                    <button type="button" @click="retryAccept()" class="h-11 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition">{{ __('Try again') }}</button>
+                </div>
+            </div>
+        </div>
+    </template>
 </div>

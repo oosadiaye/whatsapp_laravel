@@ -7,6 +7,7 @@ namespace App\Livewire;
 use App\Models\CallLog;
 use App\Models\Conversation;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -25,12 +26,25 @@ use Livewire\Component;
  */
 class RealtimePulse extends Component
 {
+    /**
+     * Client-driven refresh. Fired from app.js when a `call.ringing` broadcast
+     * arrives so the banner mounts immediately instead of waiting for the next
+     * 3-second poll tick. The empty body is deliberate — invoking the method
+     * triggers a full Livewire render cycle.
+     */
+    #[On('realtime-pulse:refresh')]
+    public function refresh(): void
+    {
+        // no-op: the render happens as the component's response
+    }
+
     public function render()
     {
         $user = Auth::user();
 
         if ($user === null) {
             return view('livewire.realtime-pulse', [
+                'inflightCallModels' => collect(),
                 'inflightCalls' => [],
                 'unreadMessages' => 0,
                 'missedCallsCount' => 0,
@@ -61,18 +75,18 @@ class RealtimePulse extends Component
         //                   realtime-ux-bundle-design.md section
         //                   "Permission scoping")
         if (! $user->can('conversations.view_all')) {
-            $callQuery->whereHas('conversation', fn ($q) =>
-                $q->where(fn ($qq) =>
-                    $qq->where('assigned_to_user_id', $user->id)
-                       ->orWhereNull('assigned_to_user_id')
-                )
+            $callQuery->whereHas('conversation', fn ($q) => $q->where(fn ($qq) => $qq->where('assigned_to_user_id', $user->id)
+                ->orWhereNull('assigned_to_user_id')
+            )
             );
         }
 
-        $inflightCalls = $callQuery
+        $inflightCallModels = $callQuery
             ->latest()
             ->limit(3)
-            ->get()
+            ->get();
+
+        $inflightCalls = $inflightCallModels
             ->map(fn ($call) => [
                 'id' => $call->id,
                 'conversation_id' => $call->conversation_id,
@@ -90,9 +104,8 @@ class RealtimePulse extends Component
         // rules as the call payload above.
         $messageQuery = Conversation::query();
         if (! $user->can('conversations.view_all')) {
-            $messageQuery->where(fn ($q) =>
-                $q->where('assigned_to_user_id', $user->id)
-                  ->orWhereNull('assigned_to_user_id')
+            $messageQuery->where(fn ($q) => $q->where('assigned_to_user_id', $user->id)
+                ->orWhereNull('assigned_to_user_id')
             );
         }
         $unreadMessages = (int) $messageQuery->sum('unread_count');
@@ -109,16 +122,15 @@ class RealtimePulse extends Component
             ->where('created_at', '>=', now()->subDay());
 
         if (! $user->can('conversations.view_all')) {
-            $missedQuery->whereHas('conversation', fn ($q) =>
-                $q->where(fn ($qq) =>
-                    $qq->where('assigned_to_user_id', $user->id)
-                       ->orWhereNull('assigned_to_user_id')
-                )
+            $missedQuery->whereHas('conversation', fn ($q) => $q->where(fn ($qq) => $qq->where('assigned_to_user_id', $user->id)
+                ->orWhereNull('assigned_to_user_id')
+            )
             );
         }
         $missedCallsCount = (int) $missedQuery->count();
 
         return view('livewire.realtime-pulse', [
+            'inflightCallModels' => $inflightCallModels,
             'inflightCalls' => $inflightCalls,
             'unreadMessages' => $unreadMessages,
             'missedCallsCount' => $missedCallsCount,

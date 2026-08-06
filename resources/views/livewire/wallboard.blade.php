@@ -67,11 +67,12 @@
             <div class="divide-y divide-gray-50">
                 @forelse ($agents as $agent)
                     @php $onCall = in_array($agent->id, $onCallUserIds, true); @endphp
+                    @php $offline = !$onCall && !($agent->is_online ?? false); @endphp
                     <div class="flex items-center gap-3 px-5 py-2.5">
-                        <span class="w-2.5 h-2.5 rounded-full shrink-0 {{ $onCall ? 'bg-violet-500' : ($presenceDot[$agent->presence_status] ?? 'bg-gray-300') }}"></span>
+                        <span class="w-2.5 h-2.5 rounded-full shrink-0 {{ $onCall ? 'bg-violet-500' : ($offline ? 'bg-gray-300' : ($presenceDot[$agent->presence_status] ?? 'bg-gray-300')) }}"></span>
                         <span class="text-sm text-gray-800 truncate flex-1">{{ $agent->name }}</span>
-                        <span class="text-[11px] font-medium {{ $onCall ? 'text-violet-600' : 'text-gray-400' }}">
-                            {{ $onCall ? __('On call') : ucfirst($agent->presence_status ?? __('offline')) }}
+                        <span class="text-[11px] font-medium {{ $onCall ? 'text-violet-600' : ($offline ? 'text-gray-400' : 'text-gray-500') }}">
+                            {{ $onCall ? __('On call') : ($offline ? __('Offline') : ucfirst($agent->presence_status ?? __('offline'))) }}
                         </span>
                     </div>
                 @empty

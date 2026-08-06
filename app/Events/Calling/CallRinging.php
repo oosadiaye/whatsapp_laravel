@@ -25,13 +25,11 @@ class CallRinging implements ShouldBroadcast
     use InteractsWithSockets;
     use SerializesModels;
 
-    public function __construct(public CallLog $call)
-    {
-    }
+    public function __construct(public CallLog $call) {}
 
     public function broadcastOn(): PrivateChannel
     {
-        return new PrivateChannel('user.' . $this->targetUserId());
+        return new PrivateChannel('user.'.$this->targetUserId());
     }
 
     /**
@@ -56,6 +54,9 @@ class CallRinging implements ShouldBroadcast
         return [
             'call_id' => $this->call->id,
             'meta_call_id' => $this->call->meta_call_id,
+            // Consumers use this to decide whether to ring/notify: an agent who
+            // PLACED an outbound call must not hear "Incoming call" for it.
+            'direction' => $this->call->direction,
             'contact_name' => $this->call->contact->display_name ?? null,
             'phone' => $this->call->from_phone,
             'sdp_offer' => $this->call->sdp_offer,

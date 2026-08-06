@@ -66,11 +66,20 @@ class CallInsightsPanel extends Component
         if (! $call->hasRecording() || ! filled(GeminiConfig::key())) {
             return;
         }
-        if (in_array($call->ai_status, [CallLog::AI_STATUS_PENDING, CallLog::AI_STATUS_PROCESSING], true)) {
-            return;
+
+        // Atomic guard: the conditional UPDATE only flips the status when it is
+        // NOT already pending/processing, so two simultaneous clicks (or two
+        // agents on the same call) can't both pass the read-then-write check and
+        // enqueue duplicate transcription jobs.
+        $transitioned = CallLog::query()
+            ->where('id', $call->id)
+            ->whereNotIn('ai_status', [CallLog::AI_STATUS_PENDING, CallLog::AI_STATUS_PROCESSING])
+            ->update(['ai_status' => CallLog::AI_STATUS_PENDING, 'ai_error' => null]);
+
+        if ($transitioned === 0) {
+            return; // another request already queued it
         }
 
-        $call->update(['ai_status' => CallLog::AI_STATUS_PENDING, 'ai_error' => null]);
         TranscribeCallRecording::dispatch($call->id);
     }
 

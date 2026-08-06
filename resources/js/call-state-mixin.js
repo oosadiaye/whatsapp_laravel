@@ -100,6 +100,27 @@ export function createCallStateMixin() {
         },
 
         /**
+         * Retryable POST for best-effort call-control actions (decline/hangup).
+         * One retry after a short backoff, then gives up and returns null. The
+         * caller always tears down locally regardless — a transient network
+         * failure must never strand the banner; the server's stale-call sweeper
+         * and provider disconnect webhook are the safety net.
+         */
+        async safePost(url, body) {
+            let lastError;
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    return await this.post(url, body);
+                } catch (e) {
+                    lastError = e;
+                    if (attempt === 0) await new Promise(r => setTimeout(r, 350));
+                }
+            }
+            console.warn('[call] control POST failed after retries', url, lastError);
+            return null;
+        },
+
+        /**
          * Best-effort JSON read on a non-OK response. Laravel's debug
          * error pages are HTML, not JSON — naive `await res.json()`
          * throws SyntaxError, masking the real status. Returns null

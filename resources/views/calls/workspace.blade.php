@@ -219,9 +219,14 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
 
-            {{-- WRAP-UP — shown when a recently-ended call has no disposition --}}
+            {{-- WRAP-UP — shown when a recently-ended call has no disposition.
+                 x-data hides the card client-side once saved or closed, so the
+                 operator isn't nagged until a full page reload. --}}
             @if($activeCall && !$activeCall->disposition && $activeCall->ended_at)
-                <div class="lg:col-span-2">
+                <div class="lg:col-span-2" x-data="{ wrapUpOpen: true }"
+                     x-show="wrapUpOpen"
+                     @wrap-up-saved.window="wrapUpOpen = false"
+                     @close-wrap-up.window="wrapUpOpen = false">
                     @livewire('call-wrap-up', ['call' => $activeCall], key('wrap-up-'.$activeCall->id))
                 </div>
             @endif

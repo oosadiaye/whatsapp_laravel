@@ -42,4 +42,25 @@ class CallEventChannelTest extends TestCase
         $this->assertSame('private-user.'.$placer->id, (new CallRinging($call))->broadcastOn()->name);
         $this->assertSame('private-user.'.$placer->id, (new CallTerminated($call, 'x'))->broadcastOn()->name);
     }
+
+    public function test_call_ringing_payload_carries_direction_for_consumer_gating(): void
+    {
+        // The client uses payload direction to decide whether to ring/notify:
+        // an agent who PLACED an outbound call must not hear "Incoming call"
+        // for their own dial, so outbound events must be distinguishable.
+        $agent = User::factory()->create();
+        $conv = Conversation::factory()->create(['assigned_to_user_id' => $agent->id]);
+        $inbound = CallLog::factory()->create([
+            'conversation_id' => $conv->id,
+            'direction' => CallLog::DIRECTION_INBOUND,
+        ]);
+        $outbound = CallLog::factory()->create([
+            'conversation_id' => $conv->id,
+            'direction' => CallLog::DIRECTION_OUTBOUND,
+        ]);
+
+        $this->assertSame(CallLog::DIRECTION_INBOUND, (new CallRinging($inbound))->broadcastWith()['direction']);
+        $this->assertSame(CallLog::DIRECTION_OUTBOUND, (new CallRinging($outbound))->broadcastWith()['direction']);
+        $this->assertSame($inbound->id, (new CallRinging($inbound))->broadcastWith()['call_id']);
+    }
 }

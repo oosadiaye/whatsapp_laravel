@@ -6,6 +6,8 @@ namespace App\Livewire;
 
 use App\Models\CallLog;
 use App\Models\User;
+use App\Services\RoundRobinAssigner;
+use Illuminate\Support\Carbon;
 use Livewire\Component;
 
 /**
@@ -22,17 +24,25 @@ class Wallboard extends Component
     {
         $liveCalls = CallLog::query()
             ->whereIn('status', CallLog::STATUSES_IN_FLIGHT)
-            ->with(['contact', 'placedBy'])
+            ->with(['contact', 'placedBy', 'conversation'])
             ->orderBy('started_at')
             ->get();
 
-        // Which agents are on a live call right now (outbound placer).
-        $onCallUserIds = $liveCalls->pluck('placed_by_user_id')->filter()->unique()->values()->all();
+        // Which agents are on a live call right now. Outbound calls are credited
+        // to the placing agent; inbound calls have no placer, so credit the
+        // assignee of the call's conversation (otherwise nobody shows "On call"
+        // for an answered inbound leg).
+        $onCallUserIds = $liveCalls
+            ->map(fn (CallLog $c) => $c->placed_by_user_id ?? $c->conversation?->assigned_to_user_id)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
 
         // Sargable "today" range on the created_at index (audit M2) — whereDate()
         // wraps the column in a function and can't use the index. Business-tz
         // day boundary, matching the calls dashboard.
-        $startOfToday = \Illuminate\Support\Carbon::now(config('app.business_timezone'))->startOfDay()->utc();
+        $startOfToday = Carbon::now(config('app.business_timezone'))->startOfDay()->utc();
         $today = CallLog::query()
             ->where('created_at', '>=', $startOfToday)
             ->where('created_at', '<', $startOfToday->copy()->addDay())
@@ -64,6 +74,18 @@ class Wallboard extends Component
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'presence_status', 'last_seen_at']);
+
+        // A presence_status that went stale means the agent stopped polling
+        // (closed the tab, walked away without setting away). Mark them offline
+        // so the board doesn't show "Available" for hours. Matches the
+        // RoundRobinAssigner availability window so routing and display agree.
+        $availabilityWindow = RoundRobinAssigner::AVAILABILITY_WINDOW_MINUTES;
+        $cutoff = now()->subMinutes($availabilityWindow);
+        $agents = $agents->map(function (User $agent) use ($cutoff) {
+            $agent->is_online = $agent->last_seen_at !== null && $agent->last_seen_at->gte($cutoff);
+
+            return $agent;
+        });
 
         return view('livewire.wallboard', [
             'liveCalls' => $liveCalls,

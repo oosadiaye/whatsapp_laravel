@@ -13,7 +13,6 @@ use App\Http\Requests\StoreCallQualityRequest;
 use App\Jobs\TerminateProviderCall;
 use App\Jobs\TranscribeCallRecording;
 use App\Models\CallLog;
-use App\Models\CallNote;
 use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Setting;
@@ -27,6 +26,7 @@ use App\Support\VoiceConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
@@ -66,7 +66,7 @@ class CallController extends Controller
         // then bounded as a half-open UTC range so the query stays sargable on
         // the created_at index — whereDate() wraps the column in a function and
         // defeats the index (audit M2).
-        $startOfToday = \Illuminate\Support\Carbon::now(config('app.business_timezone'))->startOfDay()->utc();
+        $startOfToday = Carbon::now(config('app.business_timezone'))->startOfDay()->utc();
         $endOfToday = $startOfToday->copy()->addDay();
         $todayScoped = fn () => CallLog::query()->tap($scope)
             ->where('created_at', '>=', $startOfToday)
@@ -269,12 +269,12 @@ class CallController extends Controller
             }
         }
 
-        if (!$user->can('conversations.call')) {
+        if (! $user->can('conversations.call')) {
             return response()->json(['error' => 'forbidden'], 403);
         }
         $hasAccess = $user->can('conversations.view_all')
             || ($user->can('conversations.view_assigned') && $conversation->assigned_to_user_id === $user->id);
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             return response()->json(['error' => 'forbidden'], 403);
         }
 
@@ -287,7 +287,7 @@ class CallController extends Controller
                 'call_id' => $call->id,
                 'session_id' => $sessionId,
             ]);
-        } catch (VoiceProviderException | ConfigurationException $e) {
+        } catch (VoiceProviderException|ConfigurationException $e) {
             $this->recordOutboundAtFailure($conversation, $e->getMessage());
 
             return response()->json([
@@ -314,6 +314,7 @@ class CallController extends Controller
         $key = 'outbound-call:'.$request->user()->id;
         if (RateLimiter::tooManyAttempts($key, 10)) {
             $seconds = RateLimiter::availableIn($key);
+
             return back()->with('error', "Rate limit reached. Try again in {$seconds} seconds.");
         }
         RateLimiter::hit($key, 60);
@@ -378,7 +379,7 @@ class CallController extends Controller
         $this->authorizeCallAccess($call);
 
         $sessionId = $request->input('session_id');
-        if (!is_string($sessionId) || $sessionId === '' || strlen($sessionId) > 64) {
+        if (! is_string($sessionId) || $sessionId === '' || strlen($sessionId) > 64) {
             return response()->json(['error' => 'invalid session_id'], 422);
         }
 
@@ -386,7 +387,7 @@ class CallController extends Controller
             ->where('id', $call->id)
             ->where(function ($q) use ($sessionId) {
                 $q->whereNull('answered_by_session_id')
-                  ->orWhere('answered_by_session_id', $sessionId);
+                    ->orWhere('answered_by_session_id', $sessionId);
             })
             ->update(['answered_by_session_id' => $sessionId]);
 
@@ -414,7 +415,7 @@ class CallController extends Controller
         if ($call->answered_by_session_id !== $sessionId) {
             return response()->json(['error' => 'must claim before answering, or different session'], 409);
         }
-        if (!is_string($sdp) || $sdp === '') {
+        if (! is_string($sdp) || $sdp === '') {
             return response()->json(['error' => 'sdp required'], 422);
         }
 
@@ -533,6 +534,24 @@ class CallController extends Controller
      */
     private function terminate(CallLog $call, string $finalStatus, string $broadcastReason): void
     {
+        // Idempotency guard: only the first request actually transitions the
+        // call and fires the teardown side-effects. A double-clicked Drop or
+        // two tabs racing to hang up would otherwise dispatch duplicate
+        // TerminateProviderCall jobs and duplicate CallTerminated broadcasts
+        // (and could resurrect the provider hang-up on a second pass).
+        $transitioned = DB::table('call_logs')
+            ->where('id', $call->id)
+            ->whereIn('status', CallLog::STATUSES_IN_FLIGHT)
+            ->update([
+                'status' => $finalStatus,
+                'ended_at' => now(),
+            ]);
+
+        if ($transitioned === 0) {
+            // Already terminal — someone else ended it. Nothing more to do.
+            return;
+        }
+
         // Hand the provider-side hangup to a retried background job. Guard the
         // dispatch so nothing about the provider call can fail the agent's
         // hangup request: on a real queue this only enqueues (retries happen on
@@ -548,11 +567,7 @@ class CallController extends Controller
             ]);
         }
 
-        $call->update([
-            'status' => $finalStatus,
-            'ended_at' => now(),
-        ]);
-        CallTerminated::dispatch($call, $broadcastReason);
+        CallTerminated::dispatch($call->fresh(), $broadcastReason);
     }
 
     /**

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http;
 
-use App\Events\Calling\CallClaimed;
 use App\Events\Calling\CallTerminated;
 use App\Models\CallLog;
 use App\Models\Contact;
+use App\Models\Conversation;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -70,6 +70,7 @@ class CallRouteTest extends TestCase
 
         Http::assertSent(function ($request) {
             $body = $request->data();
+
             return ($body['action'] ?? null) === 'accept'
                 && ($body['session']['sdp'] ?? null) === 'sdp-answer-blob';
         });
@@ -104,6 +105,7 @@ class CallRouteTest extends TestCase
 
         Http::assertSent(function ($request) {
             $body = $request->data();
+
             return ($body['action'] ?? null) === 'terminate';
         });
         Event::assertDispatched(CallTerminated::class, function ($event) use ($call) {
@@ -226,6 +228,40 @@ class CallRouteTest extends TestCase
         Event::assertDispatched(CallTerminated::class, fn ($e) => $e->call->id === $call->id);
     }
 
+    public function test_double_hangup_only_terminates_once(): void
+    {
+        Event::fake([CallTerminated::class]);
+        $agent = $this->makeAgent();
+        $call = $this->makeRingingCall($agent);
+        $call->update(['status' => CallLog::STATUS_CONNECTED]);
+        Http::fake(['*' => Http::response([], 200)]);
+
+        // A double-clicked Drop or two racing tabs both POST /hangup. Only the
+        // first may transition the call + dispatch teardown side-effects.
+        $this->actingAs($agent)->postJson(route('calls.hangup', $call))->assertOk();
+        $this->actingAs($agent)->postJson(route('calls.hangup', $call))->assertOk();
+
+        $this->assertSame(CallLog::STATUS_ENDED, $call->fresh()->status);
+        Event::assertDispatchedTimes(CallTerminated::class, 1);
+    }
+
+    public function test_decline_after_hangup_is_ignored(): void
+    {
+        Event::fake([CallTerminated::class]);
+        $agent = $this->makeAgent();
+        $call = $this->makeRingingCall($agent);
+        $call->update(['status' => CallLog::STATUS_CONNECTED]);
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $this->actingAs($agent)->postJson(route('calls.hangup', $call))->assertOk();
+        $this->actingAs($agent)->postJson(route('calls.decline', $call))->assertOk();
+
+        // The call is already terminal; a late decline must not regress it to
+        // 'declined' or fire another teardown.
+        $this->assertSame(CallLog::STATUS_ENDED, $call->fresh()->status);
+        Event::assertDispatchedTimes(CallTerminated::class, 1);
+    }
+
     private function makeOutboundCall(User $placer): CallLog
     {
         $owner = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
@@ -233,7 +269,7 @@ class CallRouteTest extends TestCase
         $otherAgent = $this->makeAgent();
         $instance = WhatsAppInstance::factory()->create(['user_id' => $owner->id]);
         $contact = Contact::factory()->create(['user_id' => $owner->id, 'phone' => '23480'.fake()->unique()->numerify('########')]);
-        $conversation = \App\Models\Conversation::create([
+        $conversation = Conversation::create([
             'user_id' => $owner->id,
             'contact_id' => $contact->id,
             'whatsapp_instance_id' => $instance->id,
@@ -264,6 +300,7 @@ class CallRouteTest extends TestCase
             'last_seen_at' => now(),
         ]);
         $agent->assignRole(User::ROLE_AGENT);
+
         return $agent;
     }
 
@@ -273,7 +310,7 @@ class CallRouteTest extends TestCase
         $owner->assignRole(User::ROLE_ADMIN);
         $instance = WhatsAppInstance::factory()->create(['user_id' => $owner->id]);
         $contact = Contact::factory()->create(['user_id' => $owner->id, 'phone' => '23480'.fake()->unique()->numerify('########')]);
-        $conversation = \App\Models\Conversation::create([
+        $conversation = Conversation::create([
             'user_id' => $owner->id,
             'contact_id' => $contact->id,
             'whatsapp_instance_id' => $instance->id,

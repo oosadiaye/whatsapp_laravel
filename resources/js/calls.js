@@ -40,8 +40,12 @@ window.incomingCall = (data) => ({
         if (window.userId && window.Echo) {
             this.echoChannel = window.Echo.private(`user.${window.userId}`);
             this.echoChannel.listen('.call.claimed', (event) => {
+                // State guard: only a still-ringing banner yields to another
+                // window. Once we're connected, a late claim event must not
+                // yank a live call to claimed_elsewhere.
                 if (event.call_id === this.callId
-                    && event.claimed_by_session_id !== this.sessionId) {
+                    && event.claimed_by_session_id !== this.sessionId
+                    && this.state === 'ringing') {
                     this.state = 'claimed_elsewhere';
                     window.bqStopRingtone?.();
                 }
@@ -51,6 +55,25 @@ window.incomingCall = (data) => ({
                     this.teardown('remote_terminated');
                 }
             });
+        }
+    },
+
+    /**
+     * Alpine destroy() — called when the banner's DOM is removed (call no
+     * longer in-flight, Livewire unmounts it). Frees the Reverb listeners and
+     * channel, then runs teardown so no timer/recorder/peer outlives the
+     * banner. Without this, every re-mount leaks another set of handlers onto
+     * the same private channel.
+     */
+    destroy() {
+        if (this.echoChannel) {
+            try { this.echoChannel.stopListening('.call.claimed'); } catch (_) {}
+            try { this.echoChannel.stopListening('.call.terminated'); } catch (_) {}
+            try { this.echoChannel.leave(); } catch (_) {}
+            this.echoChannel = null;
+        }
+        if (this.state !== 'terminated') {
+            this.teardown('component_destroyed');
         }
     },
 
@@ -97,6 +120,10 @@ window.incomingCall = (data) => ({
             this.peer = new RTCPeerConnection({
                 iceServers: iceServers(),
             });
+            // Export the live peer for the recorder/call-stats integrations
+            // that reach for window.bqMetaPeer (call-recorder.js). Cleared in
+            // cleanupMedia() so a finished call never leaks the connection.
+            window.bqMetaPeer = this.peer;
 
             // 4. Audio rendering — Meta's stream → <audio> element.
             this.peer.ontrack = (event) => {
@@ -127,11 +154,18 @@ window.incomingCall = (data) => ({
             const answer = await this.peer.createAnswer();
             await this.peer.setLocalDescription(answer);
 
-            // 8. Forward answer to server, which calls Meta acceptCall.
+            // 8. Wait for ICE gathering to complete before sending the answer.
+            //    Posting createAnswer()'s description can ship a half-gathered
+            //    answer (missing candidates) → one-way or dead audio on slower
+            //    networks. Bounded wait so a stuck ICE never hangs the accept.
+            phase = 'ice';
+            const gatheredSdp = await this._waitForIceComplete(this.peer);
+
+            // 9. Forward answer to server, which calls Meta acceptCall.
             phase = 'answer';
             const answerRes = await this.post(`/calls/${this.callId}/answer`, {
                 session_id: this.sessionId,
-                sdp: answer.sdp,
+                sdp: gatheredSdp,
             });
             if (!answerRes.ok) {
                 const body = await this.safeReadJson(answerRes);
@@ -141,6 +175,7 @@ window.incomingCall = (data) => ({
             this.state = 'connected';
             this.startDurationTimer();
             this._statsHandle = startStatsCollection(this.peer);
+            window.bqCallRecorder?.start(this.callId);
         } catch (error) {
             // Surface to console + state so the operator sees WHY it failed.
             const msg = error?.message ?? String(error);
@@ -167,6 +202,31 @@ window.incomingCall = (data) => ({
     },
 
     /**
+     * Resolve with the fully-gathered local SDP, or time out after 3s and
+     * ship whatever we have (better a slightly early answer than a stuck
+     * accept). Also resolves immediately if gathering already completed.
+     */
+    _waitForIceComplete(peer, timeoutMs = 3000) {
+        if (!peer || peer.iceGatheringState === 'complete') {
+            return Promise.resolve(peer?.localDescription?.sdp ?? '');
+        }
+        return new Promise((resolve) => {
+            const onChange = () => {
+                if (peer.iceGatheringState === 'complete') {
+                    clearTimeout(timer);
+                    peer.removeEventListener('icegatheringstatechange', onChange);
+                    resolve(peer.localDescription?.sdp ?? '');
+                }
+            };
+            const timer = setTimeout(() => {
+                peer.removeEventListener('icegatheringstatechange', onChange);
+                resolve(peer.localDescription?.sdp ?? '');
+            }, timeoutMs);
+            peer.addEventListener('icegatheringstatechange', onChange);
+        });
+    },
+
+    /**
      * Retry the accept flow after a mic_denied / connect_failed error.
      * Safe to call multiple times — acceptCall() is idempotent on the
      * client side (the server's claim endpoint is the atomic guard).
@@ -179,12 +239,13 @@ window.incomingCall = (data) => ({
 
     async declineCall() {
         window.bqStopRingtone?.();
-        await this.post(`/calls/${this.callId}/decline`, {});
+        // Best-effort: never let a transient network failure strand the banner.
+        await this.safePost(`/calls/${this.callId}/decline`, {});
         this.teardown('agent_declined');
     },
 
     async hangup() {
-        await this.post(`/calls/${this.callId}/hangup`, {});
+        await this.safePost(`/calls/${this.callId}/hangup`, {});
         this.teardown('agent_hung_up');
     },
 
@@ -197,8 +258,16 @@ window.incomingCall = (data) => ({
         try { this.peer?.close(); } catch (_) {}
         this.micStream?.getTracks().forEach(t => t.stop());
         this.peer = null;
+        window.bqMetaPeer = null;
         this.micStream = null;
+        // Release the remote audio element's stream reference so a finished
+        // call can't leak the MediaStream (or auto-replay it) on the next one.
+        const audioEl = document.getElementById('bq-remote-audio');
+        if (audioEl) {
+            try { audioEl.srcObject = null; } catch (_) {}
+        }
         this.stopDurationTimer();
+        window.bqCallRecorder?.stop();
         const aggregate = this._statsHandle?.stop();
         postQuality(this.callId, this.csrf, aggregate);
         this._statsHandle = null;

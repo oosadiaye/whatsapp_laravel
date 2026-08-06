@@ -40,6 +40,8 @@ class CallWrapUp extends Component
 
     public function save(): void
     {
+        $this->authorizeCallAccess();
+
         $this->saving = true;
 
         $this->validate([
@@ -62,6 +64,23 @@ class CallWrapUp extends Component
         $this->saving = false;
 
         $this->dispatch('wrap-up-saved');
+    }
+
+    /**
+     * Enforce the same per-call access rule as CallController: company-wide
+     * viewers, the assigned agent, or the agent who placed the call. Without
+     * this the update endpoint trusts whatever CallLog the caller mounted the
+     * component with — a crafted Livewire payload could disposition + annotate
+     * ANY call.
+     */
+    private function authorizeCallAccess(): void
+    {
+        $user = auth()->user();
+        $allowed = $user->can('conversations.view_all')
+            || $this->call->placed_by_user_id === $user->id
+            || $this->call->conversation?->assigned_to_user_id === $user->id;
+
+        abort_unless($allowed, 403, 'You do not have access to this call.');
     }
 
     public function render()

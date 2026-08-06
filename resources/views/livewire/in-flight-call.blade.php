@@ -35,7 +35,7 @@
                 <span class="font-medium">{{ $statusText }}</span>
             </div>
 
-            @if($call->isInFlight())
+            @if($call->isInFlight() && auth()->user()?->can('conversations.call'))
                 <form method="POST" action="{{ route('conversations.endCall', ['conversation' => $call->conversation_id, 'call' => $call->id]) }}">
                     @csrf
                     <button type="submit" class="text-sm font-medium hover:underline">

@@ -7,12 +7,10 @@
     {{-- Banner stack: up to 3 in-flight inbound calls, sticky top of viewport.
          Phase 17 replaces the prior "Open conversation" button with the
          IncomingCall Livewire component, which owns Accept/Decline/in-call
-         WebRTC UI. --}}
-    @forelse($inflightCalls as $call)
-        @php $callLog = \App\Models\CallLog::find($call['id']); @endphp
-        @if($callLog)
-            <livewire:incoming-call :call="$callLog" :wire:key="'call-'.$callLog->id" />
-        @endif
+         WebRTC UI. Models come pre-loaded from RealtimePulse::render() — no
+         per-banner re-find on every 3s poll. --}}
+    @forelse($inflightCallModels as $call)
+        <livewire:incoming-call :call="$call" :wire:key="'call-'.$call->id" />
     @empty
         {{-- nothing ringing right now --}}
     @endforelse
