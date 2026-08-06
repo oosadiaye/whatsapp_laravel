@@ -9,6 +9,21 @@ the code currently assumes, and how to confirm or fix it.
 > covers the **flag-gated call-flow features** (IVR/voicemail/queue/transfer/business
 > hours) — enable and verify those only after the core path is green.
 
+## Quick start — automated prerequisite pass
+
+Before the manual steps, run the **Phase 0 gate runner** — it checks every
+prerequisite that needs no live call and prints the ordered checklist:
+
+```bash
+php artisan voice:verify-live                                  # checks only
+php artisan voice:verify-live --to=+2348012345678              # also places a real test outbound call
+php artisan voice:verify-live --to=+2348012345678 --no-call    # checks, skip the test call
+```
+
+Exit code `0` = all hard checks pass (the checklist still applies); `1` = a
+blocking prerequisite is missing (fix it before going live). Source:
+`app/Console/Commands/VerifyVoiceLive.php`.
+
 ## Prerequisites
 - A live Africa's Talking account (not sandbox) with **Voice** enabled.
 - A purchased **virtual/phone number** with a voice **callback URL** set to
@@ -35,8 +50,9 @@ middleware. Tests post the real **form-encoded** shape. See
       `https://<app>/webhooks/africastalking/voice/<secret>` (the secret in the path).
 - [ ] Trigger a real callback (place/receive a call). Confirm **no 401s** in the log —
       if you see 401s, the secret in AT's callback URL doesn't match the env value.
-- [ ] Inspect a raw callback (log `$request->all()` + `$request->headers`): confirm the
-      body is `application/x-www-form-urlencoded` and the field names in §2 are correct.
+- [ ] (Optional) set `VOICE_DEBUG_LOG_WEBHOOKS=true` so every callback payload +
+      headers are written verbatim to laravel.log — the easiest way to confirm the
+      field names in §2. Turn it back off after verification (payloads contain PII).
 - [ ] (Optional hardening) set `VOICE_WEBHOOK_IP_ALLOWLIST` to AT's published source
       ranges. Scrub `/webhooks/africastalking/voice/*` from access logs (the secret is in
       the path; the app's own middleware already avoids logging it).
@@ -132,10 +148,11 @@ method surface only.
 ## 10. Known non-blocking cleanups
 - [x] ~~Add `throttle:` to the webhook route~~ — done (config `voice.webhook_rate_limit`).
 - [x] ~~`provider_session_id` unique index~~ — done (migration `..._make_provider_session_id_unique`).
-- [ ] The AT SDK loads from `unpkg.com` with no SRI — self-host + pin + SRI, and add the
-      origin to CSP.
-- [ ] Packet-loss telemetry sums cumulative counters (over-counts) — use last-sample or
-      per-interval deltas in `call-stats-collector.js`.
+- [x] ~~The AT SDK loads from `unpkg.com` with no SRI~~ — done: the SDK is self-hosted
+      (`vendor/africastalking-1.0.7.js`), loaded same-origin from the layout, and the
+      reconnect path force-reloads the same self-hosted file (no external CDN).
+- [x] ~~Packet-loss telemetry sums cumulative counters (over-counts)~~ — done:
+      `call-stats-collector.js` now derives loss from per-interval deltas.
 - [ ] TURN relay is wired for the Meta path and passed best-effort to the AT SDK
       constructor (v1.0.7 may ignore it) — on a restrictive-NAT call, confirm the relay
       actually engages for AT (`VOICE_TURN_*`).

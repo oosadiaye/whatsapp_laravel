@@ -87,12 +87,18 @@ function aggregate(samples) {
     const avg = (key) =>
         samples.reduce((sum, s) => sum + (s[key] || 0), 0) / samples.length;
 
-    const totalReceived = samples.reduce(
-        (sum, s) => sum + (s.packets_received || 0),
-        0,
-    );
-    const totalLost = samples.reduce((sum, s) => sum + (s.packets_lost || 0), 0);
-    const totalAttempted = totalReceived + totalLost;
+    // Packet loss must be measured PER INTERVAL, not from cumulative counters:
+    // packetsLost/packetsReceived are totals since the connection started, so
+    // summing them across samples counts the early (usually lossier) window
+    // multiple times and inflates the loss %. Deltas between consecutive
+    // samples give the true per-5s loss. The first sample is the baseline.
+    let totalLost = 0;
+    let totalReceived = 0;
+    for (let i = 1; i < samples.length; i++) {
+        totalLost += Math.max(0, (samples[i].packets_lost || 0) - (samples[i - 1].packets_lost || 0));
+        totalReceived += Math.max(0, (samples[i].packets_received || 0) - (samples[i - 1].packets_received || 0));
+    }
+    const totalAttempted = totalLost + totalReceived;
 
     const last = samples[samples.length - 1];
 

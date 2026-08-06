@@ -149,6 +149,18 @@ return [
     ))),
 
     /*
+    |--------------------------------------------------------------------------
+    | Debug webhook capture
+    |--------------------------------------------------------------------------
+    | Phase 0 live verification helper: when on, every Africa's Talking voice
+    | callback is logged verbatim (payload + headers) to laravel.log so the
+    | real field names / status strings can be confirmed against a live
+    | account. OFF by default — callbacks contain caller PII.
+    |   VOICE_DEBUG_LOG_WEBHOOKS=true
+    */
+    'debug_log_webhooks' => (bool) env('VOICE_DEBUG_LOG_WEBHOOKS', false),
+
+    /*
     | Africa's Talking voice-webhook shared secret. AT voice callbacks are
     | unsigned form-encoded POSTs, so the speculative HMAC scheme couldn't work.
     | Instead the callback URL carries an unguessable secret path segment

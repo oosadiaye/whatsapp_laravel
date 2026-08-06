@@ -44,6 +44,17 @@ class AfricasTalkingWebhookController extends Controller
             return response('unauthorized', 401);
         }
 
+        // Phase 0 verification helper: capture the verbatim callback (payload +
+        // headers) so the REAL field names / status strings / isActive split can
+        // be confirmed against live traffic. Gated off by default — payloads
+        // contain caller phone numbers.
+        if (config('voice.debug_log_webhooks')) {
+            Log::info('AT voice webhook captured', [
+                'headers' => $request->headers->all(),
+                'payload' => $request->all(),
+            ]);
+        }
+
         $event = $request->all();
         $sessionId = $event['sessionId'] ?? null;
         $direction = strtolower($event['direction'] ?? '');
