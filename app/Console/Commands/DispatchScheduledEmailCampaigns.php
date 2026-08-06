@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\EmailCampaign;
+use App\Models\EmailLog;
 use App\Services\EmailCampaignService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -57,6 +58,14 @@ class DispatchScheduledEmailCampaigns extends Command
         if ($next === null) {
             return; // non-recurring or past its recurrence_until — leave as sent
         }
+
+        // A recurring run is a FRESH send to the full audience, not a resume of
+        // the previous one. Clear the prior run's EmailLogs so:
+        //   - EmailCampaignDispatch's "relaunch safety" (skip anyone with an
+        //     existing log) doesn't produce an empty audience — without this a
+        //     recurring campaign only ever sent once, and
+        //   - total_recipients reflects THIS run, not all-time history.
+        EmailLog::where('email_campaign_id', $campaign->id)->delete();
 
         $campaign->update([
             'status' => EmailCampaign::STATUS_SCHEDULED,

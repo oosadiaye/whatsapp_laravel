@@ -28,15 +28,14 @@ class EmailSyncServiceTest extends TestCase
 
     private function service(): EmailSyncService
     {
-        return new EmailSyncService();
+        return new EmailSyncService;
     }
 
     private function fetcherReturning(FetchResult $result): MailFetcher
     {
-        return new class($result) implements MailFetcher {
-            public function __construct(private readonly FetchResult $result)
-            {
-            }
+        return new class($result) implements MailFetcher
+        {
+            public function __construct(private readonly FetchResult $result) {}
 
             public function fetch(EmailAccount $account): FetchResult
             {
@@ -218,5 +217,34 @@ class EmailSyncServiceTest extends TestCase
         $this->service()->sync($account, $fetch());
 
         Event::assertDispatchedTimes(MailReceived::class, 1);
+    }
+
+    public function test_an_oversized_message_is_skipped(): void
+    {
+        // Tiny cap so the fixture body is unambiguously over the limit.
+        config(['mail_client.max_inbound_kb' => 1]);
+        $account = EmailAccount::factory()->create();
+
+        $message = new FetchedMessage(
+            messageId: '<big@example.com>',
+            inReplyTo: null,
+            references: null,
+            from: 'ann@example.com',
+            to: ['me@work.test'],
+            cc: [],
+            subject: 'Big',
+            bodyHtml: str_repeat('x', 2048),
+            bodyText: 'Body',
+            date: now(),
+            attachments: [],
+        );
+
+        $new = $this->service()->sync($account, $this->fetcherReturning($this->fetchResult([$message])));
+
+        $this->assertSame(0, $new);
+        $this->assertSame(0, EmailThread::count());
+        $this->assertSame(0, EmailMessage::count());
+        // The cursor still advanced past it so it isn't re-fetched every run.
+        $this->assertSame(1, $account->fresh()->sync_state['inbox']['last_uid']);
     }
 }

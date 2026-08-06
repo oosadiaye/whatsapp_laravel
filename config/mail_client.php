@@ -29,6 +29,12 @@ return [
     // Per-account outbound send rate (B5).
     'send_rate_per_minute' => (int) env('MAIL_CLIENT_SEND_RATE', 30),
 
+    // Hard cap on a single inbound message (body + attachments), KB. Messages
+    // larger than this are skipped (never stored, attachments never written), so
+    // a malicious sender can't exhaust a queue worker's memory or the private
+    // disk. 0 = no cap.
+    'max_inbound_kb' => (int) env('MAIL_CLIENT_MAX_INBOUND_KB', 25600),
+
     // Retention for stored message bodies (real mailbox PII). 0 = keep forever;
     // set a real number so `mailbox:prune-messages` can purge (B1/L4).
     'retention_days' => (int) env('MAIL_CLIENT_RETENTION_DAYS', 0),

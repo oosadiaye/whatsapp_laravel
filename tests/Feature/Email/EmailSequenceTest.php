@@ -144,6 +144,70 @@ class EmailSequenceTest extends TestCase
         );
     }
 
+    // ---- Atomic-claim guard: no duplicate dispatch on a concurrent pass -----
+
+    private function activeSequenceWithPending(User $admin): array
+    {
+        $account = EmailAccount::factory()->create(['user_id' => $admin->id, 'is_active' => true]);
+        $sequence = $this->sequenceWithStep($admin, $account->id, EmailSequence::STATUS_ACTIVE);
+        $contact = Contact::factory()->create(['email' => 'race@example.com']);
+        $recipient = EmailSequenceRecipient::create([
+            'email_sequence_id' => $sequence->id,
+            'contact_id' => $contact->id,
+            'email' => 'race@example.com',
+            'current_step' => 0,
+            'status' => EmailSequence::RECIPIENT_PENDING,
+            'next_send_at' => now()->subMinute(),
+        ]);
+
+        return [$sequence, $recipient];
+    }
+
+    public function test_a_recently_claimed_recipient_is_not_dispatched_twice(): void
+    {
+        Queue::fake();
+        $admin = $this->admin();
+        [$sequence, $recipient] = $this->activeSequenceWithPending($admin);
+
+        // Simulate a concurrent cron pass that claimed this recipient a moment
+        // ago (SENDING with a future TTL sentinel) and hasn't advanced it yet.
+        $recipient->update([
+            'status' => EmailSequence::RECIPIENT_SENDING,
+            'next_send_at' => now()->addMinutes(9),
+        ]);
+
+        $this->artisan('email-sequences:process')->assertExitCode(0);
+
+        // No second dispatch — the atomic claim guard wins.
+        Queue::assertNotPushed(SendUserEmail::class);
+        $this->assertSame(
+            EmailSequence::RECIPIENT_SENDING,
+            $recipient->fresh()->status,
+        );
+    }
+
+    public function test_a_stale_claim_is_reclaimed_and_advanced(): void
+    {
+        Queue::fake();
+        $admin = $this->admin();
+        [$sequence, $recipient] = $this->activeSequenceWithPending($admin);
+
+        // A prior claim went stale (process died after dispatch, before advance):
+        // the TTL sentinel has elapsed, so the next pass may reclaim it.
+        $recipient->update([
+            'status' => EmailSequence::RECIPIENT_SENDING,
+            'next_send_at' => now()->subMinute(),
+        ]);
+
+        $this->artisan('email-sequences:process')->assertExitCode(0);
+
+        Queue::assertPushed(SendUserEmail::class);
+        $this->assertSame(
+            EmailSequence::RECIPIENT_SENT,
+            $recipient->fresh()->status,
+        );
+    }
+
     // ---- H2: cross-account send-as ------------------------------------------
 
     public function test_store_rejects_an_email_account_owned_by_another_user(): void

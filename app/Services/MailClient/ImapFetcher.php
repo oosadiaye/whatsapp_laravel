@@ -6,6 +6,7 @@ namespace App\Services\MailClient;
 
 use App\Exceptions\MailAuthException;
 use App\Models\EmailAccount;
+use Illuminate\Support\Facades\Log;
 use Webklex\PHPIMAP\ClientManager;
 use Webklex\PHPIMAP\Exceptions\AuthFailedException;
 
@@ -24,9 +25,7 @@ class ImapFetcher implements MailFetcher
     /** Cap messages processed per run so a huge/first sync advances over several passes. */
     private const PER_RUN_LIMIT = 200;
 
-    public function __construct(private readonly ?ClientManager $clientManager = null)
-    {
-    }
+    public function __construct(private readonly ?ClientManager $clientManager = null) {}
 
     public function fetch(EmailAccount $account): FetchResult
     {
@@ -70,6 +69,29 @@ class ImapFetcher implements MailFetcher
                 try {
                     $uid = (int) $message->getUid();
                     $maxUid = max($maxUid, $uid);
+
+                    // Skip oversized mail BEFORE materialising its bodies /
+                    // attachments — the memory + private-disk DoS guard. The
+                    // deterministic fixture-tested layer lives in
+                    // EmailSyncService::store; this short-circuit keeps a giant
+                    // message from ever being expanded into worker memory.
+                    $maxBytes = (int) config('mail_client.max_inbound_kb', 25600) * 1024;
+                    if ($maxBytes > 0) {
+                        try {
+                            if ((int) $message->getSize() > $maxBytes) {
+                                Log::warning('Skipping oversized inbound message', [
+                                    'account_id' => $account->id,
+                                    'uid' => $uid,
+                                    'cap_bytes' => $maxBytes,
+                                ]);
+
+                                continue;
+                            }
+                        } catch (\Throwable) {
+                            // size unreadable — don't skip on a missing header
+                        }
+                    }
+
                     $messages[] = $this->toFetchedMessage($message);
                 } catch (\Throwable) {
                     // Skip a single unparseable message rather than fail the run.
@@ -188,6 +210,6 @@ class ImapFetcher implements MailFetcher
 
     private function manager(): ClientManager
     {
-        return $this->clientManager ?? new ClientManager();
+        return $this->clientManager ?? new ClientManager;
     }
 }

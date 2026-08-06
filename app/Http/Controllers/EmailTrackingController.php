@@ -22,13 +22,13 @@ class EmailTrackingController extends Controller
 
     public function open(EmailLog $log): Response
     {
-        if ($log->opened_at === null) {
-            $log->forceFill(['opened_at' => now()]);
-            // Don't clobber a failed/unsubscribed status — only a delivered send
-            // becomes "opened".
-            if ($log->status === EmailLog::STATUS_SENT) {
-                $log->status = EmailLog::STATUS_OPENED;
-            }
+        // Only a delivered send can be "opened". A QUEUED/FAILED/UNSUBSCRIBED log
+        // that somehow gets its signed pixel fetched (leaked URL, prefetch before
+        // send) must not inflate the campaign's open rate.
+        if ($log->opened_at === null && in_array($log->status, [EmailLog::STATUS_SENT, EmailLog::STATUS_OPENED], true)) {
+            // Check-then-act is the pragmatic choice here (a signed URL, low
+            // concurrency); the fetch is idempotent on the opened_at guard.
+            $log->forceFill(['opened_at' => now(), 'status' => EmailLog::STATUS_OPENED]);
             $log->save();
 
             $log->campaign?->increment('opened_count');

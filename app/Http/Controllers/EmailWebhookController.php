@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Models\EmailLog;
 use App\Models\EmailSuppression;
 use App\Services\EmailEvents\EmailEventParserFactory;
 use Illuminate\Http\Request;
@@ -62,7 +63,14 @@ class EmailWebhookController extends Controller
                 continue;
             }
             EmailSuppression::suppress($event->email, $event->suppressionReason());
-            $suppressed[] = EmailSuppression::normalize($event->email);
+            $normalized = EmailSuppression::normalize($event->email);
+            $suppressed[] = $normalized;
+
+            // Reconcile the recipient's EmailLog rows + campaign counters so a
+            // hard bounce/complaint is not left looking "sent" (and later
+            // "opened") — previously the provider reality and the dashboard
+            // diverged permanently.
+            $this->reconcileLogs($normalized, $event->suppressionReason());
         }
 
         if ($suppressed !== []) {
@@ -80,5 +88,53 @@ class EmailWebhookController extends Controller
         // doesn't retry — a non-suppressible event (soft bounce, open, ...) is a
         // successful no-op, not a failure.
         return response('ok', 200);
+    }
+
+    /**
+     * Flip the affected EmailLog rows to the provider-reported reality and keep
+     * the campaign counters consistent.
+     *
+     *   - a BOUNCE marks sent/opened logs FAILED and queued logs FAILED
+     *   - a COMPLAINT marks them UNSUBSCRIBED (the recipient explicitly rejected)
+     *
+     * Counters: a log that was counted in sent_count (sent/opened) is decremented
+     * when it stops being "sent"; failed_count is incremented only for bounces;
+     * opened_count is decremented when an opened log is reconciled.
+     */
+    private function reconcileLogs(string $normalizedEmail, string $reason): void
+    {
+        $bounced = $reason === EmailSuppression::REASON_BOUNCE;
+
+        EmailLog::where('email', $normalizedEmail)
+            ->whereIn('status', [
+                EmailLog::STATUS_QUEUED,
+                EmailLog::STATUS_SENT,
+                EmailLog::STATUS_OPENED,
+            ])
+            ->chunkById(200, function ($logs) use ($bounced): void {
+                foreach ($logs as $log) {
+                    $campaign = $log->campaign;
+                    $wasSent = in_array($log->status, [EmailLog::STATUS_SENT, EmailLog::STATUS_OPENED], true);
+                    $wasOpened = $log->status === EmailLog::STATUS_OPENED;
+
+                    $log->update([
+                        'status' => $bounced ? EmailLog::STATUS_FAILED : EmailLog::STATUS_UNSUBSCRIBED,
+                        'error' => $bounced ? 'Hard bounce reported by provider' : 'Spam complaint reported by provider',
+                    ]);
+
+                    if ($campaign === null) {
+                        continue;
+                    }
+                    if ($wasSent) {
+                        $campaign->decrement('sent_count');
+                        if ($wasOpened) {
+                            $campaign->decrement('opened_count');
+                        }
+                        if ($bounced) {
+                            $campaign->increment('failed_count');
+                        }
+                    }
+                }
+            });
     }
 }

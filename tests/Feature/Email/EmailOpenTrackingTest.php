@@ -50,6 +50,20 @@ class EmailOpenTrackingTest extends TestCase
         $this->assertSame(1, $log->campaign->fresh()->opened_count);
     }
 
+    public function test_a_queued_log_pixel_fetch_does_not_record_an_open(): void
+    {
+        // A pixel fetched before the send (leaked URL, prefetch) must not inflate
+        // the open rate for an email that was never delivered.
+        $log = $this->log(['status' => EmailLog::STATUS_QUEUED]);
+
+        $this->get(URL::signedRoute('email.open', ['log' => $log->id]))->assertOk();
+
+        $log->refresh();
+        $this->assertNull($log->opened_at);
+        $this->assertSame(EmailLog::STATUS_QUEUED, $log->status);
+        $this->assertSame(0, $log->campaign->fresh()->opened_count);
+    }
+
     public function test_an_unsigned_pixel_url_is_rejected(): void
     {
         $log = $this->log();

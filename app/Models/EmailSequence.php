@@ -14,18 +14,31 @@ class EmailSequence extends Model
     use HasFactory;
 
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_PAUSED = 'paused';
+
     public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     public const RECIPIENT_PENDING = 'pending';
+
+    public const RECIPIENT_SENDING = 'sending';
+
     public const RECIPIENT_SENT = 'sent';
+
     public const RECIPIENT_OPENED = 'opened';
+
     public const RECIPIENT_CLICKED = 'clicked';
+
     public const RECIPIENT_REPLIED = 'replied';
+
     public const RECIPIENT_BOUNCED = 'bounced';
+
     public const RECIPIENT_UNSUBSCRIBED = 'unsubscribed';
+
     public const RECIPIENT_COMPLETED = 'completed';
 
     protected $fillable = [

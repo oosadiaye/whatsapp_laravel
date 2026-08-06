@@ -28,17 +28,32 @@ class SmtpSender implements MailSender
         $creds = $account->credentials ?? [];
         $mailer = 'mailbox_'.$account->id;
 
-        $encryption = ($creds['smtp_encryption'] ?? 'tls') ?: null;
+        // Laravel's SMTP transport derives the TLS scheme from `scheme` when
+        // present and only falls back to the port when absent — so the account's
+        // "Encryption" dropdown MUST be mapped to a scheme, or the choice is
+        // silently ignored (port 587 + "ssl" would STARTTLS, "none" would still
+        // opportunistically upgrade).
+        $encryption = (string) ($creds['smtp_encryption'] ?? 'tls');
+        $scheme = in_array($encryption, ['ssl', 'smtps', '465'], true) ? 'smtps' : 'smtp';
 
-        config(["mail.mailers.{$mailer}" => [
+        $mailerConfig = [
             'transport' => 'smtp',
             'host' => (string) ($creds['smtp_host'] ?? ''),
             'port' => (int) ($creds['smtp_port'] ?? 587),
-            'encryption' => $encryption,
+            'scheme' => $scheme,
             'username' => (string) ($creds['username'] ?? ''),
             'password' => (string) ($creds['password'] ?? ''),
             'timeout' => 15,
-        ]]);
+        ];
+
+        // "none" means plaintext on the wire — disable opportunistic STARTTLS so
+        // Symfony doesn't silently upgrade a connection the operator asked to
+        // keep unencrypted.
+        if ($encryption === 'none') {
+            $mailerConfig['auto_tls'] = false;
+        }
+
+        config(["mail.mailers.{$mailer}" => $mailerConfig]);
 
         // The mailable carries its own recipients/from via envelope(), so send()
         // needs no ->to(); a transport error bubbles up to the job.

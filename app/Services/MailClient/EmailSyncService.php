@@ -8,6 +8,7 @@ use App\Events\Mailbox\MailReceived;
 use App\Models\EmailAccount;
 use App\Models\EmailMessage;
 use App\Models\EmailThread;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -24,7 +25,7 @@ use Illuminate\Support\Str;
 class EmailSyncService
 {
     /**
-     * @return int  number of NEW messages stored this run
+     * @return int number of NEW messages stored this run
      */
     public function sync(EmailAccount $account, MailFetcher $fetcher): int
     {
@@ -60,6 +61,22 @@ class EmailSyncService
             ->where('message_id', $messageId)
             ->exists();
         if ($exists) {
+            return false;
+        }
+
+        // Inbound size cap (memory + private-disk DoS guard): skip a message
+        // whose body + attachments exceed the configured limit. ImapFetcher also
+        // short-circuits oversized mail before materialising bodies; this is the
+        // deterministic, fixture-tested layer that applies to every fetcher.
+        $maxBytes = (int) config('mail_client.max_inbound_kb', 25600) * 1024;
+        if ($maxBytes > 0 && $this->sizeOf($fetched) > $maxBytes) {
+            Log::warning('Skipping inbound message over the size cap', [
+                'account_id' => $account->id,
+                'message_id' => $messageId,
+                'bytes' => $this->sizeOf($fetched),
+                'cap_bytes' => $maxBytes,
+            ]);
+
             return false;
         }
 
@@ -110,6 +127,20 @@ class EmailSyncService
         MailReceived::dispatch($account, $message);
 
         return true;
+    }
+
+    /**
+     * Total stored size of a fetched message: HTML + text bodies + every
+     * attachment's bytes. The basis for the inbound size cap.
+     */
+    private function sizeOf(FetchedMessage $fetched): int
+    {
+        $bytes = strlen((string) $fetched->bodyHtml) + strlen((string) $fetched->bodyText);
+        foreach ($fetched->attachments as $attachment) {
+            $bytes += $attachment->size();
+        }
+
+        return $bytes;
     }
 
     /**

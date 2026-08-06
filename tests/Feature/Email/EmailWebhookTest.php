@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Email;
 
+use App\Models\EmailCampaign;
+use App\Models\EmailLog;
 use App\Models\EmailSuppression;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -125,5 +127,92 @@ class EmailWebhookTest extends TestCase
         ])->assertOk(); // authed + parseable, so 200 — but nothing suppressed
 
         $this->assertSame(0, EmailSuppression::count());
+    }
+
+    // ---- Webhook → EmailLog/counter reconciliation --------------------------
+
+    public function test_hard_bounce_flips_the_sent_log_to_failed_and_reconciles_counters(): void
+    {
+        $campaign = EmailCampaign::factory()->create(['sent_count' => 1, 'failed_count' => 0, 'opened_count' => 0]);
+        EmailLog::factory()->create([
+            'email_campaign_id' => $campaign->id,
+            'email' => 'bounced@example.com',
+            'status' => EmailLog::STATUS_SENT,
+        ]);
+
+        $this->postJson($this->url(), [
+            'RecordType' => 'Bounce',
+            'Type' => 'HardBounce',
+            'Email' => 'Bounced@Example.com',
+        ])->assertOk();
+
+        $this->assertSame(EmailLog::STATUS_FAILED, $campaign->logs()->first()->status);
+        $campaign->refresh();
+        $this->assertSame(0, $campaign->sent_count);    // no longer counted as sent
+        $this->assertSame(1, $campaign->failed_count);  // now counted as failed
+    }
+
+    public function test_hard_bounce_on_an_opened_log_also_decrements_opened_count(): void
+    {
+        $campaign = EmailCampaign::factory()->create(['sent_count' => 1, 'failed_count' => 0, 'opened_count' => 1]);
+        EmailLog::factory()->create([
+            'email_campaign_id' => $campaign->id,
+            'email' => 'opened-then-bounced@example.com',
+            'status' => EmailLog::STATUS_OPENED,
+            'opened_at' => now(),
+        ]);
+
+        $this->postJson($this->url(), [
+            'RecordType' => 'Bounce',
+            'Type' => 'HardBounce',
+            'Email' => 'opened-then-bounced@example.com',
+        ])->assertOk();
+
+        $campaign->refresh();
+        $this->assertSame(0, $campaign->sent_count);
+        $this->assertSame(0, $campaign->opened_count);
+        $this->assertSame(1, $campaign->failed_count);
+    }
+
+    public function test_spam_complaint_marks_the_log_unsubscribed(): void
+    {
+        $campaign = EmailCampaign::factory()->create(['sent_count' => 1, 'failed_count' => 0]);
+        EmailLog::factory()->create([
+            'email_campaign_id' => $campaign->id,
+            'email' => 'complainer@example.com',
+            'status' => EmailLog::STATUS_SENT,
+        ]);
+
+        $this->postJson($this->url(), [
+            'RecordType' => 'SpamComplaint',
+            'Email' => 'complainer@example.com',
+        ])->assertOk();
+
+        $this->assertSame(EmailLog::STATUS_UNSUBSCRIBED, $campaign->logs()->first()->status);
+        $campaign->refresh();
+        $this->assertSame(0, $campaign->sent_count); // a complaint is not a "sent"
+        $this->assertSame(0, $campaign->failed_count);
+    }
+
+    public function test_soft_bounce_does_not_reconcile_logs(): void
+    {
+        $campaign = EmailCampaign::factory()->create(['sent_count' => 1, 'failed_count' => 0]);
+        EmailLog::factory()->create([
+            'email_campaign_id' => $campaign->id,
+            'email' => 'soft@example.com',
+            'status' => EmailLog::STATUS_SENT,
+        ]);
+
+        $this->postJson($this->url(), [
+            'RecordType' => 'Bounce',
+            'Type' => 'SoftBounce',
+            'Email' => 'soft@example.com',
+        ])->assertOk();
+
+        // Recoverable — the log stays SENT, counters untouched.
+        $this->assertSame(EmailLog::STATUS_SENT, $campaign->logs()->first()->status);
+        $campaign->refresh();
+        $this->assertSame(1, $campaign->sent_count);
+        $this->assertSame(0, $campaign->failed_count);
     }
 }
