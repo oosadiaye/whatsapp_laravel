@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\EmailLog;
+use App\Models\EmailSequence;
+use App\Models\EmailSequenceRecipient;
 use App\Models\EmailSuppression;
 use App\Services\EmailEvents\EmailEventParserFactory;
 use Illuminate\Http\Request;
@@ -136,5 +138,19 @@ class EmailWebhookController extends Controller
                     }
                 }
             });
+
+        // Same story for email sequences: stop a bounced / complained recipient
+        // from receiving further steps.
+        EmailSequenceRecipient::where('email', $normalizedEmail)
+            ->whereIn('status', [
+                EmailSequence::RECIPIENT_PENDING,
+                EmailSequence::RECIPIENT_SENDING,
+                EmailSequence::RECIPIENT_SENT,
+                EmailSequence::RECIPIENT_OPENED,
+            ])
+            ->update([
+                'status' => $bounced ? EmailSequence::RECIPIENT_BOUNCED : EmailSequence::RECIPIENT_UNSUBSCRIBED,
+                'completed_at' => now(),
+            ]);
     }
 }

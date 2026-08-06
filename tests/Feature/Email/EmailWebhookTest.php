@@ -6,7 +6,10 @@ namespace Tests\Feature\Email;
 
 use App\Models\EmailCampaign;
 use App\Models\EmailLog;
+use App\Models\EmailSequence;
+use App\Models\EmailSequenceRecipient;
 use App\Models\EmailSuppression;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -214,5 +217,56 @@ class EmailWebhookTest extends TestCase
         $campaign->refresh();
         $this->assertSame(1, $campaign->sent_count);
         $this->assertSame(0, $campaign->failed_count);
+    }
+
+    public function test_hard_bounce_marks_sequence_recipients_bounced(): void
+    {
+        $sequence = EmailSequence::create([
+            'user_id' => User::factory()->create()->id,
+            'name' => 'Seq',
+            'status' => EmailSequence::STATUS_ACTIVE,
+        ]);
+        EmailSequenceRecipient::create([
+            'email_sequence_id' => $sequence->id,
+            'email' => 'seq-bounced@example.com',
+            'current_step' => 0,
+            'status' => EmailSequence::RECIPIENT_SENT,
+        ]);
+
+        $this->postJson($this->url(), [
+            'RecordType' => 'Bounce',
+            'Type' => 'HardBounce',
+            'Email' => 'Seq-Bounced@Example.com',
+        ])->assertOk();
+
+        $this->assertSame(
+            EmailSequence::RECIPIENT_BOUNCED,
+            EmailSequenceRecipient::where('email', 'seq-bounced@example.com')->first()->status,
+        );
+    }
+
+    public function test_spam_complaint_marks_sequence_recipients_unsubscribed(): void
+    {
+        $sequence = EmailSequence::create([
+            'user_id' => User::factory()->create()->id,
+            'name' => 'Seq',
+            'status' => EmailSequence::STATUS_ACTIVE,
+        ]);
+        EmailSequenceRecipient::create([
+            'email_sequence_id' => $sequence->id,
+            'email' => 'seq-complaint@example.com',
+            'current_step' => 0,
+            'status' => EmailSequence::RECIPIENT_PENDING,
+        ]);
+
+        $this->postJson($this->url(), [
+            'RecordType' => 'SpamComplaint',
+            'Email' => 'seq-complaint@example.com',
+        ])->assertOk();
+
+        $this->assertSame(
+            EmailSequence::RECIPIENT_UNSUBSCRIBED,
+            EmailSequenceRecipient::where('email', 'seq-complaint@example.com')->first()->status,
+        );
     }
 }

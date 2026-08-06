@@ -7,9 +7,11 @@ namespace App\Console\Commands;
 use App\Jobs\SendUserEmail;
 use App\Models\EmailSequence;
 use App\Models\EmailSequenceRecipient;
+use App\Models\EmailSuppression;
 use App\Services\MailClient\OutboundEmail;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\URL;
 
 class ProcessEmailSequences extends Command
 {
@@ -128,16 +130,40 @@ class ProcessEmailSequences extends Command
             return;
         }
 
+        // Honour the global suppression list: an unsubscribed / hard-bounced
+        // address must never keep receiving sequence emails. Mark it
+        // UNSUBSCRIBED (already claimed, so it won't be reprocessed) and stop.
+        if (EmailSuppression::isSuppressed($recipient->email)) {
+            $recipient->update([
+                'status' => EmailSequence::RECIPIENT_UNSUBSCRIBED,
+                'completed_at' => now(),
+            ]);
+
+            return;
+        }
+
+        // Open-tracking pixel + unsubscribe footer (signed URLs) so sequence
+        // recipients can opt out and engagement is actually recorded.
+        $recipientId = $recipient->id;
+        $unsubscribeUrl = URL::signedRoute('email.sequence-unsubscribe', ['recipient' => $recipientId]);
+        $pixelUrl = URL::signedRoute('email.sequence-open', ['recipient' => $recipientId]);
+
+        $bodyHtml = $step->body_html;
+        if ($bodyHtml !== null && $bodyHtml !== '') {
+            $bodyHtml .= '<img src="'.e($pixelUrl).'" width="1" height="1" alt="" style="display:none">';
+        }
+
         $outbound = new OutboundEmail(
             to: [$recipient->email],
             subject: $step->subject,
-            bodyHtml: $step->body_html,
+            bodyHtml: $bodyHtml,
             bodyText: $step->body_text,
             cc: [],
             inReplyTo: null,
             references: null,
             threadId: null,
             attachments: [],
+            unsubscribeUrl: $unsubscribeUrl,
         );
 
         SendUserEmail::dispatch($account->id, $outbound);

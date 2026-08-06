@@ -10,8 +10,10 @@ use App\Models\EmailAccount;
 use App\Models\EmailSequence;
 use App\Models\EmailSequenceRecipient;
 use App\Models\EmailSequenceStep;
+use App\Models\EmailSuppression;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -183,7 +185,14 @@ class EmailSequenceController extends Controller
 
         $query = Contact::query()
             ->whereNotNull('email')
-            ->where('email', '!=', '');
+            ->where('email', '!=', '')
+            // Don't enrol addresses already on the global suppression list — they
+            // were unsubscribed / hard-bounced, so the sequence must not start
+            // emailing them (the send-time check is the authoritative backstop).
+            ->whereNotIn(
+                DB::raw('LOWER(email)'),
+                EmailSuppression::query()->select('email'),
+            );
 
         if (! empty($data['group_id'])) {
             $groupId = (int) $data['group_id'];

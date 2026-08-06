@@ -9,6 +9,7 @@ use App\Models\Contact;
 use App\Models\EmailAccount;
 use App\Models\EmailSequence;
 use App\Models\EmailSequenceRecipient;
+use App\Models\EmailSuppression;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -110,6 +111,52 @@ class EmailSequenceTest extends TestCase
             ->assertSessionHas('error');
 
         $this->assertSame(0, EmailSequenceRecipient::count());
+    }
+
+    public function test_enrol_skips_suppressed_contacts(): void
+    {
+        $admin = $this->admin();
+        $sequence = $this->sequenceWithStep($admin);
+
+        Contact::factory()->create(['email' => 'good@example.com']);
+        Contact::factory()->create(['email' => 'bad@example.com']);
+        EmailSuppression::suppress('bad@example.com', EmailSuppression::REASON_BOUNCE);
+
+        $this->actingAs($admin)
+            ->post(route('email-sequences.enroll', $sequence))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(1, EmailSequenceRecipient::count());
+        $this->assertSame('good@example.com', EmailSequenceRecipient::first()->email);
+    }
+
+    public function test_a_suppressed_recipient_is_not_sent_and_marked_unsubscribed(): void
+    {
+        Queue::fake();
+        $admin = $this->admin();
+        $account = EmailAccount::factory()->create(['user_id' => $admin->id, 'is_active' => true]);
+        $sequence = $this->sequenceWithStep($admin, $account->id, EmailSequence::STATUS_ACTIVE);
+
+        $contact = Contact::factory()->create(['email' => 'suppressed@example.com']);
+        $recipient = EmailSequenceRecipient::create([
+            'email_sequence_id' => $sequence->id,
+            'contact_id' => $contact->id,
+            'email' => 'suppressed@example.com',
+            'current_step' => 0,
+            'status' => EmailSequence::RECIPIENT_PENDING,
+            'next_send_at' => now()->subMinute(),
+        ]);
+        EmailSuppression::suppress('suppressed@example.com', EmailSuppression::REASON_UNSUBSCRIBE);
+
+        $this->artisan('email-sequences:process')->assertExitCode(0);
+
+        // The suppression backstop: no dispatch, recipient marked UNSUBSCRIBED.
+        Queue::assertNotPushed(SendUserEmail::class);
+        $this->assertSame(
+            EmailSequence::RECIPIENT_UNSUBSCRIBED,
+            $recipient->fresh()->status,
+        );
     }
 
     // ---- C2: the processor runs without the Undefined-constant crash --------

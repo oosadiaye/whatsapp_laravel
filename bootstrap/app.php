@@ -1,8 +1,15 @@
 <?php
 
+use App\Http\Middleware\AllowedWebhookIps;
+use App\Http\Middleware\EnsureMailClientEnabled;
+use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Spatie\Permission\Middleware\PermissionMiddleware;
+use Spatie\Permission\Middleware\RoleMiddleware;
+use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -18,23 +25,23 @@ return Application::configure(basePath: dirname(__DIR__))
         // trust to your LB's CIDR(s) — see the SECURITY note there (review M1).
 
         // Baseline security headers (CSP/HSTS/etc.) on every web response.
-        $middleware->appendToGroup('web', \App\Http\Middleware\SecurityHeaders::class);
+        $middleware->appendToGroup('web', SecurityHeaders::class);
 
         // Log out users deactivated mid-session on their next request.
-        $middleware->appendToGroup('web', \App\Http\Middleware\EnsureUserIsActive::class);
+        $middleware->appendToGroup('web', EnsureUserIsActive::class);
 
         $middleware->alias([
             // Optional source-IP allowlist for provider webhooks (empty = off).
-            'webhook.allowed-ips' => \App\Http\Middleware\AllowedWebhookIps::class,
+            'webhook.allowed-ips' => AllowedWebhookIps::class,
             // Gates the per-employee email client behind config('mail_client.enabled').
-            'mailbox.enabled' => \App\Http\Middleware\EnsureMailClientEnabled::class,
+            'mailbox.enabled' => EnsureMailClientEnabled::class,
             // spatie/laravel-permission middleware aliases — usage:
             //   ->middleware('role:admin')
             //   ->middleware('permission:users.create')
             //   ->middleware('role_or_permission:admin|users.view')
-            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
-            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
-            'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            'role' => RoleMiddleware::class,
+            'permission' => PermissionMiddleware::class,
+            'role_or_permission' => RoleOrPermissionMiddleware::class,
         ]);
 
         // Meta posts here without CSRF tokens. Excluding only the CSRF check
@@ -49,6 +56,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // RFC 8058 one-click unsubscribe POSTs here; it's protected by the
             // signed-URL middleware instead of a CSRF token.
             'email/unsubscribe',
+            'email/sequence-unsubscribe/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

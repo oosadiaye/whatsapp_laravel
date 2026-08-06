@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services\MailClient;
 
+use App\Jobs\SendUserEmail;
+
 /**
  * A message the employee is sending — reply or fresh compose (plan B5a).
  *
  * Immutable so it can be built once (by the composer, B5b) and carried through
- * the queue to {@see \App\Jobs\SendUserEmail} unchanged. `messageId`,
+ * the queue to {@see SendUserEmail} unchanged. `messageId`,
  * `inReplyTo` and `references` are the RFC 5322 threading headers: setting them
  * on a reply is what makes it land in the recipient's existing conversation and
  * lets our own re-sync dedupe the sent copy. All ids are stored WITH angle
@@ -34,6 +36,7 @@ final class OutboundEmail
         public readonly ?int $threadId = null,
         public readonly ?string $messageId = null,
         public readonly array $attachments = [],
+        public readonly ?string $unsubscribeUrl = null,
     ) {}
 
     /**
@@ -54,6 +57,7 @@ final class OutboundEmail
             threadId: $this->threadId,
             messageId: $messageId,
             attachments: $this->attachments,
+            unsubscribeUrl: $this->unsubscribeUrl,
         );
     }
 

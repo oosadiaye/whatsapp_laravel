@@ -7,6 +7,7 @@ namespace App\Mail;
 use App\Models\EmailAccount;
 use App\Services\MailClient\OutboundAttachment;
 use App\Services\MailClient\OutboundEmail;
+use App\Services\MailClient\SmtpSender;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
@@ -23,7 +24,7 @@ use Illuminate\Queue\SerializesModels;
  * headers (Message-ID / In-Reply-To / References) are set so replies thread on
  * the recipient's side and our own re-sync can dedupe the sent copy.
  *
- * Transport is the account's own SMTP, wired up by {@see \App\Services\MailClient\SmtpSender}
+ * Transport is the account's own SMTP, wired up by {@see SmtpSender}
  * — this mailable only describes the message, not how it leaves the building.
  */
 class UserMail extends Mailable
@@ -54,6 +55,17 @@ class UserMail extends Mailable
         $html = $this->email->bodyHtml
             ?? '<pre style="font-family:inherit;white-space:pre-wrap">'.e((string) $this->email->bodyText).'</pre>';
 
+        // An optional unsubscribe footer (set by automated sends like email
+        // sequences) — required for legitimate cold outreach and gives the
+        // recipient a working path into the suppression list.
+        if ($this->email->unsubscribeUrl !== null) {
+            $html .= '<hr style="margin-top:32px;border:none;border-top:1px solid #e5e7eb">'
+                .'<p style="font-size:12px;color:#9ca3af;line-height:1.5;margin-top:12px">'
+                .'You are receiving this email because you are a contact of '.e((string) ($this->account->display_name ?: $this->account->email)).'. '
+                .'<a href="'.e($this->email->unsubscribeUrl).'" style="color:#6b7280">Unsubscribe</a>.'
+                .'</p>';
+        }
+
         return new Content(htmlString: $html);
     }
 
@@ -67,6 +79,12 @@ class UserMail extends Mailable
 
         if ($this->email->references !== null && $this->email->references !== '') {
             $custom['References'] = $this->email->references;
+        }
+
+        // RFC 2369 / 8058 one-click unsubscribe headers for automated sends.
+        if ($this->email->unsubscribeUrl !== null) {
+            $custom['List-Unsubscribe'] = '<'.$this->email->unsubscribeUrl.'>';
+            $custom['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
         }
 
         return new Headers(

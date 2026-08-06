@@ -1,15 +1,30 @@
 <?php
 
+use App\Http\Controllers\AfricasTalkingWebhookController;
+use App\Http\Controllers\CallController;
 use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\CloudWebhookController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ContactGroupController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EmailAccountController;
+use App\Http\Controllers\EmailCampaignController;
+use App\Http\Controllers\EmailSequenceController;
+use App\Http\Controllers\EmailSuppressionController;
+use App\Http\Controllers\EmailTemplateController;
+use App\Http\Controllers\EmailTrackingController;
+use App\Http\Controllers\EmailWebhookController;
+use App\Http\Controllers\MailboxController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SequenceTrackingController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\TeamLoadController;
+use App\Http\Controllers\UnsubscribeController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\CloudWebhookController;
+use App\Http\Controllers\VoicemailController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -32,13 +47,13 @@ Route::middleware([
     // Africa's Talking voice webhook (Phase 18). The optional {secret} path
     // segment authenticates the callback (AT voice callbacks are unsigned) —
     // see config voice.at_webhook_secret.
-    Route::post('/webhooks/africastalking/voice/{secret?}', [\App\Http\Controllers\AfricasTalkingWebhookController::class, 'handle'])
+    Route::post('/webhooks/africastalking/voice/{secret?}', [AfricasTalkingWebhookController::class, 'handle'])
         ->name('webhook.africastalking.voice');
 
     // Provider bounce/complaint ingestion → auto-suppression. The {secret} path
     // segment authenticates (fail-closed 404 until services.email_webhooks.secret
     // is set); {provider} selects the parser (e.g. postmark).
-    Route::post('/webhooks/email/{provider}/{secret}', [\App\Http\Controllers\EmailWebhookController::class, 'handle'])
+    Route::post('/webhooks/email/{provider}/{secret}', [EmailWebhookController::class, 'handle'])
         ->name('webhook.email');
 });
 
@@ -46,15 +61,26 @@ Route::middleware([
 // email footer links here + a List-Unsubscribe header. GET for the footer link,
 // POST for RFC 8058 one-click (CSRF-exempt in bootstrap/app.php). No auth —
 // recipients aren't users.
-Route::match(['get', 'post'], '/email/unsubscribe', [\App\Http\Controllers\UnsubscribeController::class, 'show'])
+Route::match(['get', 'post'], '/email/unsubscribe', [UnsubscribeController::class, 'show'])
     ->middleware('signed')
     ->name('email.unsubscribe');
 
 // Open-tracking pixel (signed per-recipient). Returns a 1x1 GIF and records the
 // open. No auth — recipients aren't users.
-Route::get('/email/open/{log}', [\App\Http\Controllers\EmailTrackingController::class, 'open'])
+Route::get('/email/open/{log}', [EmailTrackingController::class, 'open'])
     ->middleware('signed')
     ->name('email.open');
+
+// Sequence open-tracking pixel + unsubscribe (signed per sequence recipient).
+// Same trust model as the campaign equivalents: a tamper-proof URL, no user auth
+// (recipients aren't app users). POST is CSRF-exempt in bootstrap/app.php for
+// RFC 8058 one-click.
+Route::get('/email/sequence-open/{recipient}', [SequenceTrackingController::class, 'open'])
+    ->middleware('signed')
+    ->name('email.sequence-open');
+Route::match(['get', 'post'], '/email/sequence-unsubscribe/{recipient}', [SequenceTrackingController::class, 'unsubscribe'])
+    ->middleware('signed')
+    ->name('email.sequence-unsubscribe');
 
 // Authenticated routes — role/permission gates per resource group
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -69,14 +95,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Whole feature gated by config('mail_client.enabled') (404 when off) +
     // mailbox.view. A user manages their OWN accounts (see controller guards).
     Route::middleware(['mailbox.enabled', 'permission:mailbox.view'])->group(function () {
-        Route::get('/mailbox', [\App\Http\Controllers\MailboxController::class, 'inbox'])->name('mailbox.inbox');
-        Route::get('/mailbox/attachments/{attachment}', [\App\Http\Controllers\MailboxController::class, 'downloadAttachment'])->name('mailbox.attachments.download');
-        Route::get('/mailbox/accounts', [\App\Http\Controllers\EmailAccountController::class, 'index'])->name('mailbox.accounts.index');
-        Route::get('/mailbox/accounts/connect', [\App\Http\Controllers\EmailAccountController::class, 'create'])->name('mailbox.accounts.create');
-        Route::post('/mailbox/accounts', [\App\Http\Controllers\EmailAccountController::class, 'store'])->name('mailbox.accounts.store');
-        Route::get('/mailbox/accounts/{account}/edit', [\App\Http\Controllers\EmailAccountController::class, 'edit'])->name('mailbox.accounts.edit');
-        Route::put('/mailbox/accounts/{account}', [\App\Http\Controllers\EmailAccountController::class, 'update'])->name('mailbox.accounts.update');
-        Route::delete('/mailbox/accounts/{account}', [\App\Http\Controllers\EmailAccountController::class, 'destroy'])->name('mailbox.accounts.destroy');
+        Route::get('/mailbox', [MailboxController::class, 'inbox'])->name('mailbox.inbox');
+        Route::get('/mailbox/attachments/{attachment}', [MailboxController::class, 'downloadAttachment'])->name('mailbox.attachments.download');
+        Route::get('/mailbox/accounts', [EmailAccountController::class, 'index'])->name('mailbox.accounts.index');
+        Route::get('/mailbox/accounts/connect', [EmailAccountController::class, 'create'])->name('mailbox.accounts.create');
+        Route::post('/mailbox/accounts', [EmailAccountController::class, 'store'])->name('mailbox.accounts.store');
+        Route::get('/mailbox/accounts/{account}/edit', [EmailAccountController::class, 'edit'])->name('mailbox.accounts.edit');
+        Route::put('/mailbox/accounts/{account}', [EmailAccountController::class, 'update'])->name('mailbox.accounts.update');
+        Route::delete('/mailbox/accounts/{account}', [EmailAccountController::class, 'destroy'])->name('mailbox.accounts.destroy');
     });
 
     // Single-instance app: the one WhatsApp number is configured on the
@@ -189,61 +215,61 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ─── Email Campaigns (bulk email to prospects) ─────────────────────────
     // Static routes before {emailCampaign} wildcards.
     Route::middleware('permission:email.create')->group(function () {
-        Route::get('/email-campaigns/create', [\App\Http\Controllers\EmailCampaignController::class, 'create'])->name('email-campaigns.create');
-        Route::post('/email-campaigns', [\App\Http\Controllers\EmailCampaignController::class, 'store'])->name('email-campaigns.store');
+        Route::get('/email-campaigns/create', [EmailCampaignController::class, 'create'])->name('email-campaigns.create');
+        Route::post('/email-campaigns', [EmailCampaignController::class, 'store'])->name('email-campaigns.store');
     });
     Route::middleware('permission:email.view')->group(function () {
         // Suppression list — before the {emailCampaign} wildcard.
-        Route::get('/email-campaigns/suppressions', [\App\Http\Controllers\EmailSuppressionController::class, 'index'])->name('email-suppressions.index');
-        Route::get('/email-campaigns', [\App\Http\Controllers\EmailCampaignController::class, 'index'])->name('email-campaigns.index');
-        Route::get('/email-campaigns/{emailCampaign}', [\App\Http\Controllers\EmailCampaignController::class, 'show'])->name('email-campaigns.show');
+        Route::get('/email-campaigns/suppressions', [EmailSuppressionController::class, 'index'])->name('email-suppressions.index');
+        Route::get('/email-campaigns', [EmailCampaignController::class, 'index'])->name('email-campaigns.index');
+        Route::get('/email-campaigns/{emailCampaign}', [EmailCampaignController::class, 'show'])->name('email-campaigns.show');
     });
     Route::middleware('permission:email.edit')->group(function () {
-        Route::post('/email-campaigns/suppressions', [\App\Http\Controllers\EmailSuppressionController::class, 'store'])->name('email-suppressions.store');
-        Route::delete('/email-campaigns/suppressions/{suppression}', [\App\Http\Controllers\EmailSuppressionController::class, 'destroy'])->name('email-suppressions.destroy');
+        Route::post('/email-campaigns/suppressions', [EmailSuppressionController::class, 'store'])->name('email-suppressions.store');
+        Route::delete('/email-campaigns/suppressions/{suppression}', [EmailSuppressionController::class, 'destroy'])->name('email-suppressions.destroy');
     });
     Route::middleware('permission:email.edit')->group(function () {
-        Route::get('/email-campaigns/{emailCampaign}/edit', [\App\Http\Controllers\EmailCampaignController::class, 'edit'])->name('email-campaigns.edit');
-        Route::put('/email-campaigns/{emailCampaign}', [\App\Http\Controllers\EmailCampaignController::class, 'update'])->name('email-campaigns.update');
+        Route::get('/email-campaigns/{emailCampaign}/edit', [EmailCampaignController::class, 'edit'])->name('email-campaigns.edit');
+        Route::put('/email-campaigns/{emailCampaign}', [EmailCampaignController::class, 'update'])->name('email-campaigns.update');
     });
     Route::middleware('permission:email.send')->group(function () {
-        Route::post('/email-campaigns/{emailCampaign}/launch', [\App\Http\Controllers\EmailCampaignController::class, 'launch'])->name('email-campaigns.launch');
-        Route::post('/email-campaigns/{emailCampaign}/pause', [\App\Http\Controllers\EmailCampaignController::class, 'pause'])->name('email-campaigns.pause');
-        Route::post('/email-campaigns/{emailCampaign}/resume', [\App\Http\Controllers\EmailCampaignController::class, 'resume'])->name('email-campaigns.resume');
-        Route::post('/email-campaigns/{emailCampaign}/cancel', [\App\Http\Controllers\EmailCampaignController::class, 'cancel'])->name('email-campaigns.cancel');
+        Route::post('/email-campaigns/{emailCampaign}/launch', [EmailCampaignController::class, 'launch'])->name('email-campaigns.launch');
+        Route::post('/email-campaigns/{emailCampaign}/pause', [EmailCampaignController::class, 'pause'])->name('email-campaigns.pause');
+        Route::post('/email-campaigns/{emailCampaign}/resume', [EmailCampaignController::class, 'resume'])->name('email-campaigns.resume');
+        Route::post('/email-campaigns/{emailCampaign}/cancel', [EmailCampaignController::class, 'cancel'])->name('email-campaigns.cancel');
     });
     Route::middleware('permission:email.delete')->group(function () {
-        Route::delete('/email-campaigns/{emailCampaign}', [\App\Http\Controllers\EmailCampaignController::class, 'destroy'])->name('email-campaigns.destroy');
+        Route::delete('/email-campaigns/{emailCampaign}', [EmailCampaignController::class, 'destroy'])->name('email-campaigns.destroy');
     });
 
     // ─── Reports & Health ────────────────────────────────────────────────
     Route::middleware('permission:reports.view')->group(function () {
-        Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
     });
 
     // ─── Email Sequences (cold email / follow-up automation) ─────────────
     Route::middleware('permission:email.view')->group(function () {
-        Route::get('/email-sequences', [\App\Http\Controllers\EmailSequenceController::class, 'index'])->name('email-sequences.index');
-        Route::get('/email-sequences/create', [\App\Http\Controllers\EmailSequenceController::class, 'create'])->name('email-sequences.create');
-        Route::get('/email-sequences/{emailSequence}/edit', [\App\Http\Controllers\EmailSequenceController::class, 'edit'])->name('email-sequences.edit');
+        Route::get('/email-sequences', [EmailSequenceController::class, 'index'])->name('email-sequences.index');
+        Route::get('/email-sequences/create', [EmailSequenceController::class, 'create'])->name('email-sequences.create');
+        Route::get('/email-sequences/{emailSequence}/edit', [EmailSequenceController::class, 'edit'])->name('email-sequences.edit');
     });
     Route::middleware('permission:email.create')->group(function () {
-        Route::post('/email-sequences', [\App\Http\Controllers\EmailSequenceController::class, 'store'])->name('email-sequences.store');
+        Route::post('/email-sequences', [EmailSequenceController::class, 'store'])->name('email-sequences.store');
     });
     Route::middleware('permission:email.edit')->group(function () {
-        Route::put('/email-sequences/{emailSequence}', [\App\Http\Controllers\EmailSequenceController::class, 'update'])->name('email-sequences.update');
-        Route::post('/email-sequences/{emailSequence}/steps', [\App\Http\Controllers\EmailSequenceController::class, 'storeStep'])->name('email-sequences.steps.store');
-        Route::put('/email-sequences/{emailSequence}/steps/{step}', [\App\Http\Controllers\EmailSequenceController::class, 'updateStep'])->name('email-sequences.steps.update');
-        Route::delete('/email-sequences/{emailSequence}/steps/{step}', [\App\Http\Controllers\EmailSequenceController::class, 'deleteStep'])->name('email-sequences.steps.destroy');
-        Route::post('/email-sequences/{emailSequence}/enroll', [\App\Http\Controllers\EmailSequenceController::class, 'enroll'])->name('email-sequences.enroll');
+        Route::put('/email-sequences/{emailSequence}', [EmailSequenceController::class, 'update'])->name('email-sequences.update');
+        Route::post('/email-sequences/{emailSequence}/steps', [EmailSequenceController::class, 'storeStep'])->name('email-sequences.steps.store');
+        Route::put('/email-sequences/{emailSequence}/steps/{step}', [EmailSequenceController::class, 'updateStep'])->name('email-sequences.steps.update');
+        Route::delete('/email-sequences/{emailSequence}/steps/{step}', [EmailSequenceController::class, 'deleteStep'])->name('email-sequences.steps.destroy');
+        Route::post('/email-sequences/{emailSequence}/enroll', [EmailSequenceController::class, 'enroll'])->name('email-sequences.enroll');
     });
     Route::middleware('permission:email.send')->group(function () {
-        Route::post('/email-sequences/{emailSequence}/launch', [\App\Http\Controllers\EmailSequenceController::class, 'launch'])->name('email-sequences.launch');
-        Route::post('/email-sequences/{emailSequence}/pause', [\App\Http\Controllers\EmailSequenceController::class, 'pause'])->name('email-sequences.pause');
-        Route::post('/email-sequences/{emailSequence}/cancel', [\App\Http\Controllers\EmailSequenceController::class, 'cancel'])->name('email-sequences.cancel');
+        Route::post('/email-sequences/{emailSequence}/launch', [EmailSequenceController::class, 'launch'])->name('email-sequences.launch');
+        Route::post('/email-sequences/{emailSequence}/pause', [EmailSequenceController::class, 'pause'])->name('email-sequences.pause');
+        Route::post('/email-sequences/{emailSequence}/cancel', [EmailSequenceController::class, 'cancel'])->name('email-sequences.cancel');
     });
     Route::middleware('permission:email.delete')->group(function () {
-        Route::delete('/email-sequences/{emailSequence}', [\App\Http\Controllers\EmailSequenceController::class, 'destroy'])->name('email-sequences.destroy');
+        Route::delete('/email-sequences/{emailSequence}', [EmailSequenceController::class, 'destroy'])->name('email-sequences.destroy');
     });
 
     // ─── Email Templates ───────────────────────────────────────────────────
@@ -251,18 +277,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // with the Meta-synced WhatsApp message templates under /templates.
     // Static /create precedes the {emailTemplate} wildcard routes.
     Route::middleware('permission:email.view')->group(function () {
-        Route::get('/email-templates', [\App\Http\Controllers\EmailTemplateController::class, 'index'])->name('email-templates.index');
+        Route::get('/email-templates', [EmailTemplateController::class, 'index'])->name('email-templates.index');
     });
     Route::middleware('permission:email.create')->group(function () {
-        Route::get('/email-templates/create', [\App\Http\Controllers\EmailTemplateController::class, 'create'])->name('email-templates.create');
-        Route::post('/email-templates', [\App\Http\Controllers\EmailTemplateController::class, 'store'])->name('email-templates.store');
+        Route::get('/email-templates/create', [EmailTemplateController::class, 'create'])->name('email-templates.create');
+        Route::post('/email-templates', [EmailTemplateController::class, 'store'])->name('email-templates.store');
     });
     Route::middleware('permission:email.edit')->group(function () {
-        Route::get('/email-templates/{emailTemplate}/edit', [\App\Http\Controllers\EmailTemplateController::class, 'edit'])->name('email-templates.edit');
-        Route::put('/email-templates/{emailTemplate}', [\App\Http\Controllers\EmailTemplateController::class, 'update'])->name('email-templates.update');
+        Route::get('/email-templates/{emailTemplate}/edit', [EmailTemplateController::class, 'edit'])->name('email-templates.edit');
+        Route::put('/email-templates/{emailTemplate}', [EmailTemplateController::class, 'update'])->name('email-templates.update');
     });
     Route::middleware('permission:email.delete')->group(function () {
-        Route::delete('/email-templates/{emailTemplate}', [\App\Http\Controllers\EmailTemplateController::class, 'destroy'])->name('email-templates.destroy');
+        Route::delete('/email-templates/{emailTemplate}', [EmailTemplateController::class, 'destroy'])->name('email-templates.destroy');
     });
 
     // ─── Conversations / Chat (Phase 13/14) ────────────────────────────────
@@ -274,38 +300,38 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ─── Calls feed + Workspace (Phase 15 / 20) ────────────────────────────
     Route::middleware('role_or_permission:conversations.view_all|conversations.view_assigned')->group(function () {
-        Route::get('/calls', [\App\Http\Controllers\CallController::class, 'index'])
+        Route::get('/calls', [CallController::class, 'index'])
             ->name('calls.index');
         // Unified agent Call Workspace: live call + queue/history + AI/notes panel.
-        Route::get('/workspace', [\App\Http\Controllers\CallController::class, 'workspace'])
+        Route::get('/workspace', [CallController::class, 'workspace'])
             ->name('calls.workspace');
         // Stream a call recording (private disk, per-call access checked in the action).
-        Route::get('/calls/{call}/recording', [\App\Http\Controllers\CallController::class, 'downloadRecording'])
+        Route::get('/calls/{call}/recording', [CallController::class, 'downloadRecording'])
             ->name('calls.recording.download');
         // Voicemail inbox (inbound callers who left a message).
-        Route::get('/voicemails', [\App\Http\Controllers\VoicemailController::class, 'index'])
+        Route::get('/voicemails', [VoicemailController::class, 'index'])
             ->name('voicemails.index');
         // Auth-gated recording proxy — never exposes the raw AT URL to the browser.
-        Route::get('/voicemails/{voicemail}/recording', [\App\Http\Controllers\VoicemailController::class, 'download'])
+        Route::get('/voicemails/{voicemail}/recording', [VoicemailController::class, 'download'])
             ->name('voicemails.download');
-        Route::post('/voicemails/{voicemail}/heard', [\App\Http\Controllers\VoicemailController::class, 'markHeard'])
+        Route::post('/voicemails/{voicemail}/heard', [VoicemailController::class, 'markHeard'])
             ->name('voicemails.markHeard');
     });
     Route::middleware('permission:conversations.reply')->group(function () {
         Route::post('/conversations/{conversation}/reply', [ConversationController::class, 'reply'])->name('conversations.reply');
 
         // Phase 17 — inbound call browser answer
-        Route::post('/calls/{call}/claim', [\App\Http\Controllers\CallController::class, 'claim'])->name('calls.claim');
-        Route::post('/calls/{call}/answer', [\App\Http\Controllers\CallController::class, 'answer'])->name('calls.answer');
-        Route::post('/calls/{call}/decline', [\App\Http\Controllers\CallController::class, 'decline'])->name('calls.decline');
-        Route::post('/calls/{call}/hangup', [\App\Http\Controllers\CallController::class, 'hangup'])->name('calls.hangup');
-        Route::post('/calls/{call}/quality', [\App\Http\Controllers\CallController::class, 'quality'])->name('calls.quality');
+        Route::post('/calls/{call}/claim', [CallController::class, 'claim'])->name('calls.claim');
+        Route::post('/calls/{call}/answer', [CallController::class, 'answer'])->name('calls.answer');
+        Route::post('/calls/{call}/decline', [CallController::class, 'decline'])->name('calls.decline');
+        Route::post('/calls/{call}/hangup', [CallController::class, 'hangup'])->name('calls.hangup');
+        Route::post('/calls/{call}/quality', [CallController::class, 'quality'])->name('calls.quality');
 
         // Phase 20 — Call Workspace: upload recording for AI analysis + log notes.
-        Route::post('/calls/{call}/recording', [\App\Http\Controllers\CallController::class, 'storeRecording'])->name('calls.recording.store');
-        Route::post('/calls/{call}/notes', [\App\Http\Controllers\CallController::class, 'storeNote'])->name('calls.notes.store');
+        Route::post('/calls/{call}/recording', [CallController::class, 'storeRecording'])->name('calls.recording.store');
+        Route::post('/calls/{call}/notes', [CallController::class, 'storeNote'])->name('calls.notes.store');
         // Blind transfer to another agent or a PSTN number.
-        Route::post('/calls/{call}/transfer', [\App\Http\Controllers\CallController::class, 'transfer'])->name('calls.transfer');
+        Route::post('/calls/{call}/transfer', [CallController::class, 'transfer'])->name('calls.transfer');
     });
     Route::middleware('permission:conversations.reply')->group(function () {
         Route::post('/contacts/{contact}/chat', [ContactController::class, 'startChat'])
@@ -319,14 +345,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/conversations/{conversation}/calls/{call}/end', [ConversationController::class, 'endCall'])->name('conversations.endCall');
 
         // Phase 18 — outbound PSTN dial via Africa's Talking
-        Route::post('/calls/outbound', [\App\Http\Controllers\CallController::class, 'placeOutbound'])
+        Route::post('/calls/outbound', [CallController::class, 'placeOutbound'])
             ->name('calls.outbound');
     });
     // Workspace dial pad — dial a raw number or a chosen contact (feature-scoped
     // calls.dial permission). Resolves the destination + hands off to the
     // conversation page, which places the call through the softphone.
     Route::middleware('permission:calls.dial')->group(function () {
-        Route::post('/calls/dial', [\App\Http\Controllers\CallController::class, 'dial'])->name('calls.dial');
+        Route::post('/calls/dial', [CallController::class, 'dial'])->name('calls.dial');
     });
     Route::middleware('permission:conversations.call')->group(function () {
         Route::post('/contacts/{contact}/call', [ContactController::class, 'startCall'])
@@ -355,7 +381,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // so managers get team visibility without user-CRUD rights.
     // See RolesAndPermissionsSeeder for the team.view → role grants.
     Route::middleware('permission:team.view')->group(function () {
-        Route::get('/team', [\App\Http\Controllers\TeamLoadController::class, 'index'])
+        Route::get('/team', [TeamLoadController::class, 'index'])
             ->name('team.index');
         // Live operations wallboard — realtime call board (Livewire Wallboard).
         Route::view('/wallboard', 'wallboard.index')->name('wallboard');

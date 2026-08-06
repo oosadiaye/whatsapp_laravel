@@ -101,4 +101,35 @@ class UserMailTest extends TestCase
                 ->withMime('application/pdf'),
         );
     }
+
+    public function test_an_unsubscribe_url_renders_a_footer_and_one_click_headers(): void
+    {
+        $email = new OutboundEmail(
+            to: ['c@example.com'],
+            subject: 'Cold outreach',
+            bodyHtml: '<p>Hello</p>',
+            unsubscribeUrl: 'https://app.example.com/email/sequence-unsubscribe/42?signature=abc',
+        );
+
+        $mailable = new UserMail($this->account(), $email);
+        $mailable->render();
+
+        $mailable->assertSeeInHtml('Unsubscribe', false);
+        $mailable->assertSeeInHtml('sequence-unsubscribe/42', false);
+        $this->assertSame(
+            '<https://app.example.com/email/sequence-unsubscribe/42?signature=abc>',
+            $mailable->headers()->text['List-Unsubscribe'] ?? null,
+        );
+        $this->assertSame('List-Unsubscribe=One-Click', $mailable->headers()->text['List-Unsubscribe-Post'] ?? null);
+    }
+
+    public function test_no_unsubscribe_footer_without_a_url(): void
+    {
+        $email = new OutboundEmail(to: ['c@example.com'], subject: 'Reply', bodyText: 'hi');
+
+        $mailable = new UserMail($this->account(), $email);
+
+        $mailable->assertDontSeeInHtml('Unsubscribe');
+        $this->assertArrayNotHasKey('List-Unsubscribe', $mailable->headers()->text);
+    }
 }
