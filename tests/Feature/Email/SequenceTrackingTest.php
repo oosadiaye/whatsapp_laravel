@@ -86,4 +86,57 @@ class SequenceTrackingTest extends TestCase
         $this->assertFalse(EmailSuppression::isSuppressed('no@example.com'));
         $this->assertSame(EmailSequence::RECIPIENT_SENT, $recipient->fresh()->status);
     }
+
+    public function test_click_records_the_click_and_redirects_to_the_target(): void
+    {
+        $recipient = $this->recipient(EmailSequence::RECIPIENT_SENT);
+        $target = 'https://example.com/page?a=1&b=2';
+
+        $url = URL::signedRoute('email.sequence-click', ['recipient' => $recipient->id, 'url' => $target]);
+        $this->get($url)->assertRedirect($target);
+
+        $recipient->refresh();
+        $this->assertSame(1, $recipient->click_count);
+        $this->assertSame(EmailSequence::RECIPIENT_CLICKED, $recipient->status);
+    }
+
+    public function test_click_does_not_count_for_a_never_sent_recipient(): void
+    {
+        $recipient = $this->recipient(EmailSequence::RECIPIENT_PENDING);
+
+        $url = URL::signedRoute('email.sequence-click', [
+            'recipient' => $recipient->id,
+            'url' => 'https://example.com',
+        ]);
+        // Still redirects (user-friendly) but records no engagement.
+        $this->get($url)->assertRedirect('https://example.com');
+
+        $this->assertSame(0, $recipient->fresh()->click_count);
+        $this->assertSame(EmailSequence::RECIPIENT_PENDING, $recipient->fresh()->status);
+    }
+
+    public function test_click_rejects_a_non_http_target(): void
+    {
+        $recipient = $this->recipient(EmailSequence::RECIPIENT_SENT);
+
+        // A signed URL is required to reach this branch, but even so the target
+        // must be http(s) — a javascript: target is never allowed to redirect.
+        $url = URL::signedRoute('email.sequence-click', [
+            'recipient' => $recipient->id,
+            'url' => 'javascript:alert(1)',
+        ]);
+        $this->get($url)->assertStatus(400);
+
+        $this->assertSame(0, $recipient->fresh()->click_count);
+    }
+
+    public function test_an_unsigned_click_url_is_rejected(): void
+    {
+        $recipient = $this->recipient(EmailSequence::RECIPIENT_SENT);
+
+        $this->get(route('email.sequence-click', ['recipient' => $recipient->id, 'url' => 'https://example.com']))
+            ->assertForbidden();
+
+        $this->assertSame(0, $recipient->fresh()->click_count);
+    }
 }

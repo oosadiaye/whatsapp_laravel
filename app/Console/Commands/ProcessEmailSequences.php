@@ -9,9 +9,9 @@ use App\Models\EmailSequence;
 use App\Models\EmailSequenceRecipient;
 use App\Models\EmailSuppression;
 use App\Services\MailClient\OutboundEmail;
+use App\Support\SequenceEmailContent;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\URL;
 
 class ProcessEmailSequences extends Command
 {
@@ -142,28 +142,21 @@ class ProcessEmailSequences extends Command
             return;
         }
 
-        // Open-tracking pixel + unsubscribe footer (signed URLs) so sequence
-        // recipients can opt out and engagement is actually recorded.
+        // Open-tracking pixel + wrapped links + unsubscribe footer (all signed)
+        // so sequence recipients can opt out and engagement is recorded.
         $recipientId = $recipient->id;
-        $unsubscribeUrl = URL::signedRoute('email.sequence-unsubscribe', ['recipient' => $recipientId]);
-        $pixelUrl = URL::signedRoute('email.sequence-open', ['recipient' => $recipientId]);
-
-        $bodyHtml = $step->body_html;
-        if ($bodyHtml !== null && $bodyHtml !== '') {
-            $bodyHtml .= '<img src="'.e($pixelUrl).'" width="1" height="1" alt="" style="display:none">';
-        }
 
         $outbound = new OutboundEmail(
             to: [$recipient->email],
             subject: $step->subject,
-            bodyHtml: $bodyHtml,
+            bodyHtml: SequenceEmailContent::bodyHtml($step->body_html, $recipientId),
             bodyText: $step->body_text,
             cc: [],
             inReplyTo: null,
             references: null,
             threadId: null,
             attachments: [],
-            unsubscribeUrl: $unsubscribeUrl,
+            unsubscribeUrl: SequenceEmailContent::unsubscribeUrl($recipientId),
         );
 
         SendUserEmail::dispatch($account->id, $outbound);

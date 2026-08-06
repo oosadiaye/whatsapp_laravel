@@ -7,6 +7,8 @@ namespace App\Http\Controllers;
 use App\Models\EmailSequence;
 use App\Models\EmailSequenceRecipient;
 use App\Models\EmailSuppression;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\View\View;
 
@@ -52,5 +54,36 @@ class SequenceTrackingController extends Controller
         ]);
 
         return view('email.unsubscribed', ['email' => $recipient->email]);
+    }
+
+    /**
+     * Click-through redirect. The signed URL carries the original destination in
+     * the `url` query param (bound into the signature, so it can't be swapped to
+     * a phishing target). Records the click on the recipient and sends them on.
+     */
+    public function click(EmailSequenceRecipient $recipient, Request $request): RedirectResponse
+    {
+        $target = (string) $request->query('url', '');
+
+        // Only http(s) targets are legal — a signed URL carrying javascript: or a
+        // bare path is a tampered/malformed link.
+        if (! preg_match('#^https?://#i', $target)) {
+            abort(400);
+        }
+
+        // Count genuine engagement from a delivered step only; a leaked link for
+        // a never-sent / unsubscribed recipient still redirects but records nothing.
+        if (in_array($recipient->status, [
+            EmailSequence::RECIPIENT_SENT,
+            EmailSequence::RECIPIENT_OPENED,
+            EmailSequence::RECIPIENT_CLICKED,
+        ], true)) {
+            $recipient->increment('click_count');
+            if ($recipient->status !== EmailSequence::RECIPIENT_CLICKED) {
+                $recipient->update(['status' => EmailSequence::RECIPIENT_CLICKED]);
+            }
+        }
+
+        return redirect()->away($target);
     }
 }

@@ -78,6 +78,9 @@ Route::get('/email/open/{log}', [EmailTrackingController::class, 'open'])
 Route::get('/email/sequence-open/{recipient}', [SequenceTrackingController::class, 'open'])
     ->middleware('signed')
     ->name('email.sequence-open');
+Route::get('/email/sequence-click/{recipient}', [SequenceTrackingController::class, 'click'])
+    ->middleware('signed')
+    ->name('email.sequence-click');
 Route::match(['get', 'post'], '/email/sequence-unsubscribe/{recipient}', [SequenceTrackingController::class, 'unsubscribe'])
     ->middleware('signed')
     ->name('email.sequence-unsubscribe');
