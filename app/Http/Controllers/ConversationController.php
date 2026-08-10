@@ -116,8 +116,15 @@ class ConversationController extends Controller
 
         $callLogs = $conversation->callLogs()->with('placedBy')->get();
 
-        // Merge messages and call_logs into one chronological timeline
-        $timeline = $messages->concat($callLogs)->sortBy('created_at')->values();
+        // Merge messages + calls into one chronological timeline — but ONLY
+        // WhatsApp/Meta calls belong in the chat. Africa's Talking (softphone)
+        // calls are handled like a phone dialer (Call Workspace / Call History /
+        // incoming-call screen), so they're excluded from the chat timeline here.
+        // ($callLogs itself stays unfiltered for any non-timeline consumer.)
+        $timeline = $messages
+            ->concat($callLogs->where('provider', CallLog::PROVIDER_META_WHATSAPP))
+            ->sortBy('created_at')
+            ->values();
 
         // Approved templates from the same instance, used when the 24h window
         // is closed. Single-tenant: any approved template tied to this

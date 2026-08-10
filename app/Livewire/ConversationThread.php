@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire;
 
+use App\Models\CallLog;
 use App\Models\Conversation;
 use Livewire\Component;
 
@@ -31,7 +32,15 @@ class ConversationThread extends Component
         $conversation = $this->authorizeAccess();
 
         $messages = $conversation->messages()->with('sentBy')->get();
-        $callLogs = $conversation->callLogs()->with('placedBy')->get();
+        // Only WhatsApp/Meta calls belong in the chat timeline. Africa's Talking
+        // (softphone) calls behave like a phone dialer — they live in the Call
+        // Workspace, Call History, and the ringing incoming-call screen, NOT
+        // interleaved with chat messages (which produced the wall of
+        // "Inbound call · Declined" chips in the conversation thread).
+        $callLogs = $conversation->callLogs()
+            ->where('provider', CallLog::PROVIDER_META_WHATSAPP)
+            ->with('placedBy')
+            ->get();
         $timeline = $messages->concat($callLogs)->sortBy('created_at')->values();
 
         return view('livewire.conversation-thread', [
