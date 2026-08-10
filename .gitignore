@@ -39,3 +39,6 @@ Thumbs.db
 /laravel whatsapp_new.zip
 *.zip
 .claude/worktrees/
+
+# Stray test-run output dumps (e.g. `php artisan test > test_output.txt`)
+test_output.txt
