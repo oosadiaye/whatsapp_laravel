@@ -11,9 +11,13 @@ use Illuminate\Support\Facades\Log;
 class EmailLeadScoringService
 {
     public const SCORE_NONE = 0;
+
     public const SCORE_SENT = 5;
+
     public const SCORE_OPENED = 15;
+
     public const SCORE_CLICKED = 25;
+
     public const SCORE_REPLIED = 40;
 
     public function scoreContact(Contact $contact): int

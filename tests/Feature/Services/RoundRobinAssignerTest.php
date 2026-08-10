@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Services;
 
+use App\Models\Contact;
+use App\Models\Conversation;
+use App\Models\Setting;
 use App\Models\User;
+use App\Models\WhatsAppInstance;
 use App\Services\RoundRobinAssigner;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class RoundRobinAssignerTest extends TestCase
@@ -22,7 +27,7 @@ class RoundRobinAssignerTest extends TestCase
 
     public function test_returns_null_when_no_agents_exist(): void
     {
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $this->assertNull($assigner->next());
     }
@@ -31,7 +36,7 @@ class RoundRobinAssignerTest extends TestCase
     {
         $offline = $this->makeAgent(lastSeenAt: now()->subMinutes(5));
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $this->assertNull($assigner->next());
     }
@@ -48,7 +53,7 @@ class RoundRobinAssignerTest extends TestCase
 
         $agent = $this->makeAgent(lastSeenAt: now());
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $picked = $assigner->next();
 
@@ -63,7 +68,7 @@ class RoundRobinAssignerTest extends TestCase
             isActive: false,
         );
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $this->assertNull($assigner->next());
     }
@@ -78,7 +83,7 @@ class RoundRobinAssignerTest extends TestCase
             lastSeenAt: now()->subSeconds(119),
         );
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $picked = $assigner->next();
 
@@ -99,7 +104,7 @@ class RoundRobinAssignerTest extends TestCase
             lastAssignedAt: null,
         );
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $picked = $assigner->next();
 
@@ -129,7 +134,7 @@ class RoundRobinAssignerTest extends TestCase
             lastAssignedAt: now()->subMinutes(5),
         );
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $picked = $assigner->next();
 
@@ -149,7 +154,7 @@ class RoundRobinAssignerTest extends TestCase
         $a = $this->makeAgent(email: 'a@example.com', lastSeenAt: now());
         $b = $this->makeAgent(email: 'b@example.com', lastSeenAt: now());
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $first = $assigner->next();
         $second = $assigner->next();
@@ -173,7 +178,7 @@ class RoundRobinAssignerTest extends TestCase
         $away = $this->makeAgent(lastSeenAt: now());
         $away->forceFill(['presence_status' => User::PRESENCE_AWAY])->save();
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $this->assertNull(
             $assigner->next(),
@@ -186,7 +191,7 @@ class RoundRobinAssignerTest extends TestCase
         $busy = $this->makeAgent(lastSeenAt: now());
         $busy->forceFill(['presence_status' => User::PRESENCE_BUSY])->save();
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $picked = $assigner->next();
 
@@ -211,7 +216,7 @@ class RoundRobinAssignerTest extends TestCase
         $busy = $this->makeAgent(email: 'b@example.com', lastSeenAt: now());
         $busy->forceFill(['presence_status' => User::PRESENCE_BUSY])->save();
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $first = $assigner->next();
         $second = $assigner->next();
@@ -228,7 +233,7 @@ class RoundRobinAssignerTest extends TestCase
 
     public function test_excludes_agent_at_cap(): void
     {
-        \App\Models\Setting::set('round_robin_cap_per_agent', '3');
+        Setting::set('round_robin_cap_per_agent', '3');
 
         $agent = $this->makeAgent(lastSeenAt: now());
 
@@ -237,7 +242,7 @@ class RoundRobinAssignerTest extends TestCase
             $this->makeAssignedConversation($agent, lastInboundAt: now());
         }
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $this->assertNull(
             $assigner->next(),
@@ -247,7 +252,7 @@ class RoundRobinAssignerTest extends TestCase
 
     public function test_includes_agent_one_below_cap(): void
     {
-        \App\Models\Setting::set('round_robin_cap_per_agent', '3');
+        Setting::set('round_robin_cap_per_agent', '3');
 
         $agent = $this->makeAgent(lastSeenAt: now());
         // Only 2 active conversations — below cap
@@ -255,7 +260,7 @@ class RoundRobinAssignerTest extends TestCase
             $this->makeAssignedConversation($agent, lastInboundAt: now());
         }
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $picked = $assigner->next();
 
@@ -265,7 +270,7 @@ class RoundRobinAssignerTest extends TestCase
 
     public function test_does_not_count_conversations_with_old_inbound(): void
     {
-        \App\Models\Setting::set('round_robin_cap_per_agent', '3');
+        Setting::set('round_robin_cap_per_agent', '3');
 
         $agent = $this->makeAgent(lastSeenAt: now());
         // 5 conversations, all with last_inbound_at OUTSIDE the 24h window
@@ -273,7 +278,7 @@ class RoundRobinAssignerTest extends TestCase
             $this->makeAssignedConversation($agent, lastInboundAt: now()->subHours(25));
         }
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $picked = $assigner->next();
 
@@ -287,7 +292,7 @@ class RoundRobinAssignerTest extends TestCase
 
     public function test_uses_settings_value_for_cap(): void
     {
-        \App\Models\Setting::set('round_robin_cap_per_agent', '2');
+        Setting::set('round_robin_cap_per_agent', '2');
 
         $a = $this->makeAgent(email: 'a@example.com', lastSeenAt: now());
         $b = $this->makeAgent(email: 'b@example.com', lastSeenAt: now());
@@ -299,7 +304,7 @@ class RoundRobinAssignerTest extends TestCase
         // Agent B: 1 active conversation — below cap (eligible)
         $this->makeAssignedConversation($b, lastInboundAt: now());
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $picked = $assigner->next();
 
@@ -315,12 +320,12 @@ class RoundRobinAssignerTest extends TestCase
     {
         // cap=0 means manual-only mode: no agent is ever auto-picked.
         // (count) < 0 is always false, so all agents filtered out.
-        \App\Models\Setting::set('round_robin_cap_per_agent', '0');
+        Setting::set('round_robin_cap_per_agent', '0');
 
         $this->makeAgent(email: 'a@example.com', lastSeenAt: now());
         $this->makeAgent(email: 'b@example.com', lastSeenAt: now());
 
-        $assigner = new RoundRobinAssigner();
+        $assigner = new RoundRobinAssigner;
 
         $this->assertNull(
             $assigner->next(),
@@ -329,22 +334,22 @@ class RoundRobinAssignerTest extends TestCase
     }
 
     private function makeAssignedConversation(
-        \App\Models\User $agent,
-        \Illuminate\Support\Carbon $lastInboundAt,
-    ): \App\Models\Conversation {
-        $owner = \App\Models\User::factory()->create([
-            'role' => \App\Models\User::ROLE_ADMIN,
+        User $agent,
+        Carbon $lastInboundAt,
+    ): Conversation {
+        $owner = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
             'is_active' => true,
         ]);
-        $instance = \App\Models\WhatsAppInstance::factory()->create([
+        $instance = WhatsAppInstance::factory()->create([
             'user_id' => $owner->id,
         ]);
-        $contact = \App\Models\Contact::factory()->create([
+        $contact = Contact::factory()->create([
             'user_id' => $owner->id,
             'phone' => '23480'.fake()->unique()->numerify('########'),
         ]);
 
-        return \App\Models\Conversation::create([
+        return Conversation::create([
             'user_id' => $owner->id,
             'contact_id' => $contact->id,
             'whatsapp_instance_id' => $instance->id,
@@ -357,8 +362,8 @@ class RoundRobinAssignerTest extends TestCase
 
     private function makeAgent(
         ?string $email = null,
-        ?\Illuminate\Support\Carbon $lastSeenAt = null,
-        ?\Illuminate\Support\Carbon $lastAssignedAt = null,
+        ?Carbon $lastSeenAt = null,
+        ?Carbon $lastAssignedAt = null,
         bool $isActive = true,
     ): User {
         $user = User::factory()->create([

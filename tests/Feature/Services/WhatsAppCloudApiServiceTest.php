@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Services;
 
 use App\Exceptions\WhatsAppApiException;
-use App\Models\User;
 use App\Models\WhatsAppInstance;
 use App\Services\WhatsAppCloudApiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,13 +27,14 @@ class WhatsAppCloudApiServiceTest extends TestCase
     use RefreshDatabase;
 
     private WhatsAppCloudApiService $service;
+
     private WhatsAppInstance $instance;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->service = new WhatsAppCloudApiService();
+        $this->service = new WhatsAppCloudApiService;
         $this->instance = $this->makeCloudInstance();
     }
 

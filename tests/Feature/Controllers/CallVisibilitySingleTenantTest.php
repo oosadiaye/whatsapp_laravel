@@ -6,8 +6,10 @@ namespace Tests\Feature\Controllers;
 
 use App\Models\CallLog;
 use App\Models\Conversation;
+use App\Models\Setting;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
+use App\Services\AfricasTalkingVoiceService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -72,7 +74,7 @@ class CallVisibilitySingleTenantTest extends TestCase
 
         // Required Setting for from_phone — the controller pulls it during
         // CallLog::create and the column is NOT NULL.
-        \App\Models\Setting::set('africastalking_virtual_number', '+2348000000001');
+        Setting::set('africastalking_virtual_number', '+2348000000001');
 
         Http::fake([
             'graph.facebook.com/*' => Http::response([], 200),
@@ -81,7 +83,7 @@ class CallVisibilitySingleTenantTest extends TestCase
         // Stub the AfricasTalking voice service so we don't hit the real API
         // — only the AUTHORIZATION path is under test here. Returning a
         // session id is enough for the controller to proceed.
-        $this->mock(\App\Services\AfricasTalkingVoiceService::class, function ($mock) {
+        $this->mock(AfricasTalkingVoiceService::class, function ($mock) {
             $mock->shouldReceive('placeCall')->andReturn('sess_test_'.uniqid());
         });
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Console;
 
 use App\Models\Campaign;
+use App\Models\MessageLog;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -164,7 +165,7 @@ class QueueDoctorTest extends TestCase
 
         // Create at least one MessageLog row so whereHas('messageLogs')
         // returns true — same shape CampaignBatchDispatch would create.
-        \App\Models\MessageLog::create([
+        MessageLog::create([
             'campaign_id' => $campaign->id,
             'phone' => '+2348012345678',
             'status' => 'PENDING',

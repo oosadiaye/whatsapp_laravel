@@ -29,19 +29,17 @@ class SyncEmailAccountJobTest extends TestCase
      */
     private function factoryFetching(\Closure $onFetch): MailAccountProviderFactory
     {
-        return new class($onFetch) extends MailAccountProviderFactory {
-            public function __construct(private readonly \Closure $onFetch)
-            {
-            }
+        return new class($onFetch) extends MailAccountProviderFactory
+        {
+            public function __construct(private readonly \Closure $onFetch) {}
 
             public function fetcherFor(EmailAccount $account): ?MailFetcher
             {
                 $onFetch = $this->onFetch;
 
-                return new class($onFetch) implements MailFetcher {
-                    public function __construct(private readonly \Closure $onFetch)
-                    {
-                    }
+                return new class($onFetch) implements MailFetcher
+                {
+                    public function __construct(private readonly \Closure $onFetch) {}
 
                     public function fetch(EmailAccount $account): FetchResult
                     {
@@ -59,7 +57,7 @@ class SyncEmailAccountJobTest extends TestCase
         $factory = $this->factoryFetching(fn () => throw new MailAuthException('invalid credentials'));
 
         // Must NOT throw — a retry can't fix bad creds.
-        (new SyncEmailAccount($account->id))->handle(new EmailSyncService(), $factory);
+        (new SyncEmailAccount($account->id))->handle(new EmailSyncService, $factory);
 
         $this->assertTrue($account->fresh()->needs_reauth);
     }
@@ -71,7 +69,7 @@ class SyncEmailAccountJobTest extends TestCase
         $factory = $this->factoryFetching(fn () => throw new RuntimeException('connection reset'));
 
         $this->expectException(RuntimeException::class);
-        (new SyncEmailAccount($account->id))->handle(new EmailSyncService(), $factory);
+        (new SyncEmailAccount($account->id))->handle(new EmailSyncService, $factory);
     }
 
     public function test_an_inactive_account_is_skipped(): void
@@ -81,7 +79,7 @@ class SyncEmailAccountJobTest extends TestCase
         // fetcherFor would throw if the job didn't skip first.
         $factory = $this->factoryFetching(fn () => throw new RuntimeException('should not be called'));
 
-        (new SyncEmailAccount($account->id))->handle(new EmailSyncService(), $factory);
+        (new SyncEmailAccount($account->id))->handle(new EmailSyncService, $factory);
 
         $this->assertFalse($account->fresh()->needs_reauth);
     }

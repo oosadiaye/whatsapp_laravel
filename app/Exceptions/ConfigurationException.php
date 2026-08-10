@@ -9,6 +9,4 @@ namespace App\Exceptions;
  * not set in /settings, API key missing). Caller surfaces as 503 with
  * actionable message pointing admin to /settings.
  */
-class ConfigurationException extends \RuntimeException
-{
-}
+class ConfigurationException extends \RuntimeException {}

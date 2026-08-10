@@ -12,6 +12,4 @@ use RuntimeException;
  * Carries the upstream HTTP status and response body in its message so the
  * caller can decide whether to retry, surface to the user, or escalate.
  */
-class WhatsAppApiException extends RuntimeException
-{
-}
+class WhatsAppApiException extends RuntimeException {}

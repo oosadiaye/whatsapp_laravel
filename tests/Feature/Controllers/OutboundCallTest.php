@@ -123,7 +123,7 @@ class OutboundCallTest extends TestCase
     {
         $admin = $this->makeUser('admin');
         $conv = Conversation::factory()->create(['user_id' => $admin->id]);
-        $callLog = \App\Models\CallLog::factory()->inFlight()->outbound($admin)->create([
+        $callLog = CallLog::factory()->inFlight()->outbound($admin)->create([
             'conversation_id' => $conv->id,
             'contact_id' => $conv->contact_id,
             'whatsapp_instance_id' => $conv->whatsapp_instance_id,
@@ -147,7 +147,7 @@ class OutboundCallTest extends TestCase
         $userA = $this->makeUser('admin');
         $userB = $this->makeUser('admin', 'b@example.com');
         $convB = Conversation::factory()->create(['user_id' => $userB->id]);
-        $callB = \App\Models\CallLog::factory()->inFlight()->outbound($userB)->create([
+        $callB = CallLog::factory()->inFlight()->outbound($userB)->create([
             'conversation_id' => $convB->id,
             'contact_id' => $convB->contact_id,
             'whatsapp_instance_id' => $convB->whatsapp_instance_id,

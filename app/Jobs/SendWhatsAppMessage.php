@@ -10,6 +10,7 @@ use App\Models\MessageLog;
 use App\Services\CampaignService;
 use App\Services\ContactImportService;
 use App\Services\WhatsAppMessenger;
+use App\Support\Personalizer;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -99,7 +100,7 @@ class SendWhatsAppMessage implements ShouldQueue
             return;
         }
 
-        $personalizer = new ContactImportService();
+        $personalizer = new ContactImportService;
 
         // Branch 1: template-driven send (production path for cold outreach).
         if ($this->campaign->shouldSendAsTemplate()) {
@@ -142,7 +143,7 @@ class SendWhatsAppMessage implements ShouldQueue
 
         $this->campaign->increment('sent_count');
 
-        (new CampaignService())->checkCompletion($this->campaign);
+        (new CampaignService)->checkCompletion($this->campaign);
     }
 
     /**
@@ -181,6 +182,7 @@ class SendWhatsAppMessage implements ShouldQueue
                 if ($headerComponent !== null) {
                     $output[] = $headerComponent;
                 }
+
                 continue;
             }
 
@@ -216,7 +218,7 @@ class SendWhatsAppMessage implements ShouldQueue
      * Build the header component for a template send.
      *
      * @param  array<string, mixed>  $component  the HEADER component definition from the template
-     * @return array<string, mixed>|null  shaped for Meta's components[] array, or null if no params required
+     * @return array<string, mixed>|null shaped for Meta's components[] array, or null if no params required
      */
     private function buildHeaderComponent(array $component): ?array
     {
@@ -265,13 +267,13 @@ class SendWhatsAppMessage implements ShouldQueue
 
     /**
      * Map a positional template variable ({{1}}, {{2}}, ...) to a contact field
-     * via the shared, config-driven {@see \App\Support\Personalizer} — the same
+     * via the shared, config-driven {@see Personalizer} — the same
      * resolver the freeform path uses, so the two can't drift. Order lives in
      * config/personalization.php.
      */
     private function resolveTemplateVariable(int $position): string
     {
-        return (new \App\Support\Personalizer())->positional($this->contact, $position);
+        return (new Personalizer)->positional($this->contact, $position);
     }
 
     /**
@@ -292,12 +294,12 @@ class SendWhatsAppMessage implements ShouldQueue
 
             // 132012 — template format mismatch (header expected IMAGE, got UNKNOWN, etc).
             '132012' => "\n\nHINT: Template-format mismatch. The template expects a media "
-                ."header but no media file was supplied (or wrong type). Edit the campaign "
+                .'header but no media file was supplied (or wrong type). Edit the campaign '
                 ."and upload a header media file matching the template's expected format.",
 
             // 131056 — per-pair rate limit. Same business+customer pair too frequently.
             '131056' => "\n\nHINT: Meta per-pair rate limit hit. Same business+customer pair "
-                ."contacted too often. Lower campaign rate_per_minute or wait before retrying.",
+                .'contacted too often. Lower campaign rate_per_minute or wait before retrying.',
         ];
 
         foreach ($hints as $code => $hint) {
@@ -335,7 +337,7 @@ class SendWhatsAppMessage implements ShouldQueue
 
         $this->campaign->increment('failed_count');
 
-        (new CampaignService())->checkCompletion($this->campaign);
+        (new CampaignService)->checkCompletion($this->campaign);
 
         Log::error('SendWhatsAppMessage failed', [
             'campaign_id' => $this->campaign->id,

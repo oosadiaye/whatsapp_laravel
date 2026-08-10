@@ -21,6 +21,7 @@ use Livewire\Component;
  *   - conversations.view_assigned → assigned to me + unassigned pool
  *
  * Anonymous users get an empty payload (no error, no banner) — the
+ *
  * @auth gate in app.blade.php means this is mostly belt-and-suspenders,
  * but the test exercises it explicitly for clarity.
  */

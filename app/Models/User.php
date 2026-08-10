@@ -24,12 +24,17 @@ class User extends Authenticatable
     use HasFactory, HasRoles, Notifiable;
 
     public const ROLE_SUPER_ADMIN = 'super_admin';
+
     public const ROLE_ADMIN = 'admin';
+
     public const ROLE_MANAGER = 'manager';
+
     public const ROLE_AGENT = 'agent';
 
     public const PRESENCE_AVAILABLE = 'available';
+
     public const PRESENCE_BUSY = 'busy';
+
     public const PRESENCE_AWAY = 'away';
 
     public const PRESENCE_STATUSES = [
@@ -39,8 +44,10 @@ class User extends Authenticatable
     ];
 
     public const MIC_PENDING = 'pending';
+
     public const MIC_GRANTED = 'granted';
-    public const MIC_DENIED  = 'denied';
+
+    public const MIC_DENIED = 'denied';
 
     public const MIC_PERMISSION_STATES = [
         self::MIC_PENDING,
@@ -109,7 +116,7 @@ class User extends Authenticatable
      */
     public function assignedConversations(): HasMany
     {
-        return $this->hasMany(\App\Models\Conversation::class, 'assigned_to_user_id');
+        return $this->hasMany(Conversation::class, 'assigned_to_user_id');
     }
 
     public function messageTemplates(): HasMany

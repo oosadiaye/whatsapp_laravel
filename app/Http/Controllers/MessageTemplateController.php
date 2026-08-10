@@ -33,9 +33,7 @@ use Throwable;
  */
 class MessageTemplateController extends Controller
 {
-    public function __construct(private readonly WhatsAppCloudApiService $cloudApi)
-    {
-    }
+    public function __construct(private readonly WhatsAppCloudApiService $cloudApi) {}
 
     public function index(): View
     {

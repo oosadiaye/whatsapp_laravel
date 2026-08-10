@@ -13,8 +13,11 @@ class MessageLogsTable extends Component
     use WithPagination;
 
     public int $campaignId;
+
     public string $filterStatus = 'all';
+
     public string $search = '';
+
     public int $perPage = 20;
 
     protected $queryString = ['filterStatus', 'search'];

@@ -13,6 +13,7 @@ class ConversationMessage extends Model
     use HasFactory;
 
     public const DIRECTION_INBOUND = 'inbound';
+
     public const DIRECTION_OUTBOUND = 'outbound';
 
     protected $fillable = [

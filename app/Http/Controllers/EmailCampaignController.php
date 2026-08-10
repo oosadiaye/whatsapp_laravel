@@ -20,9 +20,7 @@ use Illuminate\View\View;
  */
 class EmailCampaignController extends Controller
 {
-    public function __construct(private readonly EmailCampaignService $service)
-    {
-    }
+    public function __construct(private readonly EmailCampaignService $service) {}
 
     public function index(): View
     {

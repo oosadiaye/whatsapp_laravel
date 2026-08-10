@@ -13,7 +13,7 @@ final class EmailEventParserFactory
     public function make(string $provider): ?EmailEventParser
     {
         return match (strtolower($provider)) {
-            'postmark' => new PostmarkParser(),
+            'postmark' => new PostmarkParser,
             // 'ses'      => new SesParser(),      // SNS signature + subscription confirm
             // 'mailgun'  => new MailgunParser(),  // HMAC(timestamp+token)
             // 'sendgrid' => new SendgridParser(), // ECDSA signed events

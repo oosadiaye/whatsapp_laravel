@@ -31,11 +31,12 @@ class WhatsAppCloudApiCallingTest extends TestCase
 
         Http::assertSent(function ($request) {
             $body = $request->data();
+
             return str_contains($request->url(), '123456789/calls')
                 && $body['action'] === 'pre_accept'
                 && $body['call_id'] === 'wacid.abc123'
                 && $body['messaging_product'] === 'whatsapp'
-                && !isset($body['session']);
+                && ! isset($body['session']);
         });
     }
 
@@ -50,6 +51,7 @@ class WhatsAppCloudApiCallingTest extends TestCase
 
         Http::assertSent(function ($request) {
             $body = $request->data();
+
             return $body['action'] === 'pre_accept'
                 && $body['session']['sdp_type'] === 'answer'
                 && $body['session']['sdp'] === "v=0\r\no=...";
@@ -83,6 +85,7 @@ class WhatsAppCloudApiCallingTest extends TestCase
 
         Http::assertSent(function ($request) {
             $body = $request->data();
+
             return str_contains($request->url(), '999/calls')
                 && $body['action'] === 'accept'
                 && $body['call_id'] === 'wacid.xyz'

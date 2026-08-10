@@ -13,6 +13,7 @@ use App\Models\EmailCampaign;
 use App\Models\EmailLog;
 use App\Models\EmailSuppression;
 use App\Models\User;
+use App\Services\EmailCampaignService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -22,6 +23,7 @@ class EmailSendPipelineTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private ContactGroup $group;
 
     protected function setUp(): void
@@ -67,7 +69,7 @@ class EmailSendPipelineTest extends TestCase
 
         $campaign = $this->campaign();
 
-        (new EmailCampaignDispatch($campaign->id))->handle(app(\App\Services\EmailCampaignService::class));
+        (new EmailCampaignDispatch($campaign->id))->handle(app(EmailCampaignService::class));
 
         Mail::assertSent(CampaignEmail::class, fn ($m) => $m->hasTo('ann@example.com'));
         Mail::assertSent(CampaignEmail::class, fn ($m) => $m->hasTo('bob@example.com'));
@@ -88,7 +90,7 @@ class EmailSendPipelineTest extends TestCase
         $this->contactInGroup(['email' => 'Dup@Example.com', 'is_active' => true]);
         $this->contactInGroup(['email' => 'dup@example.com', 'is_active' => true]);
 
-        (new EmailCampaignDispatch($this->campaign()->id))->handle(app(\App\Services\EmailCampaignService::class));
+        (new EmailCampaignDispatch($this->campaign()->id))->handle(app(EmailCampaignService::class));
 
         Mail::assertSentCount(1);
     }
@@ -115,7 +117,7 @@ class EmailSendPipelineTest extends TestCase
         Mail::fake();
         $campaign = $this->campaign(); // group has no contacts
 
-        (new EmailCampaignDispatch($campaign->id))->handle(app(\App\Services\EmailCampaignService::class));
+        (new EmailCampaignDispatch($campaign->id))->handle(app(EmailCampaignService::class));
 
         Mail::assertNothingSent();
         $this->assertSame(EmailCampaign::STATUS_SENT, $campaign->fresh()->status);
@@ -130,7 +132,7 @@ class EmailSendPipelineTest extends TestCase
         $this->contactInGroup(['email' => 'ann@example.com', 'is_active' => true]);
         $this->contactInGroup(['email' => 'bob@example.com', 'is_active' => true]);
         $campaign = $this->campaign();
-        $service = app(\App\Services\EmailCampaignService::class);
+        $service = app(EmailCampaignService::class);
 
         (new EmailCampaignDispatch($campaign->id))->handle($service);
         // Simulate the queue re-running the same job after a timeout release.

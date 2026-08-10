@@ -21,11 +21,10 @@ class OutboundCallService
 {
     public function __construct(
         private readonly WhatsAppCloudApiService $cloudApi,
-    ) {
-    }
+    ) {}
 
     /**
-     * @throws WhatsAppApiException  if Meta rejects the call request
+     * @throws WhatsAppApiException if Meta rejects the call request
      */
     public function initiate(Conversation $conversation, User $placedBy): CallLog
     {

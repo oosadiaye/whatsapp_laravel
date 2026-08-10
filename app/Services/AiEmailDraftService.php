@@ -36,6 +36,7 @@ class AiEmailDraftService
 
             if (! $response->successful()) {
                 Log::warning('Gemini email draft failed', ['status' => $response->status(), 'body' => $response->body()]);
+
                 return null;
             }
 
@@ -49,6 +50,7 @@ class AiEmailDraftService
             return trim($text);
         } catch (\Throwable $e) {
             Log::warning('Gemini email draft exception', ['error' => $e->getMessage()]);
+
             return null;
         }
     }

@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 use Laravel\Horizon\Horizon;
 use Laravel\Horizon\HorizonApplicationServiceProvider;
@@ -33,7 +34,7 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
         Gate::define('viewHorizon', function ($user = null): bool {
             return $user !== null
                 && method_exists($user, 'hasAnyRole')
-                && $user->hasAnyRole([\App\Models\User::ROLE_SUPER_ADMIN, \App\Models\User::ROLE_ADMIN]);
+                && $user->hasAnyRole([User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN]);
         });
     }
 }

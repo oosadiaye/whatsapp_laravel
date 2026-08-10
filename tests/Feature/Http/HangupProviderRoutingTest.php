@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http;
 
+use App\Jobs\TerminateProviderCall;
 use App\Models\CallLog;
 use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
-use App\Jobs\TerminateProviderCall;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
@@ -88,6 +88,7 @@ class HangupProviderRoutingTest extends TestCase
         ]);
         $agent->assignRole(User::ROLE_AGENT);
         $agent->givePermissionTo('conversations.call');
+
         return $agent;
     }
 

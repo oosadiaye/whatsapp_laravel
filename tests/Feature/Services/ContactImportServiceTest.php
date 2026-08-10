@@ -11,6 +11,8 @@ use App\Services\ContactImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 /**
@@ -59,7 +61,7 @@ class ContactImportServiceTest extends TestCase
         // "imports/<random>.csv", NOT an absolute path.
         $diskKey = $file->store('imports');
 
-        $service = new ContactImportService();
+        $service = new ContactImportService;
         $result = $service->importFromFile(
             $diskKey,
             $group->id,
@@ -93,7 +95,7 @@ class ContactImportServiceTest extends TestCase
         $csv = "phone,name\n+2348012345678,After Reimport\n";
         $diskKey = UploadedFile::fake()->createWithContent('contacts.csv', $csv)->store('imports');
 
-        $result = (new ContactImportService())->importFromFile(
+        $result = (new ContactImportService)->importFromFile(
             $diskKey,
             $group->id,
             ['phone' => 'phone', 'name' => 'name'],
@@ -125,7 +127,7 @@ class ContactImportServiceTest extends TestCase
         file_put_contents($absolute, "phone,name\n+2348011112222,Direct\n");
 
         try {
-            $service = new ContactImportService();
+            $service = new ContactImportService;
             $result = $service->importFromFile(
                 $absolute,
                 $group->id,
@@ -147,7 +149,7 @@ class ContactImportServiceTest extends TestCase
 
         $admin = User::factory()->create(['is_active' => true]);
         $group = ContactGroup::create(['user_id' => $admin->id, 'name' => 'Targets']);
-        $service = new ContactImportService();
+        $service = new ContactImportService;
         $map = ['phone' => 'phone', 'name' => 'name'];
 
         $key1 = UploadedFile::fake()->createWithContent('c1.csv', "phone,name\n2348012345678,Alice\n")->store('imports');
@@ -179,7 +181,7 @@ class ContactImportServiceTest extends TestCase
             ['not-a-phone', ''], // invalid — no phone, no email
         ]);
 
-        $result = (new ContactImportService())->importFromFile(
+        $result = (new ContactImportService)->importFromFile(
             $diskKey,
             $group->id,
             ['phone' => 'phone', 'name' => 'name'],
@@ -211,7 +213,7 @@ class ContactImportServiceTest extends TestCase
             ['+2348011111111', 'After'],
         ]);
 
-        (new ContactImportService())->importFromFile(
+        (new ContactImportService)->importFromFile(
             $diskKey,
             $group->id,
             ['phone' => 'phone', 'name' => 'name'],
@@ -234,9 +236,9 @@ class ContactImportServiceTest extends TestCase
     {
         @mkdir(dirname($absolutePath), 0777, true);
 
-        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $spreadsheet->getActiveSheet()->fromArray($rows);
-        (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet))->save($absolutePath);
+        (new Xlsx($spreadsheet))->save($absolutePath);
         $spreadsheet->disconnectWorksheets();
     }
 }

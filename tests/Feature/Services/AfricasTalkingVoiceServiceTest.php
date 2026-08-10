@@ -122,7 +122,7 @@ class AfricasTalkingVoiceServiceTest extends TestCase
         // endCall now reports failure by throwing — TerminateProviderCall (the
         // caller) is what tolerates it, via bounded retries. A silent swallow
         // here would orphan the customer's live leg.
-        $this->expectException(\App\Exceptions\VoiceProviderException::class);
+        $this->expectException(VoiceProviderException::class);
         $service->endCall('sess_abc');
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Imports;
 
+use App\Services\ContactImportService;
 use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -13,8 +14,8 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 /**
  * Streams an .xlsx contact import in bounded chunks (audit M6) so a large sheet
  * never loads fully into memory — the workbook analogue of the CSV generator in
- * {@see \App\Services\ContactImportService::streamCsv()}. PhpSpreadsheet reads
- * `chunkSize()` rows at a time and calls {@see collection()} per chunk.
+ * {@see ContactImportService::streamCsv()}. PhpSpreadsheet reads
+ * `chunkSize()` rows at a time and calls {@see Collection()} per chunk.
  *
  * The header row is captured from the first row of the file; each subsequent row
  * is combined with the headers and handed to the shared row handler (the same
@@ -35,11 +36,9 @@ class ContactsSheetImport implements ToCollection, WithChunkReading
 
     /**
      * @param  Closure(array<string, string>): string  $rowHandler  returns
-     *         'imported'|'duplicates'|'invalid' for the given associative row
+     *                                                              'imported'|'duplicates'|'invalid' for the given associative row
      */
-    public function __construct(private readonly Closure $rowHandler)
-    {
-    }
+    public function __construct(private readonly Closure $rowHandler) {}
 
     /**
      * @param  Collection<int, Collection<int, mixed>>  $rows

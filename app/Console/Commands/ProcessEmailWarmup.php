@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Jobs\SendUserEmail;
 use App\Models\EmailWarmupLog;
 use App\Models\EmailWarmupSetting;
 use App\Services\MailClient\OutboundEmail;
-use App\Jobs\SendUserEmail;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 

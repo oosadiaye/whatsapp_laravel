@@ -14,8 +14,7 @@ final class FetchedAttachment
         public readonly string $filename,
         public readonly ?string $mime,
         public readonly string $content,
-    ) {
-    }
+    ) {}
 
     public function size(): int
     {

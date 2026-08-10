@@ -175,7 +175,7 @@ class CampaignTemplateGuardTest extends TestCase
             'instance_id' => $instance->id,
             'groups' => [$group->id],
         ])->assertRedirect()
-          ->assertSessionDoesntHaveErrors();
+            ->assertSessionDoesntHaveErrors();
 
         $this->assertSame(1, Campaign::count());
     }

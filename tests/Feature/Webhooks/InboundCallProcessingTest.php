@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Webhooks;
 
+use App\Events\Calling\CallRinging;
 use App\Models\CallLog;
 use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
 use App\Services\InboundCallProcessor;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class InboundCallProcessingTest extends TestCase
@@ -177,7 +181,7 @@ class InboundCallProcessingTest extends TestCase
             $body,
         )->assertOk();
 
-        $this->assertSame(1, \App\Models\CallLog::count());
+        $this->assertSame(1, CallLog::count());
     }
 
     public function test_decline_event_sets_declined_status_with_reason(): void
@@ -248,7 +252,7 @@ class InboundCallProcessingTest extends TestCase
 
     public function test_inbound_call_auto_assigns_to_available_agent(): void
     {
-        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+        $this->seed(RolesAndPermissionsSeeder::class);
 
         $admin = User::factory()->create([
             'role' => User::ROLE_ADMIN,
@@ -264,7 +268,7 @@ class InboundCallProcessingTest extends TestCase
         $agent->assignRole(User::ROLE_AGENT);
 
         $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
-        $processor = $this->app->make(\App\Services\InboundCallProcessor::class);
+        $processor = $this->app->make(InboundCallProcessor::class);
 
         $processor->processCalls($instance, [
             [
@@ -276,7 +280,7 @@ class InboundCallProcessingTest extends TestCase
             ],
         ]);
 
-        $conversation = \App\Models\Conversation::first();
+        $conversation = Conversation::first();
         $this->assertNotNull($conversation);
         $this->assertSame(
             $agent->id,
@@ -287,7 +291,7 @@ class InboundCallProcessingTest extends TestCase
 
     public function test_inbound_call_persists_sdp_offer_from_webhook(): void
     {
-        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+        $this->seed(RolesAndPermissionsSeeder::class);
 
         $admin = User::factory()->create([
             'role' => User::ROLE_ADMIN,
@@ -302,9 +306,9 @@ class InboundCallProcessingTest extends TestCase
         $agent->assignRole(User::ROLE_AGENT);
         $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([], 200)]);
+        Http::fake(['*' => Http::response([], 200)]);
 
-        $processor = $this->app->make(\App\Services\InboundCallProcessor::class);
+        $processor = $this->app->make(InboundCallProcessor::class);
         $processor->processCalls($instance, [
             [
                 'id' => 'wacid.sdp_test',
@@ -326,7 +330,7 @@ class InboundCallProcessingTest extends TestCase
 
     public function test_inbound_call_invokes_pre_accept_call(): void
     {
-        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+        $this->seed(RolesAndPermissionsSeeder::class);
 
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
         $admin->assignRole(User::ROLE_ADMIN);
@@ -337,11 +341,11 @@ class InboundCallProcessingTest extends TestCase
             'phone_number_id' => '777',
         ]);
 
-        \Illuminate\Support\Facades\Http::fake([
-            '*/777/calls' => \Illuminate\Support\Facades\Http::response([], 200),
+        Http::fake([
+            '*/777/calls' => Http::response([], 200),
         ]);
 
-        $processor = $this->app->make(\App\Services\InboundCallProcessor::class);
+        $processor = $this->app->make(InboundCallProcessor::class);
         $processor->processCalls($instance, [
             [
                 'id' => 'wacid.preaccept',
@@ -353,8 +357,9 @@ class InboundCallProcessingTest extends TestCase
             ],
         ]);
 
-        \Illuminate\Support\Facades\Http::assertSent(function ($request) {
+        Http::assertSent(function ($request) {
             $body = $request->data();
+
             return str_contains($request->url(), '777/calls')
                 && ($body['action'] ?? null) === 'pre_accept'
                 && ($body['call_id'] ?? null) === 'wacid.preaccept';
@@ -363,9 +368,9 @@ class InboundCallProcessingTest extends TestCase
 
     public function test_inbound_call_dispatches_call_ringing_event(): void
     {
-        \Illuminate\Support\Facades\Event::fake([\App\Events\Calling\CallRinging::class]);
+        Event::fake([CallRinging::class]);
 
-        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+        $this->seed(RolesAndPermissionsSeeder::class);
 
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
         $admin->assignRole(User::ROLE_ADMIN);
@@ -373,9 +378,9 @@ class InboundCallProcessingTest extends TestCase
         $agent->assignRole(User::ROLE_AGENT);
         $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([], 200)]);
+        Http::fake(['*' => Http::response([], 200)]);
 
-        $processor = $this->app->make(\App\Services\InboundCallProcessor::class);
+        $processor = $this->app->make(InboundCallProcessor::class);
         $processor->processCalls($instance, [
             [
                 'id' => 'wacid.event_test',
@@ -387,7 +392,7 @@ class InboundCallProcessingTest extends TestCase
             ],
         ]);
 
-        \Illuminate\Support\Facades\Event::assertDispatched(\App\Events\Calling\CallRinging::class, function ($event) use ($agent) {
+        Event::assertDispatched(CallRinging::class, function ($event) use ($agent) {
             return $event->call->meta_call_id === 'wacid.event_test'
                 && $event->call->conversation->assigned_to_user_id === $agent->id;
         });

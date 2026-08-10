@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Events\Calling\CallRinging;
 use App\Models\CallLog;
 use App\Models\Contact;
 use App\Models\Conversation;
@@ -36,8 +37,7 @@ class InboundCallProcessor
     public function __construct(
         private readonly WhatsAppCloudApiService $cloudApi,
         private readonly RoundRobinAssigner $roundRobinAssigner,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<int, array<string, mixed>>  $calls  from value.calls[]
@@ -139,7 +139,7 @@ class InboundCallProcessor
             // over Reverb. Only fire if there's an assignee — unassigned calls
             // (round-robin returned null) have no target channel.
             if ($conversation->assigned_to_user_id !== null) {
-                \App\Events\Calling\CallRinging::dispatch($callLog);
+                CallRinging::dispatch($callLog);
             }
         }
 

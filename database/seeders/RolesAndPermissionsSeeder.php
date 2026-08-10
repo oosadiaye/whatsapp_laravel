@@ -89,7 +89,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'conversations.reply',
             'conversations.assign',        // route a chat to a staff member
             'conversations.call',          // initiate voice calls (legacy gate — kept
-                                           // for the conversation-page Call button)
+            // for the conversation-page Call button)
 
             // Voice calls (feature-scoped) — the Call Workspace, history,
             // voicemail, and the workspace dial pad. calls.view = access the

@@ -8,11 +8,12 @@ use App\Models\Campaign;
 use App\Models\ConversationMessage;
 use App\Models\MessageLog;
 use App\Models\WhatsAppInstance;
-use App\Services\InboundMessageProcessor;
 use App\Services\InboundCallProcessor;
+use App\Services\InboundMessageProcessor;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -130,7 +131,7 @@ class CloudWebhookController extends Controller
             // on non-2xx, and two deliveries landing at once could both read
             // "not yet delivered" and double-bump the campaign counter. The row
             // lock makes the read-then-increment below atomic per message.
-            \Illuminate\Support\Facades\DB::transaction(function () use ($messageId, $mappedStatus, $status): void {
+            DB::transaction(function () use ($messageId, $mappedStatus, $status): void {
                 $log = MessageLog::where('whatsapp_message_id', $messageId)
                     ->lockForUpdate()
                     ->first();

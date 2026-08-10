@@ -301,7 +301,7 @@ class UserControllerTest extends TestCase
         $this->assertTrue($target->fresh()->hasRole('super_admin'));
     }
 
-    private function makeUser(string $role, string $email = null): User
+    private function makeUser(string $role, ?string $email = null): User
     {
         $user = User::factory()->create([
             'email' => $email ?? "{$role}-".uniqid().'@example.com',

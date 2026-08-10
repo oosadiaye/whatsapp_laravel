@@ -22,7 +22,9 @@ class EmailAccount extends Model
     use HasFactory, SoftDeletes;
 
     public const PROVIDER_GMAIL = 'gmail';
+
     public const PROVIDER_GRAPH = 'graph';
+
     public const PROVIDER_IMAP = 'imap';
 
     /**

@@ -14,8 +14,11 @@ class MessageTemplate extends Model
     use HasFactory, SoftDeletes;
 
     public const STATUS_LOCAL = 'LOCAL';
+
     public const STATUS_APPROVED = 'APPROVED';
+
     public const STATUS_PENDING = 'PENDING';
+
     public const STATUS_REJECTED = 'REJECTED';
 
     protected $fillable = [

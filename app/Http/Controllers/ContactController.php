@@ -12,11 +12,15 @@ use App\Models\CallLog;
 use App\Models\Contact;
 use App\Models\ContactGroup;
 use App\Models\Conversation;
+use App\Models\ConversationMessage;
+use App\Models\Setting;
 use App\Models\WhatsAppInstance;
 use App\Services\AfricasTalkingVoiceService;
 use App\Services\ContactImportService;
+use App\Support\Csv;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -24,7 +28,7 @@ class ContactController extends Controller
 {
     public function index(Request $request): View
     {
-        $threshold = now()->subDays(\App\Models\Contact::ENGAGEMENT_WINDOW_DAYS);
+        $threshold = now()->subDays(Contact::ENGAGEMENT_WINDOW_DAYS);
 
         // Single-tenant — every user with contacts.view sees every contact.
         // user_id column stays as audit metadata. Route permission is the gate.
@@ -33,20 +37,18 @@ class ContactController extends Controller
             ->withExists([
                 // True if at least one inbound message exists for any of this
                 // contact's conversations within the engagement window.
-                'conversationMessages as has_recent_inbound_message' => fn ($q) =>
-                    $q->where('conversation_messages.direction', \App\Models\ConversationMessage::DIRECTION_INBOUND)
-                      ->where('received_at', '>=', $threshold),
+                'conversationMessages as has_recent_inbound_message' => fn ($q) => $q->where('conversation_messages.direction', ConversationMessage::DIRECTION_INBOUND)
+                    ->where('received_at', '>=', $threshold),
 
                 // True if at least one inbound call exists within the window.
-                'callLogs as has_recent_inbound_call' => fn ($q) =>
-                    $q->where('call_logs.direction', \App\Models\CallLog::DIRECTION_INBOUND)
-                      ->where('call_logs.created_at', '>=', $threshold),
+                'callLogs as has_recent_inbound_call' => fn ($q) => $q->where('call_logs.direction', CallLog::DIRECTION_INBOUND)
+                    ->where('call_logs.created_at', '>=', $threshold),
             ]);
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search): void {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%");
+                    ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
@@ -57,6 +59,7 @@ class ContactController extends Controller
         // signal triggered engagement.
         $contacts->getCollection()->transform(function (Contact $c): Contact {
             $c->is_engaged = (bool) ($c->has_recent_inbound_message || $c->has_recent_inbound_call);
+
             return $c;
         });
 
@@ -123,18 +126,19 @@ class ContactController extends Controller
                 'status' => CallLog::STATUS_INITIATED,
                 'started_at' => now(),
                 'placed_by_user_id' => $request->user()->id,
-                'from_phone' => \App\Models\Setting::get('africastalking_virtual_number'),
+                'from_phone' => Setting::get('africastalking_virtual_number'),
                 'to_phone' => $contact->phone,
             ]);
-        } catch (VoiceProviderException | ConfigurationException | \InvalidArgumentException $e) {
+        } catch (VoiceProviderException|ConfigurationException|\InvalidArgumentException $e) {
             // \InvalidArgumentException = the contact's stored phone can't be
             // normalised to E.164 (bad import). Catch it too so a malformed
             // number flashes an error instead of 500-ing the request.
-            \Illuminate\Support\Facades\Log::error('AT outbound call failed', [
+            Log::error('AT outbound call failed', [
                 'contact_id' => $contact->id,
                 'user_id' => $request->user()->id,
                 'error' => $e->getMessage(),
             ]);
+
             return back()->with('error', 'Voice service unavailable. Try again in a moment.');
         }
 
@@ -148,7 +152,7 @@ class ContactController extends Controller
      * the Settings page — no send-time picker. Returns the primary instance, or
      * null + an error message the caller flashes on redirect.
      *
-     * @return array{instance: ?\App\Models\WhatsAppInstance, error: ?string}
+     * @return array{instance: ?WhatsAppInstance, error: ?string}
      */
     private function resolveInstanceOrError(): array
     {
@@ -253,7 +257,7 @@ class ContactController extends Controller
         $group = ContactGroup::findOrFail($groupId);
         $imported = 0;
         $invalid = 0;
-        $importService = new ContactImportService();
+        $importService = new ContactImportService;
 
         foreach ($lines as $line) {
             $parts = str_getcsv($line);
@@ -261,6 +265,7 @@ class ContactController extends Controller
 
             if ($phone === null) {
                 $invalid++;
+
                 continue;
             }
 
@@ -340,14 +345,14 @@ class ContactController extends Controller
         $group = ContactGroup::findOrFail($groupId);
         $contacts = $group->contacts()->get(['phone', 'name']);
 
-        $filename = 'contacts_' . str_replace(' ', '_', $group->name) . '_' . now()->format('Y-m-d') . '.csv';
+        $filename = 'contacts_'.str_replace(' ', '_', $group->name).'_'.now()->format('Y-m-d').'.csv';
 
         return response()->streamDownload(function () use ($contacts) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, ['phone', 'name']);
 
             foreach ($contacts as $contact) {
-                fputcsv($handle, [\App\Support\Csv::safe($contact->phone), \App\Support\Csv::safe($contact->name)]);
+                fputcsv($handle, [Csv::safe($contact->phone), Csv::safe($contact->name)]);
             }
 
             fclose($handle);

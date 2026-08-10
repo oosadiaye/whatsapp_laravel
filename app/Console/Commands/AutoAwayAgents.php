@@ -23,7 +23,7 @@ class AutoAwayAgents extends Command
             ->where('presence_status', '!=', User::PRESENCE_AWAY)
             ->where(function ($q) use ($threshold) {
                 $q->whereNull('last_seen_at')
-                  ->orWhere('last_seen_at', '<', now()->subMinutes($threshold));
+                    ->orWhere('last_seen_at', '<', now()->subMinutes($threshold));
             })
             ->update([
                 'presence_status' => User::PRESENCE_AWAY,

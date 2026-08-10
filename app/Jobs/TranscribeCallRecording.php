@@ -31,9 +31,7 @@ class TranscribeCallRecording implements ShouldQueue
 
     public int $tries = 2;
 
-    public function __construct(public readonly int $callLogId)
-    {
-    }
+    public function __construct(public readonly int $callLogId) {}
 
     public function handle(GeminiTranscriptionService $gemini, AudioTranscoder $transcoder): void
     {

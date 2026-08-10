@@ -7,6 +7,7 @@ namespace Tests\Feature\Email;
 use App\Mail\CampaignEmail;
 use App\Models\EmailCampaign;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class CampaignEmailMailableTest extends TestCase
@@ -50,7 +51,7 @@ class CampaignEmailMailableTest extends TestCase
         // RFC 2369/8058 headers are set on the built message.
         $headers = $mailable->render() ? $mailable->headers() : null;
         $this->assertSame(
-            '<'.\Illuminate\Support\Facades\URL::signedRoute('email.unsubscribe', ['email' => 'jane@example.com']).'>',
+            '<'.URL::signedRoute('email.unsubscribe', ['email' => 'jane@example.com']).'>',
             $headers->text['List-Unsubscribe'] ?? null,
         );
         $this->assertSame('List-Unsubscribe=One-Click', $headers->text['List-Unsubscribe-Post'] ?? null);

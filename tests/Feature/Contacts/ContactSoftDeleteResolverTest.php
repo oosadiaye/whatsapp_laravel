@@ -39,7 +39,7 @@ class ContactSoftDeleteResolverTest extends TestCase
         $this->assertNull($resolved->fresh()->deleted_at, 'the row must be restored');
     }
 
-    public function test_first_or_create_including_trashed_does_not_collide_and_keeps_firstOrCreate_semantics(): void
+    public function test_first_or_create_including_trashed_does_not_collide_and_keeps_first_or_create_semantics(): void
     {
         $user = User::factory()->create();
         Contact::create(['user_id' => $user->id, 'phone' => '2348010000001', 'name' => 'Original'])->delete();

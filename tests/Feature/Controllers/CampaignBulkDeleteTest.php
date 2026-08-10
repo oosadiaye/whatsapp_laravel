@@ -77,10 +77,10 @@ class CampaignBulkDeleteTest extends TestCase
         // created each one. Replaces a previous multi-tenant assertion that
         // expected cross-account IDs to be silently filtered out.
         $alice = $this->makeAdmin('alice@example.com');
-        $bob   = $this->makeAdmin('bob@example.com');
+        $bob = $this->makeAdmin('bob@example.com');
 
         $aliceCampaign = $this->makeCampaign($alice, 'DRAFT');
-        $bobCampaign   = $this->makeCampaign($bob, 'DRAFT');
+        $bobCampaign = $this->makeCampaign($bob, 'DRAFT');
 
         $this->actingAs($alice)
             ->post(route('campaigns.bulkDestroy'), ['ids' => [$aliceCampaign->id, $bobCampaign->id]])

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Mail\CampaignEmail;
+
 /**
  * A small catalogue of ready-made, email-safe HTML templates an operator can
  * start a campaign from (the composer's "Start from a template" picker). Each
@@ -12,7 +14,7 @@ namespace App\Support;
  * {{name}} / {{email}} personalisation tokens the campaign mailer substitutes.
  *
  * The unsubscribe footer + tracking pixel are appended by
- * {@see \App\Mail\CampaignEmail}, so templates deliberately omit them.
+ * {@see CampaignEmail}, so templates deliberately omit them.
  */
 final class EmailTemplateLibrary
 {

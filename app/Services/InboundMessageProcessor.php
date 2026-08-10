@@ -8,7 +8,6 @@ use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\WhatsAppInstance;
-use App\Services\RoundRobinAssigner;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -37,11 +36,10 @@ class InboundMessageProcessor
     public function __construct(
         private readonly WhatsAppCloudApiService $cloudApi,
         private readonly RoundRobinAssigner $roundRobinAssigner,
-    ) {
-    }
+    ) {}
 
     /**
-     * @param  array<int, array<string, mixed>>  $messages   from value.messages[]
+     * @param  array<int, array<string, mixed>>  $messages  from value.messages[]
      * @param  array<string, mixed>  $contactsBlock  from value.contacts[] (gives us the name)
      */
     public function processMessages(

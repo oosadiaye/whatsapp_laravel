@@ -12,6 +12,4 @@ use RuntimeException;
  * (a retry can't fix bad credentials). Distinct from transient/network errors,
  * which propagate and DO retry with backoff.
  */
-class MailAuthException extends RuntimeException
-{
-}
+class MailAuthException extends RuntimeException {}

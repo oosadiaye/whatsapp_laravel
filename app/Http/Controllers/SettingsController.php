@@ -21,9 +21,7 @@ use Throwable;
 
 class SettingsController extends Controller
 {
-    public function __construct(private readonly WhatsAppCloudApiService $cloudApi)
-    {
-    }
+    public function __construct(private readonly WhatsAppCloudApiService $cloudApi) {}
 
     /**
      * Keys whose database value is ciphertext (encrypted via Crypt::encryptString

@@ -9,6 +9,4 @@ namespace App\Exceptions;
  * Caller layer (CallController) catches this to return 503 to the agent
  * with a "Voice service unavailable" message.
  */
-class VoiceProviderException extends \RuntimeException
-{
-}
+class VoiceProviderException extends \RuntimeException {}

@@ -45,14 +45,14 @@ class ContactRelationsTest extends TestCase
         $this->assertCount(1, $conv->contact->callLogs);
     }
 
-    public function test_isEngaged_returns_false_for_contact_with_no_recent_activity(): void
+    public function test_is_engaged_returns_false_for_contact_with_no_recent_activity(): void
     {
         $contact = Contact::factory()->create();
 
         $this->assertFalse($contact->isEngaged());
     }
 
-    public function test_isEngaged_returns_true_when_contact_messaged_within_window(): void
+    public function test_is_engaged_returns_true_when_contact_messaged_within_window(): void
     {
         $conv = Conversation::factory()->create();
         ConversationMessage::create([
@@ -67,7 +67,7 @@ class ContactRelationsTest extends TestCase
         $this->assertTrue($conv->contact->isEngaged());
     }
 
-    public function test_isEngaged_returns_false_when_only_old_messages_exist(): void
+    public function test_is_engaged_returns_false_when_only_old_messages_exist(): void
     {
         $conv = Conversation::factory()->create();
         ConversationMessage::create([
@@ -82,7 +82,7 @@ class ContactRelationsTest extends TestCase
         $this->assertFalse($conv->contact->isEngaged());
     }
 
-    public function test_isEngaged_returns_true_when_inbound_call_within_window(): void
+    public function test_is_engaged_returns_true_when_inbound_call_within_window(): void
     {
         $conv = Conversation::factory()->create();
         CallLog::factory()->create([
@@ -96,7 +96,7 @@ class ContactRelationsTest extends TestCase
         $this->assertTrue($conv->contact->isEngaged());
     }
 
-    public function test_isEngaged_only_counts_inbound_messages_not_outbound(): void
+    public function test_is_engaged_only_counts_inbound_messages_not_outbound(): void
     {
         $conv = Conversation::factory()->create();
         ConversationMessage::create([

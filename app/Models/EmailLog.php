@@ -16,9 +16,13 @@ class EmailLog extends Model
     use HasFactory;
 
     public const STATUS_QUEUED = 'queued';
+
     public const STATUS_SENT = 'sent';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_OPENED = 'opened';
+
     public const STATUS_UNSUBSCRIBED = 'unsubscribed';
 
     protected $fillable = [

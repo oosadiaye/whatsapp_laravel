@@ -5,18 +5,21 @@ declare(strict_types=1);
 namespace App\Livewire\Mailbox\Concerns;
 
 use App\Jobs\SendUserEmail;
+use App\Livewire\Mailbox\Inbox;
 use App\Models\EmailAccount;
 use App\Models\EmailMessage;
 use App\Services\AiEmailDraftService;
 use App\Services\MailClient\AttachmentName;
 use App\Services\MailClient\OutboundAttachment;
 use App\Services\MailClient\OutboundEmail;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 /**
  * The mailbox composer (plan B5b) — reply / reply-all / forward / fresh compose —
- * rendered into the B4 inbox seam. Kept a trait so the {@see \App\Livewire\Mailbox\Inbox}
+ * rendered into the B4 inbox seam. Kept a trait so the {@see Inbox}
  * stays the read SHELL and this stays the write path (php/patterns: small,
  * focused units).
  *
@@ -53,14 +56,18 @@ trait WithCompose
 
     public ?string $composeReferences = null;
 
-    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    /** @var array<int, TemporaryUploadedFile> */
     public array $composeFiles = [];
 
     // AI drafting modal
     public bool $showAiDraft = false;
+
     public bool $aiDrafting = false;
+
     public string $aiDraftGoal = '';
+
     public string $aiDraftTone = 'professional';
+
     public string $aiDraftContext = '';
 
     public function draftWithAi(AiEmailDraftService $service): void
@@ -234,7 +241,7 @@ trait WithCompose
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Builder<EmailAccount>
+     * @return Builder<EmailAccount>
      */
     private function ownActiveAccounts()
     {

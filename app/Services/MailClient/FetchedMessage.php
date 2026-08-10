@@ -31,6 +31,5 @@ final class FetchedMessage
         public readonly ?DateTimeInterface $date,
         public readonly array $attachments = [],
         public readonly string $folder = 'inbox',
-    ) {
-    }
+    ) {}
 }

@@ -9,6 +9,8 @@ use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
+use App\Services\InboundMessageProcessor;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -259,7 +261,7 @@ class InboundMessageProcessingTest extends TestCase
 
     public function test_inbound_message_auto_assigns_to_available_agent(): void
     {
-        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
+        $this->seed(RolesAndPermissionsSeeder::class);
 
         $admin = User::factory()->create([
             'role' => User::ROLE_ADMIN,
@@ -275,7 +277,7 @@ class InboundMessageProcessingTest extends TestCase
         $agent->assignRole(User::ROLE_AGENT);
 
         $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
-        $processor = $this->app->make(\App\Services\InboundMessageProcessor::class);
+        $processor = $this->app->make(InboundMessageProcessor::class);
 
         $processor->processMessages($instance, [
             [
@@ -287,7 +289,7 @@ class InboundMessageProcessingTest extends TestCase
             ],
         ]);
 
-        $conversation = \App\Models\Conversation::first();
+        $conversation = Conversation::first();
         $this->assertNotNull($conversation);
         $this->assertSame(
             $agent->id,

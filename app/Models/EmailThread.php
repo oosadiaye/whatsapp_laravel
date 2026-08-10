@@ -19,8 +19,11 @@ class EmailThread extends Model
     use HasFactory;
 
     public const FOLDER_INBOX = 'inbox';
+
     public const FOLDER_SENT = 'sent';
+
     public const FOLDER_ARCHIVE = 'archive';
+
     public const FOLDER_TRASH = 'trash';
 
     /**

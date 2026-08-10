@@ -33,9 +33,7 @@ class TerminateProviderCall implements ShouldQueue
     /** Exponential-ish backoff between provider retry attempts (seconds). */
     public array $backoff = [10, 30, 60];
 
-    public function __construct(public readonly int $callLogId)
-    {
-    }
+    public function __construct(public readonly int $callLogId) {}
 
     public function handle(
         AfricasTalkingVoiceService $atVoice,

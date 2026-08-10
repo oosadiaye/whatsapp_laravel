@@ -8,8 +8,10 @@ use App\Imports\ContactsSheetImport;
 use App\Models\Contact;
 use App\Models\ContactGroup;
 use App\Models\Setting;
+use App\Support\Personalizer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\LazyCollection;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -99,7 +101,7 @@ class ContactImportService
      *
      * @param  array<string, mixed>  $row  associative, keyed by the file's headers
      * @param  array<string, string>  $columnMap
-     * @return string  the result key this row increments: imported|duplicates|invalid
+     * @return string the result key this row increments: imported|duplicates|invalid
      */
     private function processImportRow(array $row, array $columnMap, int $userId, ContactGroup $group, string $defaultCountryCode): string
     {
@@ -163,7 +165,7 @@ class ContactImportService
      * stored phone is already E.164, so the country code must be applied here
      * at import time, not hardcoded to Nigeria.
      *
-     * @return string|null  Normalized phone number or null if invalid
+     * @return string|null Normalized phone number or null if invalid
      */
     public function normalizePhone(string $raw, ?string $defaultCountryCode = null): ?string
     {
@@ -176,7 +178,7 @@ class ContactImportService
         }
 
         if (str_starts_with($phone, '0') && strlen($phone) === 11) {
-            $phone = $defaultCountryCode . substr($phone, 1);
+            $phone = $defaultCountryCode.substr($phone, 1);
         } elseif (! str_starts_with($phone, '1') && ! str_starts_with($phone, '2') &&
                   ! str_starts_with($phone, '3') && ! str_starts_with($phone, '4') &&
                   ! str_starts_with($phone, '5') && ! str_starts_with($phone, '6') &&
@@ -194,13 +196,13 @@ class ContactImportService
 
     /**
      * Replace named personalization tokens in a freeform message with contact
-     * data. Delegates to the shared {@see \App\Support\Personalizer} so the field
+     * data. Delegates to the shared {@see Personalizer} so the field
      * resolution matches the WhatsApp-template path. Kept as a method for
      * backward-compatible call sites.
      */
     public function personalizeMessage(string $template, Contact $contact, string $campaignName = ''): string
     {
-        return (new \App\Support\Personalizer())->named($contact, $template, $campaignName);
+        return (new Personalizer)->named($contact, $template, $campaignName);
     }
 
     /**
@@ -279,6 +281,6 @@ class ContactImportService
             return $filePath;
         }
 
-        return \Illuminate\Support\Facades\Storage::disk('local')->path($filePath);
+        return Storage::disk('local')->path($filePath);
     }
 }

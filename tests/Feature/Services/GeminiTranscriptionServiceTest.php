@@ -6,6 +6,7 @@ namespace Tests\Feature\Services;
 
 use App\Exceptions\TranscriptionException;
 use App\Services\GeminiTranscriptionService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -83,7 +84,7 @@ class GeminiTranscriptionServiceTest extends TestCase
         // Simulate a connection error whose message embeds the key (as cURL
         // errors sometimes do) — the thrown exception must NOT carry it.
         Http::fake(function () {
-            throw new \Illuminate\Http\Client\ConnectionException('cURL error 7: connect failed key=test-gemini-key');
+            throw new ConnectionException('cURL error 7: connect failed key=test-gemini-key');
         });
 
         try {

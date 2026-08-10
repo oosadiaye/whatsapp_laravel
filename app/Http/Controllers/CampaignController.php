@@ -10,6 +10,7 @@ use App\Models\ContactGroup;
 use App\Models\MessageTemplate;
 use App\Models\WhatsAppInstance;
 use App\Services\CampaignService;
+use App\Support\Csv;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -160,7 +161,7 @@ class CampaignController extends Controller
         // create a campaign without the required header URL, then Meta would
         // reject every send with error 132012 in the queue worker.
         if ($path === false) {
-            \Illuminate\Support\Facades\Log::error('Failed to store campaign header media', [
+            Log::error('Failed to store campaign header media', [
                 'original_name' => $file->getClientOriginalName(),
                 'mime' => $file->getClientMimeType(),
                 'size' => $file->getSize(),
@@ -226,16 +227,16 @@ class CampaignController extends Controller
     {
         // Single-tenant — any campaigns.view user can open any campaign.
         $campaign = Campaign::with([
-                'whatsAppInstance',
-                // Eager-load each group with two counts: total contacts in that
-                // group, and active contacts (the ones CampaignBatchDispatch
-                // actually fans out to). The active count is what the user
-                // really cares about because inactive contacts get filtered.
-                'contactGroups' => fn ($q) => $q->withCount([
-                    'contacts as total_contacts_count',
-                    'contacts as active_contacts_count' => fn ($cq) => $cq->where('is_active', true),
-                ]),
-            ])
+            'whatsAppInstance',
+            // Eager-load each group with two counts: total contacts in that
+            // group, and active contacts (the ones CampaignBatchDispatch
+            // actually fans out to). The active count is what the user
+            // really cares about because inactive contacts get filtered.
+            'contactGroups' => fn ($q) => $q->withCount([
+                'contacts as total_contacts_count',
+                'contacts as active_contacts_count' => fn ($cq) => $cq->where('is_active', true),
+            ]),
+        ])
             ->findOrFail($id);
 
         return view('campaigns.show', ['campaign' => $campaign]);
@@ -452,7 +453,7 @@ class CampaignController extends Controller
                         'status' => $response->status(),
                     ]);
                     $warnMessage = "Heads-up: header media URL probed as HTTP {$response->status()} from the server. "
-                        ."Launch proceeded — Meta may still reach it externally. "
+                        .'Launch proceeded — Meta may still reach it externally. '
                         ."If sends fail with 131053, run 'php artisan storage:link' on the server.";
                 }
             } catch (\Throwable $e) {
@@ -545,7 +546,7 @@ class CampaignController extends Controller
     {
         $campaign = Campaign::findOrFail($id);
 
-        $filename = 'campaign_' . $campaign->id . '_logs_' . now()->format('Y-m-d') . '.csv';
+        $filename = 'campaign_'.$campaign->id.'_logs_'.now()->format('Y-m-d').'.csv';
 
         // Stream the logs lazily (audit M5): lazy() chunks by id under the hood
         // and eager-loads `contact` per chunk, so a large campaign's logs are
@@ -556,13 +557,13 @@ class CampaignController extends Controller
 
             foreach ($campaign->messageLogs()->with('contact')->lazy() as $log) {
                 fputcsv($handle, [
-                    \App\Support\Csv::safe($log->phone),
-                    \App\Support\Csv::safe($log->contact?->name ?? ''),
+                    Csv::safe($log->phone),
+                    Csv::safe($log->contact?->name ?? ''),
                     $log->status,
                     $log->sent_at?->toDateTimeString(),
                     $log->delivered_at?->toDateTimeString(),
                     $log->read_at?->toDateTimeString(),
-                    \App\Support\Csv::safe($log->error_message),
+                    Csv::safe($log->error_message),
                 ]);
             }
 

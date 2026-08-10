@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\MailClient;
 
+use App\Exceptions\MailAuthException;
 use App\Models\EmailAccount;
 
 /**
@@ -15,7 +16,7 @@ use App\Models\EmailAccount;
  * MUST be idempotent-friendly: it reads the account's sync cursor
  * (EmailAccount.sync_state) and returns only messages after it, plus the new
  * cursor to persist. On a cursor invalidation it returns a full re-sync (the
- * service dedups). On an AUTH failure it throws {@see \App\Exceptions\MailAuthException}
+ * service dedups). On an AUTH failure it throws {@see MailAuthException}
  * (terminal — the job stops retrying); transient/network errors propagate so the
  * job can retry with backoff.
  */

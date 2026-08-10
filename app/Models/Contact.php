@@ -2,9 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\CallLog;
-use App\Models\Conversation;
-use App\Models\ConversationMessage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -96,7 +93,7 @@ class Contact extends Model
      * Eloquent's firstOrCreate semantics. See {@see firstOrNewIncludingTrashed}.
      *
      * @param  array<string, mixed>  $attributes  the unique lookup key
-     * @param  array<string, mixed>  $values      applied only on create
+     * @param  array<string, mixed>  $values  applied only on create
      */
     public static function firstOrCreateIncludingTrashed(array $attributes, array $values = []): self
     {
@@ -115,7 +112,7 @@ class Contact extends Model
      * See {@see firstOrNewIncludingTrashed}.
      *
      * @param  array<string, mixed>  $attributes  the unique lookup key
-     * @param  array<string, mixed>  $values      applied on both create and update
+     * @param  array<string, mixed>  $values  applied on both create and update
      */
     public static function updateOrCreateIncludingTrashed(array $attributes, array $values = []): self
     {

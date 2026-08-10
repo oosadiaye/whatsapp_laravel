@@ -15,14 +15,14 @@ use App\Models\EmailSuppression;
 final class EmailEvent
 {
     public const TYPE_BOUNCE = 'bounce';
+
     public const TYPE_COMPLAINT = 'complaint';
 
     public function __construct(
         public readonly string $email,
         public readonly string $type,
         public readonly ?string $detail = null,
-    ) {
-    }
+    ) {}
 
     /**
      * Map the event type onto the suppression-list reason.

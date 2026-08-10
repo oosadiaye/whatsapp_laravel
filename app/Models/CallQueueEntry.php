@@ -9,8 +9,11 @@ use Illuminate\Database\Eloquent\Model;
 class CallQueueEntry extends Model
 {
     public const STATUS_WAITING = 'waiting';
+
     public const STATUS_CONNECTED = 'connected';
+
     public const STATUS_LEFT = 'left';
+
     public const STATUS_TIMEOUT = 'timeout';
 
     protected $fillable = [

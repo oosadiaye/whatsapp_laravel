@@ -22,9 +22,7 @@ use Webklex\PHPIMAP\ClientManager;
  */
 class ImapSmtpProvider implements MailAccountProvider
 {
-    public function __construct(private readonly ?ClientManager $clientManager = null)
-    {
-    }
+    public function __construct(private readonly ?ClientManager $clientManager = null) {}
 
     public function connectionTest(EmailAccount $account): ConnectionResult
     {
@@ -59,6 +57,6 @@ class ImapSmtpProvider implements MailAccountProvider
 
     private function manager(): ClientManager
     {
-        return $this->clientManager ?? new ClientManager();
+        return $this->clientManager ?? new ClientManager;
     }
 }

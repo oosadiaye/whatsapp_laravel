@@ -16,9 +16,9 @@ class MailAccountProviderFactory
     public function make(string $provider): ?MailAccountProvider
     {
         return match ($provider) {
-            EmailAccount::PROVIDER_IMAP => new ImapSmtpProvider(),
-            EmailAccount::PROVIDER_GMAIL => new GmailProvider(),
-            EmailAccount::PROVIDER_GRAPH => new GraphProvider(),
+            EmailAccount::PROVIDER_IMAP => new ImapSmtpProvider,
+            EmailAccount::PROVIDER_GMAIL => new GmailProvider,
+            EmailAccount::PROVIDER_GRAPH => new GraphProvider,
             default => null,
         };
     }
@@ -31,9 +31,9 @@ class MailAccountProviderFactory
     public function fetcherFor(EmailAccount $account): ?MailFetcher
     {
         return match ($account->provider) {
-            EmailAccount::PROVIDER_IMAP => new ImapFetcher(),
-            EmailAccount::PROVIDER_GMAIL => new ImapFetcher(),
-            EmailAccount::PROVIDER_GRAPH => new ImapFetcher(),
+            EmailAccount::PROVIDER_IMAP => new ImapFetcher,
+            EmailAccount::PROVIDER_GMAIL => new ImapFetcher,
+            EmailAccount::PROVIDER_GRAPH => new ImapFetcher,
             default => null,
         };
     }
@@ -41,9 +41,9 @@ class MailAccountProviderFactory
     public function senderFor(EmailAccount $account): ?MailSender
     {
         return match ($account->provider) {
-            EmailAccount::PROVIDER_IMAP => new SmtpSender(),
-            EmailAccount::PROVIDER_GMAIL => new SmtpSender(),
-            EmailAccount::PROVIDER_GRAPH => new SmtpSender(),
+            EmailAccount::PROVIDER_IMAP => new SmtpSender,
+            EmailAccount::PROVIDER_GMAIL => new SmtpSender,
+            EmailAccount::PROVIDER_GRAPH => new SmtpSender,
             default => null,
         };
     }

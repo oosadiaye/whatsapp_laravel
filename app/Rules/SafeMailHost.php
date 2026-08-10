@@ -44,6 +44,7 @@ class SafeMailHost implements ValidationRule
             if (! $this->isPublicIp($host)) {
                 $fail('The :attribute points at a private or reserved address.');
             }
+
             return;
         }
 
@@ -56,6 +57,7 @@ class SafeMailHost implements ValidationRule
         foreach ($this->resolve($host) as $ip) {
             if (! $this->isPublicIp($ip)) {
                 $fail('The :attribute resolves to a private or reserved address.');
+
                 return;
             }
         }

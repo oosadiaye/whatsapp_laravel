@@ -25,7 +25,7 @@ class PersonalizerTest extends TestCase
 
     public function test_field_resolves_each_key(): void
     {
-        $p = new Personalizer();
+        $p = new Personalizer;
         $c = $this->contact();
 
         $this->assertSame('Ada Lovelace', $p->field($c, 'name'));
@@ -38,7 +38,7 @@ class PersonalizerTest extends TestCase
 
     public function test_positional_uses_the_default_config_order(): void
     {
-        $p = new Personalizer();
+        $p = new Personalizer;
         $c = $this->contact();
 
         $this->assertSame('Ada Lovelace', $p->positional($c, 1)); // display_name
@@ -53,7 +53,7 @@ class PersonalizerTest extends TestCase
         // point of the config-driven map (the old hardcode got this wrong).
         config(['personalization.template_variables' => [1 => 'phone', 2 => 'email', 3 => 'custom_field_2']]);
 
-        $p = new Personalizer();
+        $p = new Personalizer;
         $c = $this->contact();
 
         $this->assertSame('2348011112222', $p->positional($c, 1));
@@ -64,13 +64,13 @@ class PersonalizerTest extends TestCase
 
     public function test_display_name_falls_back_to_phone(): void
     {
-        $p = new Personalizer();
+        $p = new Personalizer;
         $this->assertSame('2348011112222', $p->positional($this->contact(['name' => null]), 1));
     }
 
     public function test_named_replaces_tokens_with_friend_fallback(): void
     {
-        $p = new Personalizer();
+        $p = new Personalizer;
 
         $this->assertSame(
             'Hi Ada Lovelace (Ada) at ada@example.com',

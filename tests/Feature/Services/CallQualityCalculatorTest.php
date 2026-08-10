@@ -11,7 +11,7 @@ class CallQualityCalculatorTest extends TestCase
 {
     public function test_excellent_call_yields_mos_above_4(): void
     {
-        $calculator = new CallQualityCalculator();
+        $calculator = new CallQualityCalculator;
 
         // 0% packet loss, 5ms jitter, 50ms RTT — pristine call
         $mos = $calculator->computeMos(
@@ -25,7 +25,7 @@ class CallQualityCalculatorTest extends TestCase
 
     public function test_poor_call_yields_mos_below_3(): void
     {
-        $calculator = new CallQualityCalculator();
+        $calculator = new CallQualityCalculator;
 
         // 5% packet loss, 100ms jitter, 400ms RTT — degraded
         $mos = $calculator->computeMos(
@@ -39,7 +39,7 @@ class CallQualityCalculatorTest extends TestCase
 
     public function test_zero_inputs_yield_high_mos(): void
     {
-        $calculator = new CallQualityCalculator();
+        $calculator = new CallQualityCalculator;
 
         // 0/0/0 — theoretical perfect conditions
         $mos = $calculator->computeMos(0.0, 0.0, 0);
@@ -50,7 +50,7 @@ class CallQualityCalculatorTest extends TestCase
 
     public function test_extreme_packet_loss_clamped_to_min_one(): void
     {
-        $calculator = new CallQualityCalculator();
+        $calculator = new CallQualityCalculator;
 
         // 100% loss → R-factor goes deeply negative; MOS must clamp to 1.0
         $mos = $calculator->computeMos(100.0, 1000.0, 5000);
@@ -60,7 +60,7 @@ class CallQualityCalculatorTest extends TestCase
 
     public function test_returns_two_decimal_precision(): void
     {
-        $calculator = new CallQualityCalculator();
+        $calculator = new CallQualityCalculator;
 
         $mos = $calculator->computeMos(1.0, 20.0, 100);
 
@@ -75,7 +75,7 @@ class CallQualityCalculatorTest extends TestCase
         // packet-loss weight from 4.0 → 8.0 must produce a strictly LOWER
         // MOS for the same input — proving the config value reaches the
         // calculation rather than being ignored.
-        $calculator = new CallQualityCalculator();
+        $calculator = new CallQualityCalculator;
 
         $packetLoss = 5.0;
         $jitter = 10.0;

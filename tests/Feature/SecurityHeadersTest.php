@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\User;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -63,8 +65,8 @@ class SecurityHeadersTest extends TestCase
         // The per-request nonce in the CSP header must be the same one @vite,
         // Livewire, and our inline <script> tags emit — otherwise the browser
         // blocks them. Render a full app-layout page and prove they match.
-        $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
-        $user = \App\Models\User::factory()->create(['is_active' => true]);
+        $this->seed(RolesAndPermissionsSeeder::class);
+        $user = User::factory()->create(['is_active' => true]);
         $user->assignRole('super_admin');
 
         $response = $this->actingAs($user)->get(route('dashboard'));

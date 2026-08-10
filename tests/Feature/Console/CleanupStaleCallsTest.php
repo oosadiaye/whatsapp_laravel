@@ -7,10 +7,12 @@ namespace Tests\Feature\Console;
 use App\Events\Calling\CallTerminated;
 use App\Models\CallLog;
 use App\Models\Contact;
+use App\Models\Conversation;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -69,7 +71,7 @@ class CleanupStaleCallsTest extends TestCase
         });
     }
 
-    private function makeCall(string $status, \Illuminate\Support\Carbon $startedAt): CallLog
+    private function makeCall(string $status, Carbon $startedAt): CallLog
     {
         $owner = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
         $owner->assignRole(User::ROLE_ADMIN);
@@ -77,7 +79,7 @@ class CleanupStaleCallsTest extends TestCase
         $agent->assignRole(User::ROLE_AGENT);
         $instance = WhatsAppInstance::factory()->create(['user_id' => $owner->id]);
         $contact = Contact::factory()->create(['user_id' => $owner->id, 'phone' => '23480'.fake()->unique()->numerify('########')]);
-        $conversation = \App\Models\Conversation::create([
+        $conversation = Conversation::create([
             'user_id' => $owner->id,
             'contact_id' => $contact->id,
             'whatsapp_instance_id' => $instance->id,

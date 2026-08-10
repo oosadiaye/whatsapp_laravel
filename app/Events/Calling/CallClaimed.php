@@ -17,9 +17,7 @@ class CallClaimed implements ShouldBroadcast
     use InteractsWithSockets;
     use SerializesModels;
 
-    public function __construct(public CallLog $call)
-    {
-    }
+    public function __construct(public CallLog $call) {}
 
     public function broadcastOn(): PrivateChannel
     {
@@ -30,7 +28,7 @@ class CallClaimed implements ShouldBroadcast
             ?? $this->call->placed_by_user_id
             ?? 0);
 
-        return new PrivateChannel('user.' . $userId);
+        return new PrivateChannel('user.'.$userId);
     }
 
     public function broadcastAs(): string

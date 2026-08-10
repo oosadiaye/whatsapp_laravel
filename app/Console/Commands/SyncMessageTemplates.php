@@ -94,7 +94,7 @@ class SyncMessageTemplates extends Command
 
     /**
      * @param  array<int, array<string, mixed>>  $remoteTemplates
-     * @return array{0: int, 1: int}  [created, updated]
+     * @return array{0: int, 1: int} [created, updated]
      */
     private function upsertAll(WhatsAppInstance $instance, array $remoteTemplates): array
     {

@@ -15,6 +15,7 @@ use App\Services\WhatsAppMessenger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -41,8 +42,7 @@ class ConversationController extends Controller
     public function __construct(
         private readonly WhatsAppMessenger $messenger,
         private readonly OutboundCallService $outboundCalls,
-    ) {
-    }
+    ) {}
 
     /**
      * Inbox view — list of conversations with last-message preview.
@@ -103,7 +103,7 @@ class ConversationController extends Controller
                 try {
                     $this->messenger->markAsRead($conversation->whatsappInstance, $latestInbound->whatsapp_message_id);
                 } catch (Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning('markAsRead failed', [
+                    Log::warning('markAsRead failed', [
                         'conversation_id' => $conversation->id,
                         'error' => $e->getMessage(),
                     ]);
@@ -126,7 +126,7 @@ class ConversationController extends Controller
         $templates = MessageTemplate::query()
             ->where(function ($q) use ($conversation) {
                 $q->where('whatsapp_instance_id', $conversation->whatsapp_instance_id)
-                  ->orWhereNull('whatsapp_instance_id');
+                    ->orWhereNull('whatsapp_instance_id');
             })
             ->where('status', MessageTemplate::STATUS_APPROVED)
             ->orderBy('name')
@@ -193,8 +193,8 @@ class ConversationController extends Controller
      * Place an outbound call from this conversation's instance to its contact.
      * Permission gated via route middleware (`conversations.call`).
      *
-     * @throws WhatsAppApiException  if Meta rejects the call (caught and surfaced
-     *                                as a flash error, no call_log row created)
+     * @throws WhatsAppApiException if Meta rejects the call (caught and surfaced
+     *                              as a flash error, no call_log row created)
      */
     public function initiateCall(Request $request, Conversation $conversation): RedirectResponse
     {
@@ -214,11 +214,12 @@ class ConversationController extends Controller
         } catch (WhatsAppApiException $e) {
             // Log the full Meta response body server-side; flash a user-safe
             // hint that explains the cause. See Controller::userFacingCallError.
-            \Illuminate\Support\Facades\Log::error('Outbound call failed', [
+            Log::error('Outbound call failed', [
                 'conversation_id' => $conversation->id,
                 'user_id' => $request->user()->id,
                 'error' => $e->getMessage(),
             ]);
+
             return redirect()
                 ->route('conversations.show', $conversation)
                 ->with('error', $this->userFacingCallError($e->getMessage()));

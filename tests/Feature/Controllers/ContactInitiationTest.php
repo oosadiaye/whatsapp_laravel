@@ -7,6 +7,7 @@ namespace Tests\Feature\Controllers;
 use App\Models\CallLog;
 use App\Models\Contact;
 use App\Models\Conversation;
+use App\Models\ConversationMessage;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\WhatsAppInstance;
@@ -54,7 +55,7 @@ class ContactInitiationTest extends TestCase
 
     // ---- startCall: direct Africa's Talking dial -----------------------------
 
-    public function test_startCall_places_an_at_call_and_logs_it(): void
+    public function test_start_call_places_an_at_call_and_logs_it(): void
     {
         $this->fakeQueuedAtCall();
         $admin = $this->makeUser('admin');
@@ -78,7 +79,7 @@ class ContactInitiationTest extends TestCase
         $this->assertSame($admin->id, $call->placed_by_user_id);
     }
 
-    public function test_startCall_assigns_conversation_to_the_dialer_when_unassigned(): void
+    public function test_start_call_assigns_conversation_to_the_dialer_when_unassigned(): void
     {
         $this->fakeQueuedAtCall();
         $admin = $this->makeUser('admin');
@@ -95,7 +96,7 @@ class ContactInitiationTest extends TestCase
         $this->assertSame($admin->id, $conv->assigned_to_user_id);
     }
 
-    public function test_startCall_flashes_setup_error_when_no_instance_configured(): void
+    public function test_start_call_flashes_setup_error_when_no_instance_configured(): void
     {
         $admin = $this->makeUser('admin');
         $contact = Contact::factory()->create(['user_id' => $admin->id]);
@@ -109,7 +110,7 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(0, CallLog::count());
     }
 
-    public function test_startCall_flashes_error_and_logs_nothing_when_voice_provider_fails(): void
+    public function test_start_call_flashes_error_and_logs_nothing_when_voice_provider_fails(): void
     {
         Http::fake(['voice.africastalking.com/call' => Http::response(['error' => 'down'], 500)]);
 
@@ -129,7 +130,7 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(0, CallLog::count());
     }
 
-    public function test_startCall_flashes_error_for_a_contact_with_an_unnormalisable_phone(): void
+    public function test_start_call_flashes_error_for_a_contact_with_an_unnormalisable_phone(): void
     {
         // A bad import can leave a phone that can't be normalised to E.164;
         // placeCall throws \InvalidArgumentException, which startCall must catch
@@ -147,7 +148,7 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(0, CallLog::count());
     }
 
-    public function test_startCall_requires_conversations_call_permission(): void
+    public function test_start_call_requires_conversations_call_permission(): void
     {
         // agent/manager/admin/super_admin all grant conversations.call by
         // default, so use a role-less user to isolate the policy gate.
@@ -162,7 +163,7 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(0, CallLog::count());
     }
 
-    public function test_startCall_is_not_blocked_by_contact_ownership_in_single_tenant(): void
+    public function test_start_call_is_not_blocked_by_contact_ownership_in_single_tenant(): void
     {
         // Single-tenant: contacts are shared. An admin can dial a contact owned
         // by another user — the old per-user ownership 403 is gone (route
@@ -186,7 +187,7 @@ class ContactInitiationTest extends TestCase
 
     // ---- startChat: open a WhatsApp thread (no message sent) -----------------
 
-    public function test_startChat_creates_conversation_for_new_contact(): void
+    public function test_start_chat_creates_conversation_for_new_contact(): void
     {
         $admin = $this->makeUser('admin');
         $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
@@ -206,7 +207,7 @@ class ContactInitiationTest extends TestCase
         $response->assertRedirect(route('conversations.show', $conv));
     }
 
-    public function test_startChat_reuses_existing_conversation(): void
+    public function test_start_chat_reuses_existing_conversation(): void
     {
         $admin = $this->makeUser('admin');
         $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
@@ -224,7 +225,7 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(1, Conversation::count(), 'Must not create a duplicate conversation');
     }
 
-    public function test_startChat_requires_conversations_reply_permission(): void
+    public function test_start_chat_requires_conversations_reply_permission(): void
     {
         $user = User::factory()->create(['is_active' => true]);  // no role assigned
         $contact = Contact::factory()->create(['user_id' => $user->id]);
@@ -237,7 +238,7 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(0, Conversation::count());
     }
 
-    public function test_startChat_is_not_blocked_by_contact_ownership_in_single_tenant(): void
+    public function test_start_chat_is_not_blocked_by_contact_ownership_in_single_tenant(): void
     {
         // Single-tenant: contacts are shared. An admin can start a chat for a
         // contact owned by another user — the old per-user ownership 403 is
@@ -254,7 +255,7 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(1, Conversation::count());
     }
 
-    public function test_startChat_uses_the_primary_instance_without_a_picker(): void
+    public function test_start_chat_uses_the_primary_instance_without_a_picker(): void
     {
         // Single-instance app: no send-time picker. startChat resolves to the
         // one primary WhatsApp number and creates the conversation directly.
@@ -274,7 +275,7 @@ class ContactInitiationTest extends TestCase
         $this->assertSame(WhatsAppInstance::primary()->id, $conv->whatsapp_instance_id);
     }
 
-    public function test_startChat_with_no_instance_configured_flashes_setup_error(): void
+    public function test_start_chat_with_no_instance_configured_flashes_setup_error(): void
     {
         // Single-instance app: when WhatsApp has not been configured in Settings
         // (no instance row at all), startChat flashes a setup error instead of
@@ -306,7 +307,7 @@ class ContactInitiationTest extends TestCase
             'contact_id' => $engaged->id,
             'whatsapp_instance_id' => $instance->id,
         ]);
-        \App\Models\ConversationMessage::create([
+        ConversationMessage::create([
             'conversation_id' => $conv->id,
             'direction' => 'inbound',
             'whatsapp_message_id' => 'wamid.eager',

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 
 class Setting extends Model
 {
@@ -101,12 +103,12 @@ class Setting extends Model
         }
 
         try {
-            return \Illuminate\Support\Facades\Crypt::decryptString($raw);
+            return Crypt::decryptString($raw);
         } catch (\Throwable $e) {
             // A decrypt failure almost always means APP_KEY was rotated without
             // re-encrypting stored secrets. Surface it (don't fail silently) so
             // "credentials suddenly missing" is diagnosable from the log.
-            \Illuminate\Support\Facades\Log::warning('Setting::getEncrypted decrypt failed', [
+            Log::warning('Setting::getEncrypted decrypt failed', [
                 'key' => $key,
                 'error' => $e->getMessage(),
             ]);
@@ -121,6 +123,6 @@ class Setting extends Model
      */
     public static function setEncrypted(string $key, string $value): static
     {
-        return static::set($key, \Illuminate\Support\Facades\Crypt::encryptString($value));
+        return static::set($key, Crypt::encryptString($value));
     }
 }

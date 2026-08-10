@@ -14,6 +14,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 class CampaignBatchDispatch implements ShouldQueue
@@ -109,7 +110,7 @@ class CampaignBatchDispatch implements ShouldQueue
         // A relaunch that dispatched no NEW sends (every contact already logged +
         // resolved) won't trigger completion via a send job — reconcile now.
         // On a fresh launch the logs are still PENDING, so this is a no-op.
-        (new CampaignService())->checkCompletion($this->campaign);
+        (new CampaignService)->checkCompletion($this->campaign);
     }
 
     /**
@@ -118,7 +119,7 @@ class CampaignBatchDispatch implements ShouldQueue
      * running $delay accumulator is threaded by reference so pacing is
      * continuous across chunks.
      *
-     * @param  \Illuminate\Support\Collection<int, Contact>  $contacts
+     * @param  Collection<int, Contact>  $contacts
      */
     private function fanOutChunk($contacts, float &$delay, float $intervalMs): void
     {

@@ -46,7 +46,7 @@ class EmailLeadScoringServiceTest extends TestCase
         $contact = Contact::factory()->create(['email' => 'lead@example.com']);
         $this->recipient($contact, ['status' => EmailSequence::RECIPIENT_SENT, 'reply_count' => 1]);
 
-        $score = (new EmailLeadScoringService())->scoreContact($contact->fresh());
+        $score = (new EmailLeadScoringService)->scoreContact($contact->fresh());
 
         $this->assertSame(EmailLeadScoringService::SCORE_REPLIED, $score);
         $contact->refresh();
@@ -61,7 +61,7 @@ class EmailLeadScoringServiceTest extends TestCase
         $contact = Contact::factory()->create(['email' => 'lead@example.com']);
         $this->recipient($contact, ['status' => EmailSequence::RECIPIENT_COMPLETED]);
 
-        $score = (new EmailLeadScoringService())->scoreContact($contact->fresh());
+        $score = (new EmailLeadScoringService)->scoreContact($contact->fresh());
 
         $this->assertSame(EmailLeadScoringService::SCORE_SENT, $score);
     }
@@ -74,7 +74,7 @@ class EmailLeadScoringServiceTest extends TestCase
         $this->recipient($a, ['open_count' => 2]);
         $this->recipient($b, ['click_count' => 1]);
 
-        $count = (new EmailLeadScoringService())->scoreAll();
+        $count = (new EmailLeadScoringService)->scoreAll();
 
         $this->assertSame(2, $count);
         $this->assertGreaterThan(0, $a->fresh()->email_lead_score);

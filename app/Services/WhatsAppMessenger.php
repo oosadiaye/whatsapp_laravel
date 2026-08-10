@@ -22,8 +22,7 @@ class WhatsAppMessenger
 {
     public function __construct(
         private readonly WhatsAppCloudApiService $cloud,
-    ) {
-    }
+    ) {}
 
     /**
      * Send a freeform text message. Only legal inside a 24-hour conversation

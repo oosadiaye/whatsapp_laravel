@@ -23,6 +23,5 @@ final readonly class SendResult
     public function __construct(
         public ?string $messageId,
         public array $raw,
-    ) {
-    }
+    ) {}
 }

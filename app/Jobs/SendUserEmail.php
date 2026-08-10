@@ -73,6 +73,7 @@ class SendUserEmail implements ShouldQueue
             // retry is safe. release() (not drop): retryUntil() keeps this from
             // becoming a permanent failure despite $tries = 1.
             $this->release(RateLimiter::availableIn($rateKey) ?: 30);
+
             return;
         }
         RateLimiter::hit($rateKey, 60);
@@ -93,6 +94,7 @@ class SendUserEmail implements ShouldQueue
             // the wire, so a retry could deliver a SECOND copy. Fail permanently
             // (and audibly) rather than releasing back into the retry window.
             $this->fail($e);
+
             return;
         }
 

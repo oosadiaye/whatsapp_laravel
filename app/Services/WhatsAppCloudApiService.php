@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Exceptions\WhatsAppApiException;
 use App\Models\WhatsAppInstance;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -52,7 +53,7 @@ class WhatsAppCloudApiService
             // Meta already processed a non-idempotent POST (message send / call
             // terminate); blindly retrying it would duplicate the side effect.
             ->retry(2, 250, function (\Throwable $exception): bool {
-                return $exception instanceof \Illuminate\Http\Client\ConnectionException;
+                return $exception instanceof ConnectionException;
             }, throw: false);
     }
 
@@ -153,7 +154,7 @@ class WhatsAppCloudApiService
      *
      * Endpoint: POST /v20.0/{phone_number_id}/calls
      *
-     * @return string  Meta's call ID (wacid.xxx) — store on call_log for webhook correlation
+     * @return string Meta's call ID (wacid.xxx) — store on call_log for webhook correlation
      *
      * @throws WhatsAppApiException
      */
@@ -266,7 +267,7 @@ class WhatsAppCloudApiService
      *
      * Endpoint: POST /v20.0/{phone_number_id}/calls action=accept
      *
-     * @throws WhatsAppApiException  on 4xx — without accept, no audio path.
+     * @throws WhatsAppApiException on 4xx — without accept, no audio path.
      */
     public function acceptCall(WhatsAppInstance $instance, string $metaCallId, string $sdpAnswer): void
     {

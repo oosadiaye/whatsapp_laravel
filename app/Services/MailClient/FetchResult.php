@@ -21,6 +21,5 @@ final class FetchResult
         public readonly array $messages,
         public readonly array $newCursor,
         public readonly bool $wasFullResync = false,
-    ) {
-    }
+    ) {}
 }

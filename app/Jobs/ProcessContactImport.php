@@ -28,7 +28,7 @@ class ProcessContactImport implements ShouldQueue
 
     public function handle(): void
     {
-        $service = new ContactImportService();
+        $service = new ContactImportService;
 
         $result = $service->importFromFile(
             $this->filePath,

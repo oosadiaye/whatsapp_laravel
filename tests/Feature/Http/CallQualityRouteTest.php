@@ -172,6 +172,7 @@ class CallQualityRouteTest extends TestCase
         ]);
         $agent->assignRole(User::ROLE_AGENT);
         $agent->givePermissionTo('conversations.reply');
+
         return $agent;
     }
 

@@ -78,6 +78,7 @@ class StoreCampaignRequest extends FormRequest
                     'message_template_id',
                     "Template \"{$template->name}\" has status {$template->status} — only APPROVED templates can be sent. Sync the template list to refresh status, or pick a different template."
                 );
+
                 return;
             }
 

@@ -34,7 +34,7 @@ class PresenceToggle extends Component
 
     public function setStatus(string $status): void
     {
-        if (!in_array($status, User::PRESENCE_STATUSES, true)) {
+        if (! in_array($status, User::PRESENCE_STATUSES, true)) {
             return;
         }
 

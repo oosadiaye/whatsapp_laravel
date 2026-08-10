@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Livewire\Mailbox\Inbox;
 use App\Models\EmailAttachment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * The per-employee mailbox inbox page (plan B4) + attachment downloads (B5b).
- * Hosts the Livewire {@see \App\Livewire\Mailbox\Inbox} component; account
+ * Hosts the Livewire {@see Inbox} component; account
  * connection lives in {@see EmailAccountController}. Whole feature gated by the
  * mailbox.enabled route middleware + mailbox.view permission.
  */

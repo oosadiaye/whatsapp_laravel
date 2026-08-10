@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\MailClient;
 
+use App\Jobs\SendUserEmail;
 use App\Models\EmailAccount;
 
 /**
@@ -11,7 +12,7 @@ use App\Models\EmailAccount;
  * from a connected account. Implementations own the transport detail (SMTP for
  * IMAP accounts; Graph/Gmail API later) so the send job depends on this contract
  * only. Throws on a hard send failure — the caller decides retry policy (send is
- * NOT retried; see {@see \App\Jobs\SendUserEmail}).
+ * NOT retried; see {@see SendUserEmail}).
  */
 interface MailSender
 {

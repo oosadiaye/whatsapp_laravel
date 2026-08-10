@@ -35,9 +35,7 @@ class SendCampaignEmail implements ShouldQueue
     // re-entry — which is what actually closes the gap.
     public int $tries = 1;
 
-    public function __construct(public readonly int $logId)
-    {
-    }
+    public function __construct(public readonly int $logId) {}
 
     public function handle(): void
     {

@@ -59,7 +59,7 @@ class MailboxRealtimeTest extends TestCase
         $user->assignRole('agent');
         $this->actingAs($user);
 
-        $inbox = new Inbox();
+        $inbox = new Inbox;
         // Bind a closure to the component to reach its protected getListeners().
         $listeners = (fn () => $this->getListeners())->call($inbox);
 

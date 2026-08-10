@@ -18,6 +18,7 @@ class EmailCampaignControllerTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private ContactGroup $group;
 
     protected function setUp(): void

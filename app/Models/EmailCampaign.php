@@ -19,17 +19,27 @@ class EmailCampaign extends Model
     use HasFactory;
 
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_SCHEDULED = 'scheduled';
+
     public const STATUS_QUEUED = 'queued';
+
     public const STATUS_SENDING = 'sending';
+
     public const STATUS_SENT = 'sent';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_PAUSED = 'paused';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     public const RECURRENCE_NONE = 'none';
+
     public const RECURRENCE_DAILY = 'daily';
+
     public const RECURRENCE_WEEKLY = 'weekly';
+
     public const RECURRENCE_MONTHLY = 'monthly';
 
     public const RECURRENCES = [

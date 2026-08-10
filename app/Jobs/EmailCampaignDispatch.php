@@ -34,9 +34,7 @@ class EmailCampaignDispatch implements ShouldQueue
     // below the queue retry_after so a timed-out job isn't retried.
     public int $timeout = 300;
 
-    public function __construct(public readonly int $campaignId)
-    {
-    }
+    public function __construct(public readonly int $campaignId) {}
 
     public function handle(EmailCampaignService $service): void
     {

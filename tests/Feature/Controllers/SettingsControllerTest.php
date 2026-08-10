@@ -6,6 +6,9 @@ namespace Tests\Feature\Controllers;
 
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\GeminiConfig;
+use App\Support\MailConfig;
+use App\Support\VoiceConfig;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
@@ -221,7 +224,7 @@ class SettingsControllerTest extends TestCase
         $this->assertSame($secret, Crypt::decryptString($raw));
 
         // The resolver (used across the call-AI pipeline) returns it.
-        $this->assertSame($secret, \App\Support\GeminiConfig::key());
+        $this->assertSame($secret, GeminiConfig::key());
     }
 
     public function test_blank_gemini_key_does_not_overwrite_the_existing_one(): void
@@ -233,7 +236,7 @@ class SettingsControllerTest extends TestCase
             ->put(route('settings.update'), ['gemini_api_key' => ''])
             ->assertRedirect();
 
-        $this->assertSame('existing-gemini-key-123456', \App\Support\GeminiConfig::key());
+        $this->assertSame('existing-gemini-key-123456', GeminiConfig::key());
     }
 
     public function test_gemini_setting_takes_precedence_over_the_env_key(): void
@@ -241,11 +244,11 @@ class SettingsControllerTest extends TestCase
         config(['services.gemini.key' => 'env-fallback-key-abcdef']);
 
         // No DB setting → env fallback.
-        $this->assertSame('env-fallback-key-abcdef', \App\Support\GeminiConfig::key());
+        $this->assertSame('env-fallback-key-abcdef', GeminiConfig::key());
 
         // DB setting wins.
         Setting::setEncrypted('gemini_api_key', 'db-key-wins-999888');
-        $this->assertSame('db-key-wins-999888', \App\Support\GeminiConfig::key());
+        $this->assertSame('db-key-wins-999888', GeminiConfig::key());
     }
 
     public function test_recording_cannot_be_enabled_without_a_consent_notice(): void
@@ -257,7 +260,7 @@ class SettingsControllerTest extends TestCase
             ])
             ->assertSessionHasErrors('voice_recording_consent_notice');
 
-        $this->assertFalse(\App\Support\VoiceConfig::recordingEnabled());
+        $this->assertFalse(VoiceConfig::recordingEnabled());
     }
 
     public function test_recording_can_be_enabled_with_a_consent_notice(): void
@@ -272,8 +275,8 @@ class SettingsControllerTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('success');
 
-        $this->assertTrue(\App\Support\VoiceConfig::recordingEnabled());
-        $this->assertSame($notice, \App\Support\VoiceConfig::recordingConsentNotice());
+        $this->assertTrue(VoiceConfig::recordingEnabled());
+        $this->assertSame($notice, VoiceConfig::recordingConsentNotice());
     }
 
     public function test_recording_can_be_disabled(): void
@@ -287,16 +290,16 @@ class SettingsControllerTest extends TestCase
             ])
             ->assertRedirect();
 
-        $this->assertFalse(\App\Support\VoiceConfig::recordingEnabled());
+        $this->assertFalse(VoiceConfig::recordingEnabled());
     }
 
     public function test_recording_setting_takes_precedence_over_env(): void
     {
         config(['voice.call_recording_enabled' => false]);
-        $this->assertFalse(\App\Support\VoiceConfig::recordingEnabled());
+        $this->assertFalse(VoiceConfig::recordingEnabled());
 
         Setting::set('voice_recording_enabled', '1');
-        $this->assertTrue(\App\Support\VoiceConfig::recordingEnabled());
+        $this->assertTrue(VoiceConfig::recordingEnabled());
     }
 
     public function test_recording_retention_days_is_saved_and_resolves(): void
@@ -306,16 +309,16 @@ class SettingsControllerTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('success');
 
-        $this->assertSame(30, \App\Support\VoiceConfig::recordingRetentionDays());
+        $this->assertSame(30, VoiceConfig::recordingRetentionDays());
     }
 
     public function test_retention_days_setting_takes_precedence_over_env(): void
     {
         config(['voice.recording_retention_days' => 90]);
-        $this->assertSame(90, \App\Support\VoiceConfig::recordingRetentionDays());
+        $this->assertSame(90, VoiceConfig::recordingRetentionDays());
 
         Setting::set('voice_recording_retention_days', '14');
-        $this->assertSame(14, \App\Support\VoiceConfig::recordingRetentionDays());
+        $this->assertSame(14, VoiceConfig::recordingRetentionDays());
     }
 
     public function test_settings_page_shows_the_email_smtp_card(): void
@@ -357,7 +360,7 @@ class SettingsControllerTest extends TestCase
         $this->assertSame('super-secret-smtp-pass', Crypt::decryptString($raw));
 
         // The resolver applies them onto the runtime mail config.
-        \App\Support\MailConfig::apply();
+        MailConfig::apply();
         $this->assertSame('smtp', config('mail.default'));
         $this->assertSame('smtp.mailhost.test', config('mail.mailers.smtp.host'));
         $this->assertSame(587, config('mail.mailers.smtp.port'));
@@ -387,7 +390,7 @@ class SettingsControllerTest extends TestCase
     {
         $admin = $this->makeAdmin();
         Setting::set('mail_mailer', 'smtp');
-        $this->assertTrue(\App\Support\MailConfig::isConfiguredInDb());
+        $this->assertTrue(MailConfig::isConfiguredInDb());
 
         // Submitting with the "Use .env default" option (empty mailer) must clear
         // the override — not leave it stuck at smtp via the skip-empty loop.
@@ -395,7 +398,7 @@ class SettingsControllerTest extends TestCase
             ->put(route('settings.update'), ['mail_mailer' => ''])
             ->assertRedirect();
 
-        $this->assertFalse(\App\Support\MailConfig::isConfiguredInDb());
+        $this->assertFalse(MailConfig::isConfiguredInDb());
     }
 
     public function test_test_email_warns_when_the_transport_does_not_deliver(): void

@@ -26,7 +26,7 @@ class MailboxProviderTest extends TestCase
 
     public function test_factory_resolves_imap_and_returns_null_for_unknown(): void
     {
-        $factory = new MailAccountProviderFactory();
+        $factory = new MailAccountProviderFactory;
 
         $this->assertInstanceOf(ImapSmtpProvider::class, $factory->make(EmailAccount::PROVIDER_IMAP));
         $this->assertNull($factory->make('nope'));
@@ -36,7 +36,7 @@ class MailboxProviderTest extends TestCase
     {
         $account = EmailAccount::factory()->make(['credentials' => ['imap_host' => '']]);
 
-        $result = (new ImapSmtpProvider())->connectionTest($account);
+        $result = (new ImapSmtpProvider)->connectionTest($account);
 
         $this->assertFalse($result->ok);
         $this->assertStringContainsString('Missing IMAP credential', (string) $result->error);
@@ -79,7 +79,8 @@ class MailboxProviderTest extends TestCase
      */
     private function stubImapDelegate(): void
     {
-        $this->app->bind(ImapSmtpProvider::class, fn () => new class extends ImapSmtpProvider {
+        $this->app->bind(ImapSmtpProvider::class, fn () => new class extends ImapSmtpProvider
+        {
             public function connectionTest(EmailAccount $account): ConnectionResult
             {
                 return ConnectionResult::ok(); // reaching here proves delegation
@@ -99,7 +100,7 @@ class MailboxProviderTest extends TestCase
             'credentials' => ['auth_type' => 'password', 'imap_host' => 'imap.gmail.com', 'username' => 'u', 'password' => 'p'],
         ]);
 
-        $this->assertTrue((new GmailProvider())->connectionTest($account)->ok);
+        $this->assertTrue((new GmailProvider)->connectionTest($account)->ok);
     }
 
     public function test_graph_provider_routes_non_oauth_credentials_to_imap(): void
@@ -110,7 +111,7 @@ class MailboxProviderTest extends TestCase
             'credentials' => ['auth_type' => 'password', 'imap_host' => 'outlook.office365.com', 'username' => 'u', 'password' => 'p'],
         ]);
 
-        $this->assertTrue((new GraphProvider())->connectionTest($account)->ok);
+        $this->assertTrue((new GraphProvider)->connectionTest($account)->ok);
     }
 
     public function test_gmail_oauth_path_is_reachable_and_fails_without_a_token(): void
@@ -122,7 +123,7 @@ class MailboxProviderTest extends TestCase
             'credentials' => ['auth_type' => 'oauth'],
         ]);
 
-        $result = (new GmailProvider())->connectionTest($account);
+        $result = (new GmailProvider)->connectionTest($account);
 
         $this->assertFalse($result->ok);
         $this->assertStringContainsString('OAuth access token', (string) $result->error);

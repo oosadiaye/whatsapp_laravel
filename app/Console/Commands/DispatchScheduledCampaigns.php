@@ -11,6 +11,7 @@ use Illuminate\Console\Command;
 class DispatchScheduledCampaigns extends Command
 {
     protected $signature = 'campaigns:dispatch-scheduled';
+
     protected $description = 'Launch campaigns that are queued and past their scheduled time';
 
     public function handle(): int
@@ -21,10 +22,11 @@ class DispatchScheduledCampaigns extends Command
 
         if ($campaigns->isEmpty()) {
             $this->info('No scheduled campaigns to dispatch.');
+
             return self::SUCCESS;
         }
 
-        $service = new CampaignService();
+        $service = new CampaignService;
 
         foreach ($campaigns as $campaign) {
             $service->launch($campaign);
@@ -32,6 +34,7 @@ class DispatchScheduledCampaigns extends Command
         }
 
         $this->info("Dispatched {$campaigns->count()} campaign(s).");
+
         return self::SUCCESS;
     }
 }

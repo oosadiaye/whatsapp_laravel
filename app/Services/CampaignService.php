@@ -8,7 +8,6 @@ use App\Jobs\CampaignBatchDispatch;
 use App\Models\Campaign;
 use App\Models\MessageLog;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Manages campaign lifecycle operations: launch, pause, resume, cancel, clone, and completion.

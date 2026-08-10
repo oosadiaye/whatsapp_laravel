@@ -6,6 +6,7 @@ namespace Tests\Feature\Services;
 
 use App\Models\CallLog;
 use App\Models\Conversation;
+use App\Models\Setting;
 use App\Models\User;
 use App\Services\CallFlowRouter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -62,7 +63,7 @@ class CallFlowRouterTest extends TestCase
     {
         [$call] = $this->inboundCall();
         config(['voice.call_recording_enabled' => true]);
-        \App\Models\Setting::set('voice_recording_consent_notice', 'This call may be recorded.');
+        Setting::set('voice_recording_consent_notice', 'This call may be recorded.');
 
         $xml = $this->router()->entryXml($call)->render();
 
@@ -75,7 +76,7 @@ class CallFlowRouterTest extends TestCase
     {
         [$call] = $this->inboundCall();
         config(['voice.call_recording_enabled' => false]);
-        \App\Models\Setting::set('voice_recording_consent_notice', 'This call may be recorded.');
+        Setting::set('voice_recording_consent_notice', 'This call may be recorded.');
 
         $xml = $this->router()->entryXml($call)->render();
 

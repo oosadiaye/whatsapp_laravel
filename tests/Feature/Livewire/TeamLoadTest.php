@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\WhatsAppInstance;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -109,7 +110,7 @@ class TeamLoadTest extends TestCase
 
     private function makeAssignedConversation(
         User $agent,
-        \Illuminate\Support\Carbon $lastInboundAt,
+        Carbon $lastInboundAt,
     ): Conversation {
         $owner = User::factory()->create([
             'role' => User::ROLE_ADMIN,

@@ -134,19 +134,17 @@ class MailboxAccountTest extends TestCase
     private function stubProvider(bool $ok): void
     {
         $this->app->bind(MailAccountProviderFactory::class, function () use ($ok) {
-            return new class($ok) extends MailAccountProviderFactory {
-                public function __construct(private readonly bool $ok)
-                {
-                }
+            return new class($ok) extends MailAccountProviderFactory
+            {
+                public function __construct(private readonly bool $ok) {}
 
                 public function for(EmailAccount $account): ?MailAccountProvider
                 {
                     $ok = $this->ok;
 
-                    return new class($ok) implements MailAccountProvider {
-                        public function __construct(private readonly bool $ok)
-                        {
-                        }
+                    return new class($ok) implements MailAccountProvider
+                    {
+                        public function __construct(private readonly bool $ok) {}
 
                         public function connectionTest(EmailAccount $account): ConnectionResult
                         {

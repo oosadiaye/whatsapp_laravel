@@ -20,9 +20,7 @@ use App\Support\VoiceXml;
  */
 class CallFlowRouter
 {
-    public function __construct(private readonly BusinessHours $hours)
-    {
-    }
+    public function __construct(private readonly BusinessHours $hours) {}
 
     /**
      * First response when AT asks what to do with a fresh inbound call.
