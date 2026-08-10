@@ -462,8 +462,9 @@ window.outgoingCall = (data) => ({
         this.startDurationTimer();
         this._tryStats();
         // Best-effort call recording for AI analysis (self-guards on the flag +
-        // browser support; no-ops otherwise).
+        // browser support; no-ops otherwise). Reflect it on the Record control.
         window.bqCallRecorder?.start(this.callId);
+        this.recording = this.recordingAvailable;
     },
     onHangup() { this.teardown('remote'); },
     onError(err) {
@@ -594,8 +595,9 @@ window.incomingAtCall = (data) => ({
         this.startDurationTimer();
         this._tryStats();
         // Best-effort call recording for AI analysis (self-guards on the flag +
-        // browser support; no-ops otherwise).
+        // browser support; no-ops otherwise). Reflect it on the Record control.
         window.bqCallRecorder?.start(this.callId);
+        this.recording = this.recordingAvailable;
     },
     onHangup() { this.teardown('remote'); },
     onError(err) {

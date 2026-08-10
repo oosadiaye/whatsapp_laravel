@@ -43,9 +43,31 @@ export function createCallStateMixin() {
         transferNumber: '',
         transferBusy: false,
 
+        // Manual call-recording toggle (the Record control on the softphone
+        // panel). recordingAvailable reflects the server flag
+        // (meta[bq-recording-enabled]); recording tracks the live state. The
+        // recorder auto-starts on connect when the flag is on, so each factory
+        // seeds `recording = recordingAvailable` in onAccepted.
+        recording: false,
+        recordingAvailable: document.querySelector('meta[name=bq-recording-enabled]')?.getAttribute('content') === '1',
+
         // ─── Shared methods ───────────────────────────────────────
 
         toggleTransfer() { this.transferOpen = !this.transferOpen; },
+
+        /** Start/stop recording the live call from the Record control. No-op when
+         *  the server flag is off (recordingAvailable=false). Stopping finalises
+         *  and uploads the current segment; starting begins a fresh one. */
+        toggleRecording() {
+            if (!this.recordingAvailable) return;
+            if (this.recording) {
+                try { window.bqCallRecorder?.stop(); } catch (_) { /* ignore */ }
+                this.recording = false;
+            } else {
+                try { window.bqCallRecorder?.start(this.callId); } catch (_) { /* ignore */ }
+                this.recording = true;
+            }
+        },
 
         transferToNumber() {
             const n = (this.transferNumber || '').trim();
