@@ -290,11 +290,21 @@ class CallController extends Controller
 
         try {
             $sessionId = $service->placeCall($conversation->contact->phone);
-        } catch (VoiceProviderException|ConfigurationException $e) {
+        } catch (ConfigurationException $e) {
             $this->recordOutboundAtFailure($conversation, $e->getMessage());
 
             return response()->json([
-                'error' => 'Voice service unavailable. Try again in a moment, or contact via WhatsApp message.',
+                'error' => 'Voice calling isn’t set up yet — an admin needs to add the Africa’s Talking credentials in Settings → Voice.',
+            ], 503);
+        } catch (VoiceProviderException $e) {
+            $this->recordOutboundAtFailure($conversation, $e->getMessage());
+
+            return response()->json([
+                // Persistent, not transient: the provider rejected the request
+                // (typically invalid AT credentials / an account without Voice).
+                // Point at the Settings → Voice "Test voice connection" probe
+                // rather than the misleading "try again in a moment".
+                'error' => 'The voice provider rejected the call — check the Africa’s Talking credentials and account in Settings → Voice (use “Test voice connection” there to see the exact reason).',
             ], 503);
         } catch (\InvalidArgumentException $e) {
             return response()->json([

@@ -12,6 +12,7 @@ use App\Support\VoiceConfig;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -423,6 +424,64 @@ class SettingsControllerTest extends TestCase
             ->post(route('settings.test-email'), ['test_email' => 'ops@blastiq.test'])
             ->assertRedirect()
             ->assertSessionHas('success');
+    }
+
+    public function test_test_voice_connection_reports_success_when_at_accepts(): void
+    {
+        Http::fake([
+            'webrtc.africastalking.com/*' => Http::response(['token' => 'cap_tok_ok'], 200),
+        ]);
+        $admin = $this->makeAdmin();
+        Setting::set('africastalking_username', 'sandbox');
+        Setting::setEncrypted('africastalking_api_key', 'atsk_valid_key_value');
+        Setting::set('africastalking_virtual_number', '+2348100000000');
+
+        $this->actingAs($admin)
+            ->post(route('settings.test-voice'))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+    }
+
+    public function test_test_voice_connection_surfaces_africas_talking_rejection(): void
+    {
+        // AT rejects the key (the real-world "The supplied authentication is
+        // invalid" 401) — the probe must surface an error, not a false success.
+        Http::fake([
+            'webrtc.africastalking.com/*' => Http::response(['error' => 'unauthorized'], 401),
+        ]);
+        $admin = $this->makeAdmin();
+        Setting::set('africastalking_username', 'sandbox');
+        Setting::setEncrypted('africastalking_api_key', 'atsk_bad_key_value');
+        Setting::set('africastalking_virtual_number', '+2348100000000');
+
+        $this->actingAs($admin)
+            ->post(route('settings.test-voice'))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+    }
+
+    public function test_test_voice_connection_warns_when_credentials_missing(): void
+    {
+        // No AT credentials saved → configuration error surfaced as a warning,
+        // WITHOUT an AT round-trip.
+        Http::fake();
+        $admin = $this->makeAdmin();
+
+        $this->actingAs($admin)
+            ->post(route('settings.test-voice'))
+            ->assertRedirect()
+            ->assertSessionHas('warning');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_test_voice_connection_requires_settings_edit_permission(): void
+    {
+        $user = User::factory()->create(['is_active' => true]); // no role → no settings.edit
+
+        $this->actingAs($user)
+            ->post(route('settings.test-voice'))
+            ->assertForbidden();
     }
 
     private function makeAdmin(): User

@@ -218,6 +218,37 @@ class AfricasTalkingVoiceService
     }
 
     /**
+     * Validate the saved Africa's Talking credentials by minting a FRESH
+     * capability token — the setup-page "Test voice connection" probe, the AT
+     * analogue of the WhatsApp credential probe.
+     *
+     * Deliberately bypasses generateClientToken()'s 6h cache AND its testing
+     * stub so the result reflects the CURRENT credential state against the real
+     * AT endpoint (the same auth outbound /call uses — a 401 here means dialing
+     * will 401 too). Throws so the caller can surface the real reason instead of
+     * the generic "Voice service unavailable" the call button shows.
+     *
+     * @throws ConfigurationException Missing API key / username / virtual number.
+     * @throws VoiceProviderException AT rejected the credentials (e.g. 401).
+     */
+    public function probeCredentials(User $user): void
+    {
+        $apiKey = Setting::getEncrypted('africastalking_api_key');
+        if ($apiKey === null || $apiKey === '') {
+            throw new ConfigurationException("Africa's Talking API key not configured.");
+        }
+
+        $username = (string) Setting::get('africastalking_username', '');
+        $virtual = (string) Setting::get('africastalking_virtual_number', '');
+        if ($username === '' || $virtual === '') {
+            throw new ConfigurationException("Africa's Talking username / virtual number not configured.");
+        }
+
+        // Fresh, un-cached, un-stubbed mint so the probe reflects reality.
+        $this->requestCapabilityToken($username, $this->clientName($user), $virtual, $apiKey);
+    }
+
+    /**
      * POST to AT's capability-token endpoint and return the issued token.
      * Public so it can be exercised directly in tests without bypassing
      * the env('testing') short-circuit in {@see generateClientToken()}.

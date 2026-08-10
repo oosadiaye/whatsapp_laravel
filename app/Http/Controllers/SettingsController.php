@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\ConfigurationException;
+use App\Exceptions\VoiceProviderException;
 use App\Exceptions\WhatsAppApiException;
 use App\Models\Setting;
 use App\Models\WhatsAppInstance;
+use App\Services\AfricasTalkingVoiceService;
 use App\Services\WhatsAppCloudApiService;
 use App\Support\GeminiConfig;
 use App\Support\MailConfig;
@@ -174,6 +177,37 @@ class SettingsController extends Controller
         }
 
         return redirect()->back()->with('success', 'Test email sent to '.$to.'. Check that inbox to confirm delivery.');
+    }
+
+    /**
+     * Validate the saved Africa's Talking voice credentials by minting a real
+     * capability token, so an operator can confirm outbound calling will work
+     * BEFORE hitting the call button (which only shows a generic 503). Surfaces
+     * AT's actual rejection reason — e.g. an invalid API key — as a flash
+     * message, the antidote to a "saved but silently unauthorised" provider.
+     * Uses the persisted settings, so save the Voice card first, then test.
+     */
+    public function testVoiceConnection(Request $request, AfricasTalkingVoiceService $voice): RedirectResponse
+    {
+        try {
+            $voice->probeCredentials($request->user());
+        } catch (ConfigurationException $e) {
+            return redirect()->back()->with('warning',
+                'Voice isn’t configured yet: '.$e->getMessage()
+                .' Add the Africa’s Talking username, API key, and virtual number above and save first.');
+        } catch (VoiceProviderException $e) {
+            return redirect()->back()->with('error',
+                'Africa’s Talking rejected the credentials, so calls will fail. Check the API key and username, '
+                .'and that your AT account has Voice/WebRTC enabled. ('.Str::limit($e->getMessage(), 200).')');
+        } catch (Throwable $e) {
+            Log::warning('Voice connection test failed', ['error' => $e->getMessage()]);
+
+            return redirect()->back()->with('error',
+                'Could not reach Africa’s Talking to verify the credentials — check your network and try again.');
+        }
+
+        return redirect()->back()->with('success',
+            'Africa’s Talking voice verified — the softphone can register and outbound calls should connect.');
     }
 
     /**

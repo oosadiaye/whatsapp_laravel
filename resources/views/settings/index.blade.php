@@ -182,6 +182,15 @@
                                 <p class="mt-1 text-xs text-gray-500">{{ __('Per-minute cost estimate (₦6 = 600 kobo). Used for /calls cost tracking.') }}</p>
                             </div>
                         </div>
+                        {{-- Test voice connection: mints a REAL Africa's Talking capability
+                             token and surfaces AT's actual error (e.g. an invalid key)
+                             instead of the generic 503 the call button shows. Save this
+                             card first, then test. --}}
+                        <div class="px-6 py-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 bg-gray-50">
+                            <p class="text-xs text-gray-500 max-w-md">{{ __('Verify these credentials actually work before you dial — mints a real Africa\'s Talking token and shows the exact error if it fails. Save any changes above first.') }}</p>
+                            <button type="submit" form="settings-test-voice"
+                                    class="shrink-0 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500">{{ __('Test voice connection') }}</button>
+                        </div>
                     </div>
 
                     {{-- Call recording (compliance-gated) --}}
@@ -538,6 +547,13 @@
              outside the settings form so it can POST to a different route; the
              button + address input reference it via the HTML5 form= attribute. --}}
         <form id="settings-test-email" action="{{ route('settings.test-email') }}" method="POST" class="hidden">
+            @csrf
+        </form>
+
+        {{-- Standalone form for the "Test voice connection" button (Voice card).
+             Posts to settings.test-voice, which mints a real AT token and flashes
+             the result. Kept outside the settings form so it POSTs separately. --}}
+        <form id="settings-test-voice" action="{{ route('settings.test-voice') }}" method="POST" class="hidden">
             @csrf
         </form>
     </div>

@@ -369,6 +369,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:settings.edit')->group(function () {
         Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
         Route::post('/settings/test-email', [SettingsController::class, 'sendTestEmail'])->name('settings.test-email');
+        Route::post('/settings/test-voice', [SettingsController::class, 'testVoiceConnection'])->name('settings.test-voice');
     });
 
     // ─── User Management ───────────────────────────────────────────────────
