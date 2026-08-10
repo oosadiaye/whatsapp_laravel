@@ -9,6 +9,39 @@ the code currently assumes, and how to confirm or fix it.
 > covers the **flag-gated call-flow features** (IVR/voicemail/queue/transfer/business
 > hours) — enable and verify those only after the core path is green.
 
+## Recent hardening (2026-08) — what changed since the review
+
+A code review of the call feature produced targeted fixes. None of them removes
+the need for the live checks below, but they close the gaps that would otherwise
+bite silently during a real call:
+
+- **Softphone self-heals.** The vendored `africastalking-client@1.0.7` never emits
+  `offline`/`closed`/`error`, so a dropped registration used to leave the browser
+  `ready` yet deaf until a manual reload. `outbound-call.js` now watches the SDK's
+  own signalling WebSocket for close/error, times out a registration that never
+  reaches `ready`, and re-checks on tab refocus / network-online — bounded reboots.
+  → verify by killing network mid-session (item 4/7): the softphone should recover
+  without a page reload.
+- **"Voice online" pill is honest.** It now reflects *actual* registration
+  (`bqVoiceClient.ready`), not merely that credentials are configured. A stale/failed
+  registration shows amber "reconnecting", missing creds show red "offline".
+- **Call quality telemetry works.** `peer()` now reaches the real `RTCPeerConnection`
+  (captured globally), so MOS/jitter/loss are recorded for AT calls.
+- **callerId normalized to +E.164** on the outbound/transfer `<Dial>` (stored
+  `to_phone` is digits-only) — item 4 should show the customer's full number.
+- **Call-control rejects terminal calls** — an AT retry for an already-ended session
+  no longer re-bridges/re-rings it (item 3/6).
+- **Webhook rejections are logged with the reason** (secret mismatch vs no gate) —
+  a 401 "calls don't connect" is now diagnosable in `laravel.log` (item 1).
+- **`endCall()` scope corrected** — `/queueStatus` is a queued-call surface, not a
+  confirmed live-leg terminator; the browser hangup is the authoritative teardown
+  (item 6 is the live check that decides whether a different endpoint is needed).
+- **Outbound kill-switch** — `VOICE_OUTBOUND_CALLS_ENABLED=false` stops the app
+  placing PSTN calls without pulling AT credentials.
+- **Broadcasting fails loud** — `BROADCAST_CONNECTION` defaults to `reverb`, not the
+  silent `null` driver, so a forgotten var errors on the worker instead of dropping
+  ring events. Remember the queue worker (Horizon) must also be draining Redis.
+
 ## Quick start — automated prerequisite pass
 
 Before the manual steps, run the **Phase 0 gate runner** — it checks every

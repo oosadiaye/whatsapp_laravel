@@ -15,10 +15,11 @@
             @php
                 // "Configured" = the operator has entered all three AT credentials
                 // (the same signal the Settings → Voice integration panel shows as
-                // "Configured ✓"). The softphone status pill keys off THIS — so
-                // configuring AT flips it online immediately, and a slow/failed
-                // capability-token request at render time can no longer wrongly
-                // show "Voice offline" for a properly configured account.
+                // "Configured ✓"). This gates whether we mint a token + load the SDK
+                // at all. The status pill NO LONGER treats configured as "online" —
+                // "online" now means the browser client actually registered
+                // (bqVoiceClient.ready); configured only chooses the pill's
+                // not-configured (red) vs not-registered-yet (amber) message.
                 $bqAtVoiceConfigured = filled(\App\Models\Setting::get('africastalking_username'))
                     && filled(\App\Models\Setting::get('africastalking_virtual_number'))
                     && filled(\App\Models\Setting::getEncrypted('africastalking_api_key'));
@@ -171,25 +172,36 @@
                     </button>
 
                     @if(auth()->user()->can('conversations.call'))
-                        {{-- Online when AT is configured (server flag, matches the
-                             Settings panel) OR the browser softphone has actually
-                             registered. Polled so it updates the moment either
-                             becomes true — no page reload needed. --}}
+                        {{-- Softphone status pill. "Online" = the browser client has
+                             ACTUALLY registered with Africa's Talking
+                             (bqVoiceClient.ready) — NOT merely that credentials are
+                             configured. A registration can silently drop; showing a
+                             false "online" would hide that the agent can no longer
+                             receive calls. Polled every 2s so it flips the instant the
+                             reconnect watchdog comes back. Two honest offline states:
+                             not-configured (red) vs configured-but-not-registered
+                             (amber, i.e. still coming up / reconnecting). --}}
                         <span x-data="{
-                                  online: (document.querySelector('meta[name=at-voice-ready]')?.getAttribute('content') === '1'),
+                                  registered: false,
+                                  configured: (document.querySelector('meta[name=at-voice-ready]')?.getAttribute('content') === '1'),
                                   refresh() {
-                                      const configured = document.querySelector('meta[name=at-voice-ready]')?.getAttribute('content') === '1';
-                                      this.online = configured || !!(window.bqVoiceClient && window.bqVoiceClient.ready);
+                                      this.configured = document.querySelector('meta[name=at-voice-ready]')?.getAttribute('content') === '1';
+                                      this.registered = !!(window.bqVoiceClient && window.bqVoiceClient.ready);
                                   }
                               }"
                               x-init="refresh(); setInterval(() => refresh(), 2000)"
-                              x-show="!online" x-cloak
-                              class="hidden md:inline-flex items-center gap-1.5 rounded-full bg-red-100 border border-red-300 px-3 py-1 text-xs font-medium text-red-900"
-                              title="Africa's Talking voice is not configured yet — add the username, API key, and virtual number under Settings → Voice Provider.">
+                              x-show="!registered" x-cloak
+                              :class="configured
+                                  ? 'bg-amber-100 border-amber-300 text-amber-900'
+                                  : 'bg-red-100 border-red-300 text-red-900'"
+                              class="hidden md:inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium"
+                              :title="configured
+                                  ? 'Softphone not registered with Africa\'s Talking yet — reconnecting. You will not receive calls until it is online; reload the page if this persists.'
+                                  : 'Africa\'s Talking voice is not configured — add the username, API key, and virtual number under Settings → Voice Provider.'">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
                             </svg>
-                            Voice offline
+                            <span x-text="configured ? 'Voice reconnecting…' : 'Voice offline'"></span>
                         </span>
                     @endif
                 @endauth

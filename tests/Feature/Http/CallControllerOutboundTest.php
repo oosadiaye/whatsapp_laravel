@@ -150,6 +150,73 @@ class CallControllerOutboundTest extends TestCase
             ->assertOk();
     }
 
+    public function test_outbound_calling_can_be_disabled_by_kill_switch(): void
+    {
+        // Operational OFF-switch: when disabled, placeOutbound short-circuits with
+        // a 503 BEFORE touching the provider or writing any CallLog.
+        config(['voice.outbound_calls_enabled' => false]);
+        Http::fake();
+
+        $agent = $this->makeAgent();
+        $conversation = $this->makeConversation($agent);
+
+        $this->actingAs($agent)
+            ->postJson(route('calls.outbound'), ['conversation_id' => $conversation->id])
+            ->assertStatus(503)
+            ->assertJson(['error' => 'Outbound calling is temporarily disabled.']);
+
+        Http::assertNothingSent();
+        $this->assertSame(0, CallLog::count());
+    }
+
+    public function test_missing_at_username_fails_fast_with_503_and_audit(): void
+    {
+        // Clear the username the base setUp seeded: placeCall must fail fast with a
+        // ConfigurationException (→ 503 + audit row) BEFORE hitting AT, instead of
+        // sending an empty username and earning an opaque provider rejection.
+        Setting::set('africastalking_username', '');
+        Http::fake([
+            'voice.africastalking.com/call' => Http::response(['entries' => [['sessionId' => 's', 'status' => 'Queued']]], 201),
+        ]);
+
+        $agent = $this->makeAgent();
+        $conversation = $this->makeConversation($agent);
+
+        $this->actingAs($agent)
+            ->postJson(route('calls.outbound'), ['conversation_id' => $conversation->id])
+            ->assertStatus(503);
+
+        Http::assertNothingSent();
+        $this->assertNotNull(
+            CallLog::where('conversation_id', $conversation->id)
+                ->where('status', CallLog::STATUS_FAILED)
+                ->first()
+        );
+    }
+
+    public function test_provider_connection_failure_returns_503_and_audits(): void
+    {
+        // A DNS/refused/timeout ConnectionException from the HTTP client is a
+        // THROWN exception, not an error *response* — it must still surface as the
+        // graceful 503 + audit row, never a generic 500 with no trace on /calls.
+        Http::fake(function () {
+            throw new \Illuminate\Http\Client\ConnectionException('Connection timed out');
+        });
+
+        $agent = $this->makeAgent();
+        $conversation = $this->makeConversation($agent);
+
+        $this->actingAs($agent)
+            ->postJson(route('calls.outbound'), ['conversation_id' => $conversation->id])
+            ->assertStatus(503);
+
+        $this->assertNotNull(
+            CallLog::where('conversation_id', $conversation->id)
+                ->where('status', CallLog::STATUS_FAILED)
+                ->first()
+        );
+    }
+
     private function makeAgent(): User
     {
         $agent = User::factory()->create([
@@ -159,6 +226,7 @@ class CallControllerOutboundTest extends TestCase
         ]);
         $agent->assignRole(User::ROLE_AGENT);
         $agent->givePermissionTo('conversations.call');
+
         return $agent;
     }
 
@@ -171,6 +239,7 @@ class CallControllerOutboundTest extends TestCase
             'user_id' => $owner->id,
             'phone' => '23480'.fake()->unique()->numerify('########'),
         ]);
+
         return Conversation::create([
             'user_id' => $owner->id,
             'contact_id' => $contact->id,

@@ -284,6 +284,17 @@ class AfricasTalkingWebhookController extends Controller
      */
     private function handleCallControl(array $event, ?string $sessionId, string $direction): Response
     {
+        // AT retries call-control too. If we've already finalised this call
+        // (Completed/Failed arrived, or an agent hung up), do NOT re-bridge or
+        // re-ring it — reject so AT tears the leg down instead of resurrecting a
+        // finished call. The status-tracking branch in handle() has the same
+        // guard; this is its call-control-path equivalent (that branch runs
+        // AFTER the isActive=1 short-circuit, so it never sees these requests).
+        $existing = CallLog::where('provider_session_id', $sessionId)->first();
+        if ($existing !== null && in_array($existing->status, CallLog::STATUSES_TERMINAL, true)) {
+            return $this->xmlResponse('<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>');
+        }
+
         // A pending blind transfer routes the live customer leg to its target
         // (agent client or PSTN number), regardless of the original direction.
         // Clear it once the Dial is issued so a re-request doesn't loop.
@@ -295,7 +306,7 @@ class AfricasTalkingWebhookController extends Controller
             $pending->update(['transfer_target' => null]);
 
             return VoiceXml::make()
-                ->dial($target, ['callerId' => ($event['callerNumber'] ?? $pending->from_phone) ?: null])
+                ->dial($target, ['callerId' => $this->normalizeCallerId($event['callerNumber'] ?? $pending->from_phone)])
                 ->toResponse();
         }
 
@@ -336,8 +347,26 @@ class AfricasTalkingWebhookController extends Controller
 
         return $this->xmlResponse($this->dialClientXml(
             AfricasTalkingVoiceService::clientNameForUser((int) $call->placed_by_user_id),
-            $call->to_phone,
+            // The agent's softphone shows the customer's number — normalise it to
+            // +E.164 (stored to_phone is digits-only per ContactImportService).
+            $this->normalizeCallerId($call->to_phone),
         ));
+    }
+
+    /**
+     * Normalise a caller-id to +E.164 for AT's <Dial callerId>. AT expects a
+     * leading '+' over bare digits; numbers we store (Contact.phone / to_phone)
+     * are digits-only, and an inbound callerNumber could carry spaces/dashes.
+     * Strip everything to digits and re-prepend '+' so the result is fully
+     * idempotent (a clean '+E.164' round-trips unchanged) and never carries a
+     * character AT would reject. Returns null for blank/digit-less input so
+     * dialClientXml / VoiceXml omit the attribute entirely.
+     */
+    private function normalizeCallerId(?string $raw): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $raw);
+
+        return $digits === '' || $digits === null ? null : '+'.$digits;
     }
 
     /**
@@ -381,10 +410,27 @@ class AfricasTalkingWebhookController extends Controller
         $configured = (string) config('voice.at_webhook_secret', '');
 
         if ($configured !== '') {
-            return hash_equals($configured, (string) $secret);
+            $ok = hash_equals($configured, (string) $secret);
+            if (! $ok) {
+                // The #1 real-world "calls don't connect" cause: AT's callback URL
+                // secret doesn't match ours, so call-control 401s and the customer
+                // hears silence. Name it in the log instead of a bare 401.
+                Log::warning('AT voice webhook rejected: secret segment mismatch. '
+                    .'Point AT\'s voice callback URL at /webhooks/africastalking/voice/<AT_VOICE_WEBHOOK_SECRET> '
+                    .'(exact match). Until it matches, every callback 401s and calls never bridge.');
+            }
+
+            return $ok;
         }
 
         // No secret → require the IP allowlist to be the active gate.
-        return ! empty(config('voice.webhook_ip_allowlist', []));
+        $gated = ! empty(config('voice.webhook_ip_allowlist', []));
+        if (! $gated) {
+            Log::warning('AT voice webhook rejected: no auth gate configured. '
+                .'Set AT_VOICE_WEBHOOK_SECRET (recommended) or VOICE_WEBHOOK_IP_ALLOWLIST — '
+                .'otherwise the webhook fails CLOSED and no call can bridge.');
+        }
+
+        return $gated;
     }
 }

@@ -224,6 +224,16 @@ class CallController extends Controller
      */
     public function placeOutbound(Request $request, AfricasTalkingVoiceService $service, ContactImportService $normalizer): JsonResponse
     {
+        // Operational kill-switch (config/voice.php · VOICE_OUTBOUND_CALLS_ENABLED,
+        // defaults ON). Lets ops stop the app placing PSTN calls during a billing
+        // spike / provider incident without pulling AT credentials (which would
+        // also break inbound + softphone token minting).
+        if (! config('voice.outbound_calls_enabled', true)) {
+            return response()->json([
+                'error' => 'Outbound calling is temporarily disabled.',
+            ], 503);
+        }
+
         $key = 'outbound-call:'.$request->user()->id;
         if (RateLimiter::tooManyAttempts($key, 10)) {
             return response()->json(['error' => 'rate_limit'], 429);
@@ -280,13 +290,6 @@ class CallController extends Controller
 
         try {
             $sessionId = $service->placeCall($conversation->contact->phone);
-            $call = $this->recordOutboundAtCall($conversation, $sessionId);
-            CallRinging::dispatch($call);
-
-            return response()->json([
-                'call_id' => $call->id,
-                'session_id' => $sessionId,
-            ]);
         } catch (VoiceProviderException|ConfigurationException $e) {
             $this->recordOutboundAtFailure($conversation, $e->getMessage());
 
@@ -298,6 +301,44 @@ class CallController extends Controller
                 'error' => 'Invalid phone number for this contact.',
             ], 422);
         }
+
+        // The AT call now exists on the provider. If persisting its CallLog
+        // fails, the answered call would reach call-control, find no matching
+        // row, and get <Reject/> — an orphaned live leg the app can neither see
+        // nor control (still connected, still billing). Tear it back down
+        // best-effort rather than leaking it.
+        try {
+            $call = $this->recordOutboundAtCall($conversation, $sessionId);
+        } catch (\Throwable $e) {
+            Log::error('Outbound AT call placed but CallLog persist failed; terminating orphaned leg', [
+                'session_id' => $sessionId,
+                'error' => $e->getMessage(),
+            ]);
+            try {
+                $service->endCall($sessionId);
+            } catch (\Throwable $inner) {
+                Log::warning('Failed to terminate orphaned AT call', [
+                    'session_id' => $sessionId,
+                    'error' => $inner->getMessage(),
+                ]);
+            }
+
+            return response()->json([
+                'error' => 'Voice service unavailable. Try again in a moment, or contact via WhatsApp message.',
+            ], 503);
+        }
+
+        // Outbound CallRinging: the placing agent's own client filters this out
+        // (app.js rings only direction==='inbound'), so it doesn't ring anyone
+        // today — but it's the canonical "call is now live" signal on the agent's
+        // channel, asserted by CallControllerOutboundTest and a ready hook for
+        // outbound-progress UI. Kept intentionally; the payload is tiny.
+        CallRinging::dispatch($call);
+
+        return response()->json([
+            'call_id' => $call->id,
+            'session_id' => $sessionId,
+        ]);
     }
 
     /**

@@ -10,14 +10,18 @@ If you just want to verify what's broken on an existing deploy, run `bash deploy
 
 When a customer calls your business number, the server learns about it via webhook (Meta or Africa's Talking). The agent's browser, however, has no idea — until Reverb pushes a real-time event to the agent's private channel. The agent's dashboard subscribes via Laravel Echo, receives the SDP offer + caller info, and renders the Accept/Decline banner.
 
-Without Reverb (or with `BROADCAST_CONNECTION=log`), every `CallRinging` / `CallTerminated` / `CallClaimed` broadcast event is silently swallowed into the log file. Symptoms on production:
+Without Reverb, `CallRinging` / `CallTerminated` / `CallClaimed` don't reach the browser in real time. They are **not** the only path, though: a 3-second Livewire poll (`RealtimePulse`) independently discovers in-flight calls, mounts the banner, and starts the ringtone. So the degradation is latency + two cross-tab niceties, **not** a total outage:
 
-- Agent never sees the incoming-call banner.
-- Outbound calls show "Calling..." indefinitely (no Connected transition).
-- `claim` race protection between multiple browser tabs doesn't work.
-- Stale-call cleanup broadcasts go nowhere.
+- Incoming-call banner appears on the ~3s poll instead of ~100ms — it still appears.
+- Outbound "Calling…" banner is poll-driven anyway (it never used Reverb), so it's unaffected.
+- Cross-tab `claim` "claimed elsewhere" and instant remote-hangup teardown lose their *instant* path — the atomic claim `UPDATE` and the ≤3s poll still resolve them, just not instantly.
 
-This is the most-commonly-missed part of a first-time Phase 17+ deployment.
+**Two silent dependencies, not one:**
+
+1. **Reverb** — the WebSocket transport (this guide).
+2. **The queue worker (Horizon).** These events implement `ShouldBroadcast` (queued), not `ShouldBroadcastNow`, so each broadcast is a queued job. If Reverb is up but Horizon / the queue worker is **not** draining Redis, the jobs sit in the queue and nothing reaches the browser even though Reverb is healthy. The real-time (non-poll) path needs **both**.
+
+`BROADCAST_CONNECTION` now defaults to **`reverb`** (not the old silent `null`), so a deploy that forgets the variable fails *loud* on the worker instead of dropping events with no error. This real-time signaling is the most-commonly-missed part of a first-time Phase 17+ deployment.
 
 ---
 

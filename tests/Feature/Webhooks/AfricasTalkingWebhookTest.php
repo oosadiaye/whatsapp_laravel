@@ -376,6 +376,41 @@ class AfricasTalkingWebhookTest extends TestCase
         $this->assertNull(Contact::find($contact->id)?->deleted_at);
     }
 
+    public function test_call_control_for_a_terminal_call_is_rejected(): void
+    {
+        // AT retries call-control too. A request for a call we already ended must
+        // reject, not re-bridge/re-ring a finished call.
+        $call = $this->makeOutboundCall(CallLog::STATUS_ENDED, 'sess_ctrl_terminal');
+
+        $response = $this->postWebhook([
+            'isActive' => '1',
+            'sessionId' => 'sess_ctrl_terminal',
+            'direction' => 'Outbound',
+            'destinationNumber' => $call->to_phone,
+        ]);
+
+        $response->assertOk();
+        $response->assertSee('<Reject', false);
+        $response->assertDontSee('<Dial', false);
+    }
+
+    public function test_outbound_call_control_normalizes_caller_id_to_e164(): void
+    {
+        // to_phone is stored digits-only (ContactImportService convention); AT's
+        // <Dial callerId> needs +E.164 so the agent's softphone shows a real number.
+        $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_ctrl_callerid');
+
+        $response = $this->postWebhook([
+            'isActive' => '1',
+            'sessionId' => 'sess_ctrl_callerid',
+            'direction' => 'Outbound',
+            'destinationNumber' => $call->to_phone,
+        ]);
+
+        $response->assertOk();
+        $response->assertSee('callerId="+'.$call->to_phone.'"', false);
+    }
+
     private function postWebhook(array $payload)
     {
         // AT posts form-encoded callbacks to the URL carrying the secret path

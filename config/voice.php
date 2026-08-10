@@ -104,6 +104,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Outbound (Africa's Talking) calling — kill-switch, ON by default
+    |--------------------------------------------------------------------------
+    | The AT outbound path (CallController::placeOutbound → placeCall) is the
+    | working, unit-tested call flow, so this defaults to TRUE — enabling it is
+    | not a new dark feature. It exists purely as an operational OFF-switch:
+    | flip VOICE_OUTBOUND_CALLS_ENABLED=false to stop the app placing PSTN calls
+    | (runaway loop, billing spike, provider incident) WITHOUT pulling the AT
+    | credentials and breaking inbound/token minting. placeOutbound returns a
+    | clean 503 while it's off.
+    */
+    'outbound_calls_enabled' => (bool) env('VOICE_OUTBOUND_CALLS_ENABLED', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Call recording + AI analysis — OFF by default (compliance)
     |--------------------------------------------------------------------------
     | When enabled, the browser softphone records the mixed call audio and

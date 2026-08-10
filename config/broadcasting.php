@@ -13,9 +13,17 @@ return [
     |
     | Supported: "reverb", "pusher", "ably", "redis", "log", "null"
     |
+    | Default is "reverb" (not "null"): the call/ring realtime layer depends on
+    | broadcasting, and a deploy that FORGETS BROADCAST_CONNECTION must not fall
+    | back to the silent "null" driver that drops every event with no error (the
+    | 3s RealtimePulse poll would keep ringing, masking the misconfiguration for
+    | months). Reverb instead fails LOUD on the queue worker if it isn't wired,
+    | which is diagnosable. Tests pin BROADCAST_CONNECTION=null in phpunit.xml, so
+    | this default only applies to real environments where the var is absent.
+    |
     */
 
-    'default' => env('BROADCAST_CONNECTION', 'null'),
+    'default' => env('BROADCAST_CONNECTION', 'reverb'),
 
     /*
     |--------------------------------------------------------------------------

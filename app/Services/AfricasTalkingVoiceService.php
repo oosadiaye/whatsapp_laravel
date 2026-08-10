@@ -8,6 +8,7 @@ use App\Exceptions\ConfigurationException;
 use App\Exceptions\VoiceProviderException;
 use App\Models\Setting;
 use App\Models\User;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -59,16 +60,34 @@ class AfricasTalkingVoiceService
             throw new ConfigurationException("Africa's Talking virtual number not configured. Set in /settings.");
         }
 
+        // Fail fast on a missing username, exactly like the virtual number above.
+        // AT's /call requires it; sending an empty string just earns an opaque
+        // provider rejection the operator has to reverse-engineer from the log.
+        $username = (string) Setting::get('africastalking_username', '');
+        if ($username === '') {
+            throw new ConfigurationException("Africa's Talking username not configured. Set in /settings.");
+        }
+
         $normalized = $this->toE164($toCustomer);
 
-        $response = $this->client()->asForm()->post(
-            self::API_BASE.'/call',
-            [
-                'username' => Setting::get('africastalking_username', ''),
-                'from' => $virtual,
-                'to' => $normalized,
-            ],
-        );
+        // A DNS failure / refused connection / timeout throws ConnectionException
+        // (NOT a failed *response*), so it bypasses the $response->failed() check
+        // below. Convert it to the service's own exception type at this boundary
+        // so callers (placeOutbound) present the graceful 503 + audit instead of a
+        // generic 500 — the whole point of wrapping the SDK behind this adapter.
+        try {
+            $response = $this->client()->asForm()->post(
+                self::API_BASE.'/call',
+                [
+                    'username' => $username,
+                    'from' => $virtual,
+                    'to' => $normalized,
+                ],
+            );
+        } catch (ConnectionException $e) {
+            Log::error('AT placeCall connection failure', ['error' => $e->getMessage()]);
+            throw new VoiceProviderException('placeCall connection failure');
+        }
 
         if ($response->failed()) {
             Log::error('AT placeCall HTTP failure', [
@@ -89,25 +108,46 @@ class AfricasTalkingVoiceService
     }
 
     /**
-     * Hang up an in-progress call by AT session ID.
+     * Server-side hang-up request for an AT session.
      *
-     * Throws on failure so the caller (the retried TerminateProviderCall job)
-     * can retry — a transient failure here would otherwise orphan the customer's
-     * live leg (still connected, still billing). The job is what tolerates
-     * failure, via bounded retries; this method's job is to report it honestly.
+     * IMPORTANT — LIVE-CALL SCOPE (verify against a live account, see
+     * docs/AFRICASTALKING-VERIFICATION.md checklist #6): the /queueStatus
+     * endpoint used here is AT's QUEUED-call control surface, not a confirmed
+     * live-leg terminator. For a call already bridged to the browser client via
+     * <Dial>, the authoritative teardown is CLIENT-SIDE — the softphone drops
+     * its WebRTC leg (bqVoiceClient.hangupCall()), which prompts AT to tear the
+     * bridge down. This method is therefore a best-effort backstop (pre-answer /
+     * queued cases and belt-and-suspenders on hangup), NOT the primary hang-up.
+     * If a live test shows the customer leg surviving an agent hangup, replace
+     * the endpoint below with AT's real live-call termination call.
+     *
+     * Still throws on HTTP failure so the retried TerminateProviderCall job can
+     * retry rather than silently swallowing a transient provider error.
      *
      * @throws VoiceProviderException
      */
     public function endCall(string $sessionId): void
     {
-        $response = $this->client()->asForm()->post(
-            self::API_BASE.'/queueStatus',
-            [
-                'username' => Setting::get('africastalking_username', ''),
-                'sessionId' => $sessionId,
-                'action' => 'terminate',
-            ],
-        );
+        // ConnectionException (DNS/refused/timeout) is thrown, not returned — wrap
+        // it as VoiceProviderException so the retried TerminateProviderCall job
+        // sees the service's own contract and retries, rather than dying on a raw
+        // client exception.
+        try {
+            $response = $this->client()->asForm()->post(
+                self::API_BASE.'/queueStatus',
+                [
+                    'username' => Setting::get('africastalking_username', ''),
+                    'sessionId' => $sessionId,
+                    'action' => 'terminate',
+                ],
+            );
+        } catch (ConnectionException $e) {
+            Log::warning('AT endCall connection failure', [
+                'session_id' => $sessionId,
+                'error' => $e->getMessage(),
+            ]);
+            throw new VoiceProviderException('endCall connection failure');
+        }
 
         if ($response->failed()) {
             Log::warning('AT endCall failure', [
@@ -190,21 +230,26 @@ class AfricasTalkingVoiceService
         string $phoneNumber,
         string $apiKey,
     ): string {
-        $response = Http::withHeaders([
-            'apiKey' => $apiKey,
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json',
-        ])->timeout(10)->connectTimeout(5)->post(self::WEBRTC_TOKEN_URL, [
-            'username' => $username,
-            'clientName' => $clientName,
-            'phoneNumber' => $phoneNumber,
-            // AT's capability-token API (a Play/Scala service) expects these as
-            // STRINGS, not JSON booleans — sending a boolean triggers a 400
-            // "The request content was malformed: Expected String as JsString,
-            // but got true".
-            'incoming' => 'true',
-            'outgoing' => 'true',
-        ]);
+        try {
+            $response = Http::withHeaders([
+                'apiKey' => $apiKey,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ])->timeout(10)->connectTimeout(5)->post(self::WEBRTC_TOKEN_URL, [
+                'username' => $username,
+                'clientName' => $clientName,
+                'phoneNumber' => $phoneNumber,
+                // AT's capability-token API (a Play/Scala service) expects these as
+                // STRINGS, not JSON booleans — sending a boolean triggers a 400
+                // "The request content was malformed: Expected String as JsString,
+                // but got true".
+                'incoming' => 'true',
+                'outgoing' => 'true',
+            ]);
+        } catch (ConnectionException $e) {
+            Log::error('AT capability-token connection failure', ['error' => $e->getMessage()]);
+            throw new VoiceProviderException('capability-token connection failure');
+        }
 
         if ($response->failed()) {
             Log::error('AT capability-token HTTP failure', [

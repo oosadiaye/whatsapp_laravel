@@ -77,6 +77,24 @@ window.bqVoiceClient = {
     // silently dropped.
     _lastIncoming: null,
 
+    // ── Reconnect watchdog ──────────────────────────────────────────────
+    // africastalking-client@1.0.7 NEVER emits offline/closed/error (verified in
+    // the vendored bundle), so its documented auto-reconnect was dead code and a
+    // dropped registration left the softphone `ready === true` yet deaf until a
+    // manual page reload. We bridge that gap ourselves: watch the SDK's own
+    // signalling WebSocket for close/error, time out a registration that never
+    // reaches `ready`, and re-check on tab refocus / network-online. Bounded so a
+    // genuinely-down provider doesn't hot-loop; the budget resets on a healthy
+    // `ready` or a user refocus.
+    _socket: null,
+    _socketHandlers: null,
+    _readyWatch: null,
+    _rebooting: false,
+    _rebootAttempts: 0,
+    _maxRebootAttempts: 8,
+    _readyTimeoutMs: 15000,
+    _rebootDelayMs: 5000,
+
     _primaryBanner() {
         return this._banners[this._banners.length - 1] ?? null;
     },
@@ -107,11 +125,15 @@ window.bqVoiceClient = {
 
     /** Register the WebRTC client with a real AT capability token. Idempotent. */
     boot(token) {
-        if (this._booted || !token) return;
+        if (this._booted || this._rebooting || !token) return;
         if (typeof window.Africastalking === 'undefined' || !window.Africastalking.Client) {
             console.error('[BQ Voice] africastalking-client SDK not available (blocked or failed to load).');
             return;
         }
+        // The SDK opens its signalling WebSocket synchronously inside the
+        // constructor. Capture that socket so we can watch it for close/error —
+        // the drop signals the SDK itself never surfaces (see _onSocketDrop).
+        const restoreWs = this._captureSocketDuringConstruct();
         try {
             // Pass ICE servers (STUN + optional TURN) best-effort. africastalking-
             // client@1.0.7's constructor is token-first; some builds read a second
@@ -119,25 +141,35 @@ window.bqVoiceClient = {
             // if honoured, restrictive-NAT callers get a TURN relay.
             this.client = new window.Africastalking.Client(token, { iceServers: iceServers() });
         } catch (e) {
+            restoreWs();
             console.error('[BQ Voice] failed to construct AT client', e);
+            // Don't leave the softphone permanently dead — retry via the bounded
+            // reboot path.
+            this._scheduleReboot();
             return;
         }
+        this._attachSocket(restoreWs());
         this._booted = true;
+        // If registration never reaches `ready` (bad token, blocked WS, silent AT
+        // failure) the SDK gives us no error at all — time it out and reboot.
+        this._armReadyWatch();
 
         const c = this.client;
         const on = (evt, fn) => {
             try { c.on(evt, fn, false); } catch (e) { console.warn('[BQ Voice] on() failed for', evt, e); }
         };
 
-        on('ready', () => { this.ready = true; });
-        on('notready', () => { this.ready = false; });
-        on('offline', () => {
-            this.ready = false;
-            console.warn('[BQ Voice] client offline. Attempting reconnect in 5s...');
-            this._scheduleReboot();
+        on('ready', () => {
+            this.ready = true;
+            this._rebootAttempts = 0; // a healthy registration resets the budget
+            this._clearReadyWatch();
         });
+        on('notready', () => { this.ready = false; this._scheduleReboot(); });
+        // 1.0.7 never emits offline/closed, but a maintained SDK would — keep the
+        // handlers so a future swap self-heals; the socket watchdog covers 1.0.7.
+        on('offline', () => { this.ready = false; this._scheduleReboot(); });
+        on('closed', () => { this.ready = false; this._scheduleReboot(); });
         on('calling', () => {});
-        on('closed', () => {});
         // Route call lifecycle to the banner that's expecting this call.
         on('incomingcall', (params) => {
             this._lastIncoming = params;
@@ -148,32 +180,113 @@ window.bqVoiceClient = {
         on('error', (err) => { console.error('[BQ Voice] SDK error', err); this._primaryBanner()?.onError?.(err); });
     },
 
-    /** Tear down, force-reload the SDK (bypassing the buggy module cache), wait
-     *  the recommended 5s, then re-boot — with bounded retries so a transient
-     *  network blip doesn't leave the softphone dead until a manual reload. */
+    /** Wrap window.WebSocket for the SYNCHRONOUS span of the SDK constructor so
+     *  we grab the signalling socket it opens. Returns restore(), which puts the
+     *  global back and yields the captured socket (or null). A Proxy preserves
+     *  statics (WebSocket.OPEN), the prototype, and instanceof for the SDK, and
+     *  we only match africastalking URLs so Reverb/Echo's socket is untouched. */
+    _captureSocketDuringConstruct() {
+        const Original = window.WebSocket;
+        if (typeof Original !== 'function' || typeof Proxy === 'undefined') {
+            return () => null;
+        }
+        let captured = null;
+        try {
+            window.WebSocket = new Proxy(Original, {
+                construct(target, args) {
+                    const ws = Reflect.construct(target, args);
+                    try {
+                        if (/africastalking/i.test(String(args?.[0] ?? ''))) captured = ws;
+                    } catch (_) { /* ignore */ }
+                    return ws;
+                },
+            });
+        } catch (_) {
+            window.WebSocket = Original;
+            return () => null;
+        }
+        return () => { window.WebSocket = Original; return captured; };
+    },
+
+    _attachSocket(ws) {
+        this._detachSocket();
+        if (!ws || typeof ws.addEventListener !== 'function') return;
+        const onDrop = () => this._onSocketDrop();
+        this._socket = ws;
+        this._socketHandlers = onDrop;
+        try {
+            ws.addEventListener('close', onDrop);
+            ws.addEventListener('error', onDrop);
+        } catch (_) { /* ignore */ }
+    },
+
+    _detachSocket() {
+        if (this._socket && this._socketHandlers) {
+            try {
+                this._socket.removeEventListener('close', this._socketHandlers);
+                this._socket.removeEventListener('error', this._socketHandlers);
+            } catch (_) { /* ignore */ }
+        }
+        this._socket = null;
+        this._socketHandlers = null;
+    },
+
+    /** The SDK's signalling socket dropped — the event 1.0.7 never surfaces.
+     *  Only react while we believe we're live, then let the bounded reboot heal
+     *  it. Without this the softphone sits `ready === true` yet deaf. */
+    _onSocketDrop() {
+        if (!this._booted && !this.ready) return;
+        console.warn('[BQ Voice] signalling socket dropped; reconnecting softphone.');
+        this._scheduleReboot();
+    },
+
+    _armReadyWatch() {
+        this._clearReadyWatch();
+        this._readyWatch = setTimeout(() => {
+            this._readyWatch = null;
+            if (!this.ready) {
+                console.warn('[BQ Voice] registration did not reach ready; rebooting softphone.');
+                this._scheduleReboot();
+            }
+        }, this._readyTimeoutMs);
+    },
+
+    _clearReadyWatch() {
+        if (this._readyWatch) { clearTimeout(this._readyWatch); this._readyWatch = null; }
+    },
+
+    /** Single-shot reboot: tear down, force-reload the SDK (bypassing its buggy
+     *  module cache), wait, then re-boot. Bounded by _maxRebootAttempts so a
+     *  genuinely-down provider can't hot-loop; the counter resets on a healthy
+     *  `ready` or a tab refocus. boot() re-arms the ready watchdog, so a reboot
+     *  that still doesn't register re-enters here until the budget is spent. */
     async _scheduleReboot() {
+        if (this._rebooting) return;
+        if (this._rebootAttempts >= this._maxRebootAttempts) {
+            console.warn('[BQ Voice] reconnect budget exhausted; will retry on tab refocus or page reload.');
+            return;
+        }
+        this._rebooting = true;
+        this._rebootAttempts++;
+        this._clearReadyWatch();
         this.ready = false;
         this._booted = false;
+        this._detachSocket();
         try { this.client?.hangup(); } catch { /* ignore */ }
         this.client = null;
-        // Banners stay registered: client.hangup() above fires `hangup` on any
-        // connected banner (which tears down + detaches itself), while ringing
-        // banners remain so an event arriving right after the client comes back
-        // isn't dropped. A stale buffered call, though, must not be replayed.
+        // Banners stay registered so an event arriving right after the client
+        // comes back isn't dropped; a stale buffered call must NOT be replayed.
         this._lastIncoming = null;
 
-        await new Promise(r => setTimeout(r, 5000));
+        await new Promise(r => setTimeout(r, this._rebootDelayMs));
+        this._rebooting = false;
+
         const token = document.querySelector('meta[name="at-voice-token"]')?.getAttribute('content');
         if (!token) return;
 
-        for (let attempt = 0; attempt < 5; attempt++) {
-            const ok = await loadAtSdk(true);
-            if (ok) {
-                this.boot(token);
-                if (this._booted) return; // construction succeeded; `ready` fires async
-            }
-            await new Promise(r => setTimeout(r, 5000));
-        }
+        const ok = await loadAtSdk(true);
+        if (ok) this.boot(token);    // re-arms the ready watch; a failure re-enters here
+        else this._scheduleReboot(); // SDK reload failed — try again (bounded)
     },
 
     attach(banner) {
@@ -202,13 +315,53 @@ window.bqVoiceClient = {
     unhold() { try { this.client?.unhold(); } catch (e) { console.warn('[BQ Voice] unhold failed', e); } },
     dtmf(digit) { try { this.client?.dtmf(String(digit)); } catch (e) { console.warn('[BQ Voice] dtmf failed', e); } },
 
-    /** Best-effort access to the underlying RTCPeerConnection for telemetry. */
+    /** Access to the underlying RTCPeerConnection for quality telemetry.
+     *  1.0.7 keeps the PC as a closure-local and exposes it under none of these
+     *  names, so we also fall back to the last RTCPeerConnection the page
+     *  constructed (captured globally below). Since the AT SDK is this build's
+     *  only WebRTC producer, that last-created PC IS the live call's. */
     peer() {
         const c = this.client;
-        if (!c) return null;
-        return c.peer ?? c.peerConnection ?? c.getPeerConnection?.() ?? null;
+        const fromClient = c ? (c.peer ?? c.peerConnection ?? c.getPeerConnection?.()) : null;
+        return fromClient ?? window.__bqLastPeerConnection ?? null;
     },
 };
+
+// ─── Capture the call's RTCPeerConnection for quality telemetry ───────────
+// The AT SDK constructs its RTCPeerConnection internally and never exposes it,
+// so bqVoiceClient.peer() had nothing to hand the stats collector. Wrap the
+// constructor once (Proxy preserves statics/prototype/instanceof) and stash the
+// most-recently-created PC; peer() falls back to it. The AT SDK is the only
+// WebRTC producer in this build, so "last created" is the active call's PC.
+(() => {
+    const Original = window.RTCPeerConnection;
+    if (typeof Original !== 'function' || typeof Proxy === 'undefined') return;
+    try {
+        window.RTCPeerConnection = new Proxy(Original, {
+            construct(target, args) {
+                const pc = Reflect.construct(target, args);
+                // Only attribute a PC to the call when the softphone is actually
+                // registered — a PC constructed at idle (page load, or a browser
+                // extension) is never an AT call PC, so it must not overwrite the
+                // telemetry target. The AT SDK builds its PC during answer(),
+                // which only runs while ready === true, so the real call PC is
+                // still captured.
+                if (window.bqVoiceClient?.ready) {
+                    window.__bqLastPeerConnection = pc;
+                    try {
+                        pc.addEventListener('connectionstatechange', () => {
+                            if (/closed|failed/.test(pc.connectionState)
+                                && window.__bqLastPeerConnection === pc) {
+                                window.__bqLastPeerConnection = null; // don't leak a dead PC
+                            }
+                        });
+                    } catch (_) { /* ignore */ }
+                }
+                return pc;
+            },
+        });
+    } catch (_) { /* leave the native constructor in place */ }
+})();
 
 // Boot from the layout-rendered token as soon as the DOM is ready. app.js is a
 // deferred module so the <head> meta tags are present, but guard for safety.
@@ -221,6 +374,33 @@ if (document.readyState === 'loading') {
 } else {
     bqBootVoiceFromMeta();
 }
+
+// Re-verify the softphone when the tab regains focus or the network returns.
+// Mobile browsers suspend background-tab WebSockets and the SDK won't tell us,
+// so a refocus is the natural moment to heal a silently-dropped registration.
+// Reset the reboot budget — a user returning to the tab deserves a fresh set of
+// attempts.
+function bqRevalidateVoice() {
+    const vc = window.bqVoiceClient;
+    if (!vc || vc._rebooting) return;
+    const token = document.querySelector('meta[name="at-voice-token"]')?.getAttribute('content');
+    if (!token) return;
+    vc._rebootAttempts = 0;
+    if (!vc._booted) {
+        // Only boot directly when the SDK script is actually present. During an
+        // in-flight reboot's reload window, window.Africastalking is briefly
+        // deleted; booting then would just hit boot()'s "SDK not available"
+        // branch and log a spurious error. Leave it — that reboot's own promise
+        // chain re-boots once the reload finishes.
+        if (typeof window.Africastalking !== 'undefined') vc.boot(token);
+        return;
+    }
+    if (!vc.ready) vc._scheduleReboot();
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') bqRevalidateVoice();
+});
+window.addEventListener('online', bqRevalidateVoice);
 
 // ─── Outbound (agent dialing customer) ───────────────────────────────────
 window.outgoingCall = (data) => ({
