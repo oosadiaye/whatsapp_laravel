@@ -100,7 +100,11 @@ class AfricasTalkingVoiceService
         $body = $response->json();
         $entry = $body['entries'][0] ?? null;
         if ($entry === null || ($entry['status'] ?? null) !== 'Queued') {
-            $reason = $entry['status'] ?? ($body['errorMessage'] ?? 'unknown');
+            // Surface AT's own words: the per-entry status (e.g. "InsufficientCredit",
+            // "InvalidPhoneNumber", "InvalidSenderId") plus any top-level errorMessage.
+            // Log the full body so the exact rejection is diagnosable from laravel.log.
+            $reason = trim(($entry['status'] ?? '').' '.($body['errorMessage'] ?? '')) ?: 'unknown';
+            Log::error('AT placeCall rejected', ['reason' => $reason, 'body' => $response->body()]);
             throw new VoiceProviderException("AT rejected call: {$reason}");
         }
 

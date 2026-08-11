@@ -300,11 +300,12 @@ class CallController extends Controller
             $this->recordOutboundAtFailure($conversation, $e->getMessage());
 
             return response()->json([
-                // Persistent, not transient: the provider rejected the request
-                // (typically invalid AT credentials / an account without Voice).
-                // Point at the Settings → Voice "Test voice connection" probe
-                // rather than the misleading "try again in a moment".
-                'error' => 'The voice provider rejected the call — check the Africa’s Talking credentials and account in Settings → Voice (use “Test voice connection” there to see the exact reason).',
+                // Persistent, not transient — surface AT's OWN reason (e.g. "AT
+                // rejected call: InsufficientCredit" / "InvalidSenderId" / HTTP 401)
+                // so the operator can fix the actual cause instead of guessing.
+                'error' => 'Africa’s Talking rejected the call: '.\Illuminate\Support\Str::limit($e->getMessage(), 160)
+                    .'. Common causes: an invalid API key, no voice credit, or the virtual number isn’t voice-enabled for outbound. '
+                    .'Verify in Settings → Voice (“Test voice connection”).',
             ], 503);
         } catch (\InvalidArgumentException $e) {
             return response()->json([
