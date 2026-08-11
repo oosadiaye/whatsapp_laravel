@@ -114,16 +114,29 @@ class AfricasTalkingVoiceServiceTest extends TestCase
         $service->placeCall('+2348011111111');
     }
 
-    public function test_end_call_throws_on_failure_so_the_retry_job_can_retry(): void
+    public function test_end_call_throws_on_a_transient_failure_so_the_retry_job_can_retry(): void
     {
         $service = $this->app->make(AfricasTalkingVoiceService::class);
-        Http::fake(['*' => Http::response(['error' => 'no such session'], 404)]);
+        // A 5xx is transient — endCall throws so TerminateProviderCall retries
+        // rather than orphaning the customer's live leg on a fluke server error.
+        Http::fake(['*' => Http::response(['error' => 'server error'], 500)]);
 
-        // endCall now reports failure by throwing — TerminateProviderCall (the
-        // caller) is what tolerates it, via bounded retries. A silent swallow
-        // here would orphan the customer's live leg.
         $this->expectException(VoiceProviderException::class);
         $service->endCall('sess_abc');
+    }
+
+    public function test_end_call_swallows_a_4xx_instead_of_retry_storming(): void
+    {
+        // CONFIRMED live: AT's /queueStatus returns 400 for a live/non-queued
+        // session. That's permanent, not retryable, and the browser WebRTC
+        // hang-up is the real teardown — so endCall must NOT throw (which would
+        // make TerminateProviderCall retry 3x and flood the error log).
+        $service = $this->app->make(AfricasTalkingVoiceService::class);
+        Http::fake(['*' => Http::response(['error' => 'bad request'], 400)]);
+
+        $service->endCall('ATVId_live_session'); // must return without throwing
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'queueStatus'));
     }
 
     public function test_client_name_for_user_is_deterministic(): void

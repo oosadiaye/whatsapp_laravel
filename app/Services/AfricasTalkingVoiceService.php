@@ -125,10 +125,14 @@ class AfricasTalkingVoiceService
      * If a live test shows the customer leg surviving an agent hangup, replace
      * the endpoint below with AT's real live-call termination call.
      *
-     * Still throws on HTTP failure so the retried TerminateProviderCall job can
-     * retry rather than silently swallowing a transient provider error.
+     * CONFIRMED live (2026-08): AT's /queueStatus rejects a live/non-queued voice
+     * session with a 4xx (observed 400). That's a PERMANENT client error, not a
+     * transient one — retrying can't fix it, and the browser hang-up already tore
+     * the bridge down. So a 4xx here is treated as a best-effort no-op (logged,
+     * not thrown) to avoid a retry-storm; only 5xx / connection failures still
+     * throw so TerminateProviderCall can retry a genuinely transient error.
      *
-     * @throws VoiceProviderException
+     * @throws VoiceProviderException On transient (5xx / connection) failures only.
      */
     public function endCall(string $sessionId): void
     {
@@ -154,12 +158,28 @@ class AfricasTalkingVoiceService
         }
 
         if ($response->failed()) {
+            $status = $response->status();
+
+            // A 4xx is permanent: /queueStatus can't terminate a live/non-queued
+            // session (AT returns 400). Retrying is futile and the client-side
+            // WebRTC hang-up is the authoritative teardown, so swallow it — log
+            // once (info, no stacktrace) instead of throwing and making
+            // TerminateProviderCall retry-storm + flood the error log.
+            if ($status >= 400 && $status < 500) {
+                Log::info('AT endCall: /queueStatus not applicable to a live session; client-side hang-up is authoritative.', [
+                    'session_id' => $sessionId,
+                    'status' => $status,
+                ]);
+
+                return;
+            }
+
             Log::warning('AT endCall failure', [
                 'session_id' => $sessionId,
-                'status' => $response->status(),
+                'status' => $status,
             ]);
 
-            throw new VoiceProviderException("endCall HTTP {$response->status()}");
+            throw new VoiceProviderException("endCall HTTP {$status}");
         }
     }
 
