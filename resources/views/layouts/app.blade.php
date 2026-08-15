@@ -99,6 +99,14 @@
                  with its left half disappearing under the sidebar on desktop. --}}
             @auth
                 <livewire:realtime-pulse />
+                {{-- Global in-flight outbound call banner. Mounted app-wide (not
+                     just on the conversation page) so the auto-answering WebRTC
+                     softphone banner exists wherever the agent is when the
+                     customer answers — otherwise the <Dial> to the agent times
+                     out and the call drops ("ring then abrupt end"). --}}
+                @can('conversations.call')
+                    <livewire:in-flight-call />
+                @endcan
                 {{-- Missed-call toasts (bottom-right). Reads data-missed-calls from
                      #bq-realtime-data (updated by RealtimePulse every 3s) and shows
                      a dismissable toast on delta. --}}

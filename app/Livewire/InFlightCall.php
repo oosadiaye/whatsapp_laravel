@@ -9,17 +9,22 @@ use Livewire\Component;
 
 class InFlightCall extends Component
 {
-    public int $conversationId;
+    // conversationId is optional: when omitted (global layout mount) the
+    // component shows ANY in-flight outbound call the current user can see,
+    // so the auto-answering WebRTC banner is present no matter which page
+    // the agent is on when the customer answers (fixes "ring then abrupt
+    // end" caused by the banner only existing on the conversation page).
+    public ?int $conversationId = null;
 
-    public function mount(int $conversationId): void
+    public function mount(?int $conversationId = null): void
     {
         $this->conversationId = $conversationId;
     }
 
     public function render()
     {
-        // Most-recent outbound call on this conversation that's still
-        // in-flight and within the freshness window. Scoping:
+        // Most-recent outbound call that's still in-flight and within the
+        // freshness window. Scoping:
         //   view_all      → any in-flight call (so an admin opening a
         //                   colleague's conversation can see and end an
         //                   ongoing call — single-tenant fb5a398)
@@ -33,7 +38,7 @@ class InFlightCall extends Component
         $user = auth()->user();
 
         $query = CallLog::query()
-            ->where('conversation_id', $this->conversationId)
+            ->when($this->conversationId !== null, fn ($q) => $q->where('conversation_id', $this->conversationId))
             ->where('direction', CallLog::DIRECTION_OUTBOUND)
             ->whereIn('status', CallLog::STATUSES_IN_FLIGHT)
             ->where('created_at', '>=', now()->subMinutes(30));

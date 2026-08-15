@@ -58,6 +58,28 @@ function loadAtSdk(forceReload = false) {
     });
 }
 
+// Poll until the persistent softphone is registered (or the timeout elapses),
+// then invoke `callback` exactly once. Used by the call banners so a cold page
+// load / reconnect that hasn't finished registering the WebRTC client yet
+// doesn't kill the call — we wait for readiness, then attach + answer.
+// Returns the interval id so callers can cancel it on component destroy.
+function waitForVoiceClient(callback, timeoutMs = 20000) {
+    const vc = window.bqVoiceClient;
+    if (!vc) { callback(); return null; }
+    if (vc.isAvailable()) { callback(); return null; }
+    const start = Date.now();
+    const timer = setInterval(() => {
+        if (vc.isAvailable()) {
+            clearInterval(timer);
+            callback();
+        } else if (Date.now() - start > timeoutMs) {
+            clearInterval(timer);
+            callback();
+        }
+    }, 400);
+    return timer;
+}
+
 // ─── Persistent softphone singleton ─────────────────────────────────────
 // One registered client per page. Per-call Alpine banners register themselves
 // so SDK events route to the right call. Because the UI can show more than one
@@ -301,9 +323,14 @@ window.bqVoiceClient = {
     },
     detach(banner) {
         this._banners = this._banners.filter(b => b !== banner);
-        // A buffered call that outlived its banner is stale — drop it so a
-        // future attach doesn't deliver a ghost call.
-        this._lastIncoming = null;
+        // Only drop the buffered incoming once EVERY banner has detached. A
+        // transient unmount (Livewire re-render, navigation, the 3s poll
+        // re-rendering) must not lose a call that another still-attached banner
+        // can answer — otherwise the agent's <Dial> times out and the call drops
+        // ("ring then abrupt end").
+        if (this._banners.length === 0) {
+            this._lastIncoming = null;
+        }
     },
 
     isAvailable() { return !!this.client; },
@@ -416,12 +443,28 @@ window.outgoingCall = (data) => ({
     init() {
         const vc = window.bqVoiceClient;
         if (!vc || !vc.isAvailable()) {
+            // Softphone not registered yet (cold page load / reconnect / the
+            // 3s poll mounted us before the SDK finished). Do NOT hang up the
+            // customer's call — wait for the client to come online, then attach
+            // and let the buffered incomingcall auto-answer.
+            this.state = 'registering';
+            this.errorMessage = 'Waiting for voice connection…';
+            this._voiceWait = waitForVoiceClient(() => {
+                this._voiceWait = null;
+                this.init();
+            });
+            return;
+        }
+        this._attachOutgoing();
+    },
+
+    _attachOutgoing() {
+        const vc = window.bqVoiceClient;
+        if (!vc || !vc.isAvailable()) {
+            // Timed out waiting for registration — only now give up and end the
+            // server-side call rather than leaving the customer ringing.
             this.state = 'failed';
             this.errorMessage = "Voice softphone not registered. Configure Africa's Talking in Settings, then reload.";
-            // The server already dialed the customer and is waiting for our leg
-            // to bridge; with no client registered it can never answer, so end
-            // the server-side call rather than leaving the customer ringing into
-            // a void. Best-effort.
             this.safePost(`/calls/${this.callId}/hangup`, {});
             return;
         }
@@ -441,6 +484,7 @@ window.outgoingCall = (data) => ({
      * banner's DOM is removed. Prevents handler accumulation on re-mounts.
      */
     destroy() {
+        if (this._voiceWait) { clearInterval(this._voiceWait); this._voiceWait = null; }
         if (this._echoChannel) {
             try { this._echoChannel.stopListening('.call.terminated'); } catch (_) {}
             this._echoChannel = null;
@@ -544,7 +588,17 @@ window.incomingAtCall = (data) => ({
         if (this.state === 'ringing') window.bqStartRingtone?.();
 
         const vc = window.bqVoiceClient;
-        if (vc?.isAvailable()) vc.attach(this);
+        if (vc?.isAvailable()) {
+            vc.attach(this);
+        } else {
+            // Softphone not ready yet (cold load / reconnect). Don't skip attach
+            // forever — wait for registration, then attach so the incomingcall
+            // can actually be delivered when the agent clicks Accept.
+            this._voiceWait = waitForVoiceClient(() => {
+                this._voiceWait = null;
+                if (window.bqVoiceClient?.isAvailable()) window.bqVoiceClient.attach(this);
+            });
+        }
 
         if (window.userId && window.Echo) {
             this._echoChannel = window.Echo.private(`user.${window.userId}`);
@@ -569,6 +623,7 @@ window.incomingAtCall = (data) => ({
      */
     destroy() {
         this._clearAcceptTimeout();
+        if (this._voiceWait) { clearInterval(this._voiceWait); this._voiceWait = null; }
         if (this._echoChannel) {
             try { this._echoChannel.stopListening('.call.claimed'); } catch (_) {}
             try { this._echoChannel.stopListening('.call.terminated'); } catch (_) {}

@@ -70,6 +70,21 @@ class AfricasTalkingVoiceService
 
         $normalized = $this->toE164($toCustomer);
 
+        // AT's REST /call needs a call-control URL to fetch Voice XML when the
+        // customer answers. Without it the answered call has no <Dial> to bridge
+        // and drops ("ring then abrupt end"). Prefer the explicit per-call URL
+        // (the app's voice webhook, secret included); fall back to the
+        // account-level callback only when no secret is configured.
+        $params = [
+            'username' => $username,
+            'from' => $virtual,
+            'to' => $normalized,
+        ];
+        $callbackUrl = $this->voiceCallbackUrl();
+        if ($callbackUrl !== null) {
+            $params['url'] = $callbackUrl;
+        }
+
         // A DNS failure / refused connection / timeout throws ConnectionException
         // (NOT a failed *response*), so it bypasses the $response->failed() check
         // below. Convert it to the service's own exception type at this boundary
@@ -78,11 +93,7 @@ class AfricasTalkingVoiceService
         try {
             $response = $this->client()->asForm()->post(
                 self::API_BASE.'/call',
-                [
-                    'username' => $username,
-                    'from' => $virtual,
-                    'to' => $normalized,
-                ],
+                $params,
             );
         } catch (ConnectionException $e) {
             Log::error('AT placeCall connection failure', ['error' => $e->getMessage()]);
@@ -354,5 +365,27 @@ class AfricasTalkingVoiceService
             'apiKey' => $apiKey,
             'Accept' => 'application/json',
         ])->timeout(10)->connectTimeout(5);
+    }
+
+    /**
+     * Per-call control URL passed to AT's REST /call. When set, AT fetches
+     * Voice XML from here (rather than the account's global callback) on
+     * answer. Built only when a webhook secret is configured — the URL must
+     * carry the secret path segment or the callback 401s (fail-closed). When
+     * no secret is set we return null and rely on the account-level callback.
+     */
+    private function voiceCallbackUrl(): ?string
+    {
+        $secret = (string) config('voice.at_webhook_secret', '');
+        if ($secret === '') {
+            return null;
+        }
+
+        $base = rtrim((string) config('app.url', ''), '/');
+        if ($base === '') {
+            return null;
+        }
+
+        return $base.'/webhooks/africastalking/voice/'.$secret;
     }
 }

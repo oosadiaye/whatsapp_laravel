@@ -183,7 +183,9 @@
         </div>
     </x-slot>
 
-    @livewire('in-flight-call', ['conversationId' => $conversation->id])
+    {{-- In-flight outbound banner is now mounted globally in the layout
+         (app.blade.php) so the auto-answering WebRTC banner persists across
+         navigation; no per-conversation mount needed. --}}
 
     <div class="py-6">
         <div class="max-w-3xl mx-auto sm:px-6 lg:px-8 space-y-4">

@@ -5,8 +5,8 @@
     contactName: @js($call->contact->display_name ?? $call->to_phone),
     csrf: @js(csrf_token()),
 })" x-init="init()">
-    {{-- Calling / connecting --}}
-    <template x-if="state === 'calling' || state === 'connecting'">
+    {{-- Calling / connecting / registering (waiting for softphone) --}}
+    <template x-if="state === 'calling' || state === 'connecting' || state === 'registering'">
         <div class="fixed bottom-5 right-5 z-50 w-[360px] max-w-[calc(100vw-2.5rem)] bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 overflow-hidden">
             <div class="px-6 pt-7 pb-5 flex flex-col items-center">
                 <div class="relative">
@@ -23,7 +23,7 @@
                     <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
                     <span class="text-sm font-semibold">
                         <span x-show="state === 'calling'">{{ __('Calling…') }}</span>
-                        <span x-show="state === 'connecting'" x-cloak>{{ __('Connecting…') }}</span>
+                        <span x-show="state === 'connecting' || state === 'registering'" x-cloak>{{ __('Connecting…') }}</span>
                     </span>
                 </div>
             </div>

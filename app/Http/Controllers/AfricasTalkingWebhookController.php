@@ -114,13 +114,21 @@ class AfricasTalkingWebhookController extends Controller
                 'status' => CallLog::STATUS_CONNECTED,
                 'connected_at' => $call->connected_at ?? now(),
             ]),
-            'Completed' => $this->finalizeCall($call, $event, CallLog::STATUS_ENDED),
+            'Completed' => $this->finalizeCall($call, $event, $this->resolveCompletedStatus($call)),
             'Failed' => $this->finalizeCall($call, $event, CallLog::STATUS_FAILED),
             default => null,
         };
 
-        if (in_array($status, ['Completed', 'Failed'], true)) {
-            CallTerminated::dispatch($call->fresh(), 'remote_'.strtolower($status));
+        // A terminal callback (ended / missed / failed) must tear the banner down
+        // on the agent's screen. Dispatch regardless of which terminal status we
+        // landed on, with a reason that reflects it.
+        if (in_array($call->status, CallLog::STATUSES_TERMINAL, true)) {
+            $reason = match ($call->status) {
+                CallLog::STATUS_MISSED => 'remote_missed',
+                CallLog::STATUS_FAILED => 'remote_failed',
+                default => 'remote_completed',
+            };
+            CallTerminated::dispatch($call->fresh(), $reason);
         }
 
         return response('ok', 200);
@@ -169,25 +177,50 @@ class AfricasTalkingWebhookController extends Controller
             }
         }
 
-        $call = CallLog::create([
-            'conversation_id' => $conversation->id,
-            'contact_id' => $contact->id,
-            'whatsapp_instance_id' => $instance->id,
-            'direction' => 'inbound',
-            'provider' => CallLog::PROVIDER_AFRICAS_TALKING,
-            'provider_session_id' => $event['sessionId'] ?? null,
-            'status' => CallLog::STATUS_RINGING,
-            'started_at' => now(),
-            'from_phone' => $callerPhone,
-            'to_phone' => $event['destinationNumber'] ?? '',
-        ]);
+        // Safe create: handleInboundFirstEvent is reachable from BOTH the
+        // status branch and the call-control branch, so two concurrent inbound
+        // callbacks (a call-control request racing a status notification) can
+        // both pass the null-check and try to insert. With a unique index on
+        // provider_session_id the loser would 500 and AT may drop the call — so
+        // catch the duplicate, recover the existing row, and skip the double
+        // work. Only a freshly-created call triggers the downstream side-effects.
+        $sessionId = $event['sessionId'] ?? null;
+        $call = CallLog::where('provider_session_id', $sessionId)->first();
+        $created = false;
+        if ($call === null) {
+            try {
+                $call = CallLog::create([
+                    'conversation_id' => $conversation->id,
+                    'contact_id' => $contact->id,
+                    'whatsapp_instance_id' => $instance->id,
+                    'direction' => 'inbound',
+                    'provider' => CallLog::PROVIDER_AFRICAS_TALKING,
+                    'provider_session_id' => $sessionId,
+                    'status' => CallLog::STATUS_RINGING,
+                    'started_at' => now(),
+                    'from_phone' => $callerPhone,
+                    'to_phone' => $event['destinationNumber'] ?? '',
+                ]);
+                $created = true;
+            } catch (\Illuminate\Database\QueryException $e) {
+                if (! $this->isDuplicateKey($e)) {
+                    throw $e;
+                }
+                $call = CallLog::where('provider_session_id', $sessionId)->first();
+            }
+        }
+
+        if ($call === null) {
+            // Could not create or recover the call log; bail without 500ing.
+            return response('ok', 200);
+        }
 
         // Seed the raw event timeline with the triggering callback so the
         // Phase 0 validator can confirm the webhook actually reached the app.
         $call->appendRawEvent('inbound_first', $event);
         $call->save();
 
-        if (config('voice.queue_enabled')) {
+        if ($created && config('voice.queue_enabled')) {
             // Serialise the read-then-write position calc so two inbound calls
             // webhooked concurrently don't both read N and both claim position N+1
             // (M5). The lock holds the WAITING set for the duration of the insert.
@@ -208,16 +241,42 @@ class AfricasTalkingWebhookController extends Controller
         }
 
         $conversation->refresh();
-        if ($conversation->assigned_to_user_id !== null) {
+        if ($created && $conversation->assigned_to_user_id !== null) {
             CallRinging::dispatch($call);
         }
 
         return response('ok', 200);
     }
 
-    private function finalizeCall(CallLog $call, array $event, string $endStatus): void
+    /**
+     * Detect a unique-constraint violation so the inbound first-event create can
+     * recover the existing row instead of 500ing (see handleInboundFirstEvent).
+     */
+    private function isDuplicateKey(\Throwable $e): bool
     {
-        $duration = (int) ($event['durationInSeconds'] ?? 0);
+        $code = (int) $e->getCode();
+
+        return $code === 23000 || $code === 23505 || $code === 1062;
+    }
+
+    /**
+     * Decide the terminal status for an AT "Completed" callback. An inbound call
+     * the customer abandoned before the agent answered (never connected) is a
+     * MISSED call, not an ENDED one — otherwise missed-call metrics/badges that
+     * filter on STATUS_MISSED silently under-count. Outbound and any inbound that
+     * did connect stay ENDED.
+     */
+    private function resolveCompletedStatus(CallLog $call): string
+    {
+        if ($call->direction === CallLog::DIRECTION_INBOUND && $call->connected_at === null) {
+            return CallLog::STATUS_MISSED;
+        }
+
+        return CallLog::STATUS_ENDED;
+    }
+
+    private function finalizeCall(CallLog $call, array $event, string $endStatus): void
+    {        $duration = (int) ($event['durationInSeconds'] ?? 0);
         $rateKobo = (int) Setting::get('africastalking_rate_per_minute_kobo', 600);
         $costKobo = (int) ceil($duration * $rateKobo / 60);
 
