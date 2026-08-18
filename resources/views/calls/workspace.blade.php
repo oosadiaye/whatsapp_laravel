@@ -70,6 +70,16 @@
                 },
                 press(k) { this.number += k; this.contactId = null; this.selectedContactName = ''; },
                 back() { this.number = this.number.slice(0, -1); this.contactId = null; this.selectedContactName = ''; },
+                // Number keys typed anywhere in the modal go to the CALL field,
+                // never the contact search field. Letters still reach the search
+                // input so agents can look up a contact by name.
+                handleKey(e) {
+                    const k = e.key;
+                    if (k === '+' || (k.length === 1 && /[0-9*#]/.test(k))) {
+                        e.preventDefault();
+                        this.press(k);
+                    }
+                },
                 selectContact(c) {
                     this.contactId = c.id;
                     this.number = c.phone;
@@ -94,6 +104,9 @@
                             this.number = '';
                             this.contactId = null;
                             this.selectedContactName = '';
+                            // Mount the outbound call screen immediately rather
+                            // than waiting for the next InFlightCall poll tick.
+                            if (window.Livewire) Livewire.dispatch('calls:refresh');
                         } else {
                             const b = await res.json();
                             this.error = b?.error || 'Call failed.';
@@ -109,7 +122,8 @@
                  @keydown.escape.window="open = false">
                 <template x-teleport="body">
                     <div x-show="open" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4"
-                         role="dialog" aria-modal="true" aria-label="{{ __('Quick Dial') }}">
+                         role="dialog" aria-modal="true" aria-label="{{ __('Quick Dial') }}"
+                         @keydown="handleKey($event)">
                         <div x-show="open" x-transition.opacity
                              class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="open = false"></div>
 

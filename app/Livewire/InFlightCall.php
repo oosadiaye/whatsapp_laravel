@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire;
 
 use App\Models\CallLog;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class InFlightCall extends Component
@@ -19,6 +20,17 @@ class InFlightCall extends Component
     public function mount(?int $conversationId = null): void
     {
         $this->conversationId = $conversationId;
+    }
+
+    /**
+     * Client-driven refresh. Fired from the Quick Dial modal right after an
+     * outbound call is placed so the "Calling…" banner mounts immediately
+     * instead of waiting for the next 3-second poll tick.
+     */
+    #[On('calls:refresh')]
+    public function refresh(): void
+    {
+        // no-op: invoking the method triggers a full re-render
     }
 
     public function render()
