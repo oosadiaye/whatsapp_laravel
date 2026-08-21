@@ -68,6 +68,13 @@
                     const q = this.search.toLowerCase();
                     return all.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
                 },
+                // The agent's browser softphone must be registered (window.bqVoiceClient.ready)
+                // BEFORE a call is placed. If it isn't, AT can't bridge the answered call
+                // to the browser and the call drops ("ring then abrupt end"). Surface that
+                // up front instead of letting the agent place a call that will fail.
+                get voiceReady() {
+                    return !!(window.bqVoiceClient && window.bqVoiceClient.ready);
+                },
                 press(k) { this.number += k; this.contactId = null; this.selectedContactName = ''; },
                 back() { this.number = this.number.slice(0, -1); this.contactId = null; this.selectedContactName = ''; },
                 // Number keys typed anywhere in the modal go to the CALL field,
@@ -89,6 +96,10 @@
                 },
                 async placeCall() {
                     if (this.calling || !this.number.trim()) return;
+                    if (!this.voiceReady) {
+                        this.error = 'Voice isn’t connected. Reload the page or check Settings → Voice, then try again.';
+                        return;
+                    }
                     this.calling = true;
                     this.error = '';
                     const payload = { phone: this.number };
@@ -210,12 +221,17 @@
                                 <div class="grid grid-cols-3 gap-2">
                                     <button type="button" @click="number = ''; contactId = null; selectedContactName = ''"
                                             class="py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-semibold hover:bg-slate-200 transition">{{ __('Clear') }}</button>
-                                    <button type="button" @click="placeCall()" x-bind:disabled="!number.trim() || calling"
+                                    <button type="button" @click="placeCall()" x-bind:disabled="!number.trim() || calling || !voiceReady"
                                             class="col-span-2 inline-flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm shadow-emerald-600/20">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
                                         <span x-text="calling ? '{{ __('Calling…') }}' : '{{ __('Start Call') }}'"></span>
                                     </button>
                                 </div>
+                                <p x-show="!voiceReady" x-cloak
+                                   class="mt-2 flex items-center gap-1.5 justify-center text-xs text-amber-600">
+                                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+                                    {{ __('Voice isn’t connected yet — the call may drop. Reload or check Settings → Voice.') }}
+                                </p>
                                 <p x-show="error" x-cloak x-text="error"
                                    class="mt-2 text-center text-xs text-red-600"></p>
                             </div>
