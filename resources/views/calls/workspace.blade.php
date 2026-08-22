@@ -82,6 +82,14 @@
                 // input so agents can look up a contact by name.
                 handleKey(e) {
                     const k = e.key;
+                    // Enter places the call from the keyboard (dials on Quick Call).
+                    if (k === 'Enter') {
+                        if (this.number.trim()) {
+                            e.preventDefault();
+                            this.placeCall();
+                        }
+                        return;
+                    }
                     if (k === '+' || (k.length === 1 && /[0-9*#]/.test(k))) {
                         e.preventDefault();
                         this.press(k);
