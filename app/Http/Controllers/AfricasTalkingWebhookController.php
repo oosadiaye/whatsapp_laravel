@@ -311,7 +311,8 @@ class AfricasTalkingWebhookController extends Controller
     }
 
     private function finalizeCall(CallLog $call, array $event, string $endStatus): void
-    {        $duration = (int) ($event['durationInSeconds'] ?? 0);
+    {
+        $duration = (int) ($event['durationInSeconds'] ?? 0);
         $rateKobo = (int) Setting::get('africastalking_rate_per_minute_kobo', 600);
         $costKobo = (int) ceil($duration * $rateKobo / 60);
 
