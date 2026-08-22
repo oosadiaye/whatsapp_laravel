@@ -56,12 +56,20 @@
 
             {{-- Call back — places a direct AT call from the workspace, no chat needed. --}}
             @if($call->contact?->phone)
-                <div x-data="{
+                <div                 x-data="{
                     calling: false,
                     msg: '',
                     ok: false,
+                    get voiceReady() {
+                        return !!(window.bqVoiceClient && window.bqVoiceClient.ready);
+                    },
                     async callBack() {
                         if (this.calling) return;
+                        if (!this.voiceReady) {
+                            this.ok = false;
+                            this.msg = 'Voice isn’t connected — reload or check Settings → Voice.';
+                            return;
+                        }
                         this.calling = true;
                         this.msg = '';
                         try {
@@ -88,11 +96,13 @@
                         }
                     }
                 }" class="mt-3">
-                    <button type="button" @click="callBack()" :disabled="calling"
-                        class="inline-flex items-center justify-center gap-1.5 w-full px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition disabled:opacity-60">
+                    <button type="button" @click="callBack()" :disabled="calling || !voiceReady"
+                            class="inline-flex items-center justify-center gap-1.5 w-full px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition disabled:opacity-60">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
                         <span x-text="calling ? @js(__('Calling…')) : @js(__('Call back'))"></span>
                     </button>
+                    <p x-show="!voiceReady" x-cloak
+                       class="mt-2 text-xs text-amber-600">{{ __('Voice isn’t connected yet — the call may drop. Reload or check Settings → Voice.') }}</p>
                     <p x-cloak x-show="msg" x-text="msg"
                        class="mt-1.5 text-center text-[11px]" :class="ok ? 'text-emerald-600' : 'text-red-600'"></p>
                 </div>
