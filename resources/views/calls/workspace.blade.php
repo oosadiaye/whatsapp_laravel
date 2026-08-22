@@ -59,14 +59,36 @@
                 search: '',
                 showContacts: false,
                 selectedContactName: '',
+                // Contact list is loaded lazily from route('calls.contacts') on
+                // first modal open, instead of being serialized into the page.
+                contacts: [],
+                _contactsLoaded: false,
+                _contactsLoading: false,
                 get displayLabel() {
                     return this.selectedContactName || this.number || '';
                 },
                 get filteredContacts() {
-                    const all = {{ Js::from($dialContacts?->map(fn ($c) => ['id' => $c->id, 'name' => $c->name ?? $c->phone, 'phone' => $c->phone])->values() ?? []) }};
+                    const all = this.contacts;
                     if (!this.search) return all;
                     const q = this.search.toLowerCase();
-                    return all.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
+                    return all.filter(c => (c.name || '').toLowerCase().includes(q) || c.phone.includes(q));
+                },
+                async loadContacts() {
+                    if (this._contactsLoaded || this._contactsLoading) return;
+                    this._contactsLoading = true;
+                    try {
+                        const res = await fetch(@js(route('calls.contacts')), {
+                            headers: { 'Accept': 'application/json' },
+                        });
+                        if (res.ok) {
+                            this.contacts = await res.json();
+                            this._contactsLoaded = true;
+                        }
+                    } catch {
+                        // Leave the list empty; the agent can still dial by number.
+                    } finally {
+                        this._contactsLoading = false;
+                    }
                 },
                 // The agent's browser softphone must be registered (window.bqVoiceClient.ready)
                 // BEFORE a call is placed. If it isn't, AT can't bridge the answered call
@@ -133,7 +155,7 @@
                     }
                 }
             }"
-                 @open-quick-dial.window="open = true; $nextTick(() => $refs.searchInput && $refs.searchInput.focus())"
+                 @open-quick-dial.window="open = true; loadContacts(); $nextTick(() => $refs.searchInput && $refs.searchInput.focus())"
                  @keydown.escape.window="open = false">
                 <template x-teleport="body">
                     <div x-show="open" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4"

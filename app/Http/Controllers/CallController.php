@@ -180,15 +180,10 @@ class CallController extends Controller
         $requestedId = (int) $request->query('call');
         $selected = $calls->firstWhere('id', $requestedId) ?? $calls->first();
 
-        // Dial pad (calls.dial): a bounded contact list to pick from.
-        // Single-tenant: every user with calls.dial sees every contact.
+        // Dial pad (calls.dial): the contact list is no longer serialized into
+        // the page. It is fetched lazily by the Quick Dial modal from
+        // route('calls.contacts') on first open (see resources/js + workspace.blade).
         $canDial = (bool) $user->can('calls.dial');
-        $dialContacts = $canDial
-            ? Contact::whereNotNull('phone')
-                ->orderBy('name')
-                ->limit(500)
-                ->get(['id', 'name', 'phone'])
-            : collect();
 
         // Wrap-up prompt: only for a call THIS user just handled — one they placed
         // or one on a conversation assigned to them — and only recently. Using the
@@ -211,9 +206,35 @@ class CallController extends Controller
             'recordingEnabled' => VoiceConfig::recordingEnabled(),
             'aiConfigured' => filled(GeminiConfig::key()),
             'canDial' => $canDial,
-            'dialContacts' => $dialContacts,
             'activeCall' => $activeCall,
         ]);
+    }
+
+    /**
+     * Lazy contact list for the Quick Dial picker (route calls.contacts).
+     *
+     * Previously the first 500 contacts were serialized into every workspace
+     * page load. This endpoint is fetched on demand (modal open) so the heavy
+     * payload only travels when the agent actually dials. Bounded for safety.
+     */
+    public function dialContacts(Request $request): JsonResponse
+    {
+        if (! $request->user()->can('calls.dial')) {
+            return response()->json([]);
+        }
+
+        $contacts = Contact::whereNotNull('phone')
+            ->orderBy('name')
+            ->limit(500)
+            ->get(['id', 'name', 'phone'])
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'name' => $c->name ?? $c->phone,
+                'phone' => $c->phone,
+            ])
+            ->values();
+
+        return response()->json($contacts);
     }
 
     /**

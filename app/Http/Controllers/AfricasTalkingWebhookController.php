@@ -38,6 +38,40 @@ class AfricasTalkingWebhookController extends Controller
         private readonly CallFlowRouter $flow,
     ) {}
 
+    /**
+     * Per-request cache for the CallLog matching a session id. The webhook
+     * handler (and call-control branch) used to re-query CallLog by
+     * provider_session_id several times per callback; this memoizes the first
+     * lookup so repeated reads in the same request hit the cache instead of the
+     * DB. cacheCall() must be called after any create so a freshly-inserted row
+     * is visible to later reads in the same request.
+     */
+    private ?string $callLookupKey = null;
+
+    private ?CallLog $callLookupCache = null;
+
+    private function lookupCall(?string $sessionId): ?CallLog
+    {
+        if ($sessionId === null) {
+            return null;
+        }
+        if ($this->callLookupKey === $sessionId && $this->callLookupCache !== null) {
+            return $this->callLookupCache;
+        }
+        $this->callLookupKey = $sessionId;
+        $this->callLookupCache = CallLog::where('provider_session_id', $sessionId)->first();
+
+        return $this->callLookupCache;
+    }
+
+    private function cacheCall(CallLog $call): CallLog
+    {
+        $this->callLookupKey = $call->provider_session_id;
+        $this->callLookupCache = $call;
+
+        return $call;
+    }
+
     public function handle(Request $request, ?string $secret = null): Response
     {
         if (! $this->verifyWebhookAuth($secret)) {
@@ -81,13 +115,13 @@ class AfricasTalkingWebhookController extends Controller
 
         // Inbound first event — no prior CallLog. Create the chain.
         if ($direction === 'inbound') {
-            $existing = CallLog::where('provider_session_id', $sessionId)->first();
+            $existing = $this->lookupCall($sessionId);
             if ($existing === null) {
                 return $this->handleInboundFirstEvent($event);
             }
         }
 
-        $call = CallLog::where('provider_session_id', $sessionId)->first();
+        $call = $this->lookupCall($sessionId);
         if ($call === null) {
             Log::warning('AT webhook for unknown sessionId', ['session_id' => $sessionId]);
 
@@ -185,7 +219,7 @@ class AfricasTalkingWebhookController extends Controller
         // catch the duplicate, recover the existing row, and skip the double
         // work. Only a freshly-created call triggers the downstream side-effects.
         $sessionId = $event['sessionId'] ?? null;
-        $call = CallLog::where('provider_session_id', $sessionId)->first();
+        $call = $this->lookupCall($sessionId);
         $created = false;
         if ($call === null) {
             try {
@@ -201,12 +235,13 @@ class AfricasTalkingWebhookController extends Controller
                     'from_phone' => $callerPhone,
                     'to_phone' => $event['destinationNumber'] ?? '',
                 ]);
+                $this->cacheCall($call);
                 $created = true;
             } catch (\Illuminate\Database\QueryException $e) {
                 if (! $this->isDuplicateKey($e)) {
                     throw $e;
                 }
-                $call = CallLog::where('provider_session_id', $sessionId)->first();
+                $call = $this->lookupCall($sessionId);
             }
         }
 
@@ -301,6 +336,25 @@ class AfricasTalkingWebhookController extends Controller
             'cost_estimate_kobo' => $costKobo,
         ];
 
+        // Africa's Talking's Completed callback may carry the real billed
+        // amount/currency (e.g. amount=12.50, currency=KES). Persist it for
+        // reconciliation; the flat estimate above stays the working figure,
+        // but when a real amount is present we prefer it for accuracy.
+        $providerAmount = $event['amount'] ?? null;
+        $providerCurrency = $event['currency'] ?? null;
+        if (is_numeric($providerAmount)) {
+            $update['provider_amount'] = (float) $providerAmount;
+            $update['provider_currency'] = is_string($providerCurrency) && $providerCurrency !== ''
+                ? $providerCurrency
+                : null;
+            // When the provider amount is in the account's major currency and
+            // that currency matches the estimate's minor unit (kobo = NGN),
+            // upgrade the working estimate to the real figure.
+            if ($update['provider_currency'] === 'NGN') {
+                $update['cost_estimate_kobo'] = (int) round(((float) $providerAmount) * 100);
+            }
+        }
+
         if ($endStatus === CallLog::STATUS_FAILED) {
             $cause = $event['hangupCause'] ?? 'AT_FAILED';
             $update['failure_reason'] = "AT failure: {$cause}";
@@ -349,7 +403,7 @@ class AfricasTalkingWebhookController extends Controller
         // finished call. The status-tracking branch in handle() has the same
         // guard; this is its call-control-path equivalent (that branch runs
         // AFTER the isActive=1 short-circuit, so it never sees these requests).
-        $existing = CallLog::where('provider_session_id', $sessionId)->first();
+        $existing = $this->lookupCall($sessionId);
         if ($existing !== null && in_array($existing->status, CallLog::STATUSES_TERMINAL, true)) {
             return $this->xmlResponse('<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>');
         }
@@ -357,9 +411,7 @@ class AfricasTalkingWebhookController extends Controller
         // A pending blind transfer routes the live customer leg to its target
         // (agent client or PSTN number), regardless of the original direction.
         // Clear it once the Dial is issued so a re-request doesn't loop.
-        $pending = CallLog::where('provider_session_id', $sessionId)
-            ->whereNotNull('transfer_target')
-            ->first();
+        $pending = (($c = $this->lookupCall($sessionId)) && $c->transfer_target !== null) ? $c : null;
         if ($pending !== null) {
             $target = (string) $pending->transfer_target;
             $pending->update(['transfer_target' => null]);
@@ -370,14 +422,14 @@ class AfricasTalkingWebhookController extends Controller
         }
 
         if ($direction === 'inbound') {
-            $call = CallLog::where('provider_session_id', $sessionId)->first();
+            $call = $this->lookupCall($sessionId);
             if ($call === null) {
                 // First contact for this inbound session: build the chain
                 // (Contact/Conversation/assignment/CallLog) and broadcast
                 // CallRinging so the agent's banner appears. We ignore the
                 // Response it returns and re-read the persisted CallLog.
                 $this->handleInboundFirstEvent($event);
-                $call = CallLog::where('provider_session_id', $sessionId)->first();
+                $call = $this->lookupCall($sessionId);
             }
 
             if ($call === null) {
@@ -397,7 +449,7 @@ class AfricasTalkingWebhookController extends Controller
         }
 
         // Outbound bridge.
-        $call = CallLog::where('provider_session_id', $sessionId)->first();
+        $call = $this->lookupCall($sessionId);
         if ($call === null || $call->placed_by_user_id === null) {
             Log::warning('AT outbound call-control with no placing agent', ['session_id' => $sessionId]);
 

@@ -84,6 +84,8 @@ class CallLog extends Model
         'ended_at',
         'duration_seconds',
         'cost_estimate_kobo',
+        'provider_amount',
+        'provider_currency',
         'quality_metrics',
         'failure_reason',
         'placed_by_user_id',

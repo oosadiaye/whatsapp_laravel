@@ -356,6 +356,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // conversation page, which places the call through the softphone.
     Route::middleware('permission:calls.dial')->group(function () {
         Route::post('/calls/dial', [CallController::class, 'dial'])->name('calls.dial');
+        // Lazy contact list for the Quick Dial picker. Loaded on demand (modal
+        // open) instead of serialized into every workspace page load.
+        Route::get('/calls/contacts', [CallController::class, 'dialContacts'])->name('calls.contacts');
     });
     Route::middleware('permission:conversations.call')->group(function () {
         Route::post('/contacts/{contact}/call', [ContactController::class, 'startCall'])
