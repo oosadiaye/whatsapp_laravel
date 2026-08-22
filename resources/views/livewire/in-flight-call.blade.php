@@ -1,10 +1,12 @@
-<div wire:poll.3s>
+<div wire:poll.15s>
     @if($call && $call->provider === \App\Models\CallLog::PROVIDER_AFRICAS_TALKING)
         {{-- Africa's Talking outbound: mount the real WebRTC softphone banner.
              wire:key preserves the nested component (and its Alpine softphone
-             state) across this component's 3s polls, so the audio session isn't
-             torn down every cycle. The persistent client lives in the layout;
-             this banner just drives the call UI + answers the bridged leg. --}}
+             state) across this component's 15s consistency polls, so the audio
+             session isn't torn down every cycle. The persistent client lives in
+             the layout; this banner just drives the call UI + answers the
+             bridged leg. The banner appears immediately via the calls:refresh
+             dispatch on placement, so the poll is a fallback, not the trigger. --}}
         <livewire:outgoing-call :call="$call" :wire:key="'ocall-'.$call->id" />
     @elseif($call)
         @php

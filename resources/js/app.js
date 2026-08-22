@@ -39,11 +39,20 @@ window.userId = userIdMeta ? parseInt(userIdMeta.getAttribute('content'), 10) : 
 // hear "incoming call" ring for their own call, so we only act on inbound
 // events here — the outbound banner shows its own "Calling…" UI.
 if (window.userId && window.Echo) {
-    window.Echo.private(`user.${window.userId}`).listen('.call.ringing', (event) => {
+    const pulse = window.Echo.private(`user.${window.userId}`);
+    pulse.listen('.call.ringing', (event) => {
         if (!event?.call_id || event.direction !== 'inbound') return;
         window.bqStartRingtone?.();
 
-        // Mount the banner immediately instead of waiting for the 3s poll tick.
+        // Mount the banner immediately instead of waiting for the poll tick.
+        window.Livewire?.dispatch('realtime-pulse:refresh');
+    });
+    // A call ending (missed / answered-then-ended / claimed-elsewhere) changes
+    // the sidebar missed-call badge and clears any in-flight banner. Push a
+    // refresh so RealtimePulse updates instantly — the 15s consistency poll is
+    // now only a fallback for unread-message and missed-call counts, which have
+    // no dedicated broadcast.
+    pulse.listen('.call.terminated', () => {
         window.Livewire?.dispatch('realtime-pulse:refresh');
     });
 }
@@ -86,8 +95,9 @@ import './call-recorder';
 /**
  * Tiny Alpine factory consumed by the sidebar badges in
  * resources/views/layouts/navigation.blade.php. Reads a single dataset attribute
- * off `#bq-realtime-data` (rendered by the RealtimePulse Livewire component
- * every 3s) and re-renders the badge count whenever Livewire morphs the DOM.
+ * off `#bq-realtime-data` (rendered by the RealtimePulse Livewire component on
+ * each refresh — push-driven for calls, with a 15s consistency poll fallback)
+ * and re-renders the badge count whenever Livewire morphs the DOM.
  *
  * Usage in blade: <span x-data="bqBadgeWatcher('unread')" x-text="count">
  *
@@ -98,9 +108,10 @@ window.bqBadgeWatcher = (kind) => ({
     count: 0,
     init() {
         this.refresh();
-        // Re-read the count after every Livewire DOM morph (every 3s when
-        // RealtimePulse polls). morph.updated fires AFTER the new attribute
-        // is in the DOM, so we always read fresh values.
+        // Re-read the count after every Livewire DOM morph. For calls this fires
+        // on the push-driven refresh; otherwise on the 15s consistency poll.
+        // morph.updated fires AFTER the new attribute is in the DOM, so we always
+        // read fresh values.
         if (window.Livewire) {
             window.Livewire.hook('morph.updated', () => this.refresh());
         }

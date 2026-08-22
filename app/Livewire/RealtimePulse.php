@@ -11,8 +11,11 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
- * Real-time UX surface mounted on the layout. Polls every 3 seconds and
- * returns a unified payload of:
+ * Real-time UX surface mounted on the layout. Refreshes via push (the
+ * `.call.ringing` / `.call.terminated` broadcasts dispatch a Livewire refresh
+ * through app.js) and a slow 15s consistency poll that catches the data points
+ * with no dedicated broadcast — unread message counts and missed-call counts.
+ * Returns a unified payload of:
  *   - in-flight inbound calls visible to the current user (banner data)
  *   - unread message count across visible conversations (notification trigger)
  *
