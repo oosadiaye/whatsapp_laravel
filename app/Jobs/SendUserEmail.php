@@ -98,7 +98,19 @@ class SendUserEmail implements ShouldQueue
             return;
         }
 
-        $this->storeSentCopy($account, $email);
+        // The send already SUCCEEDED — the recipient has the email. A failure now
+        // storing the local copy must NOT re-enter handle(): retryUntil() overrides
+        // $tries=1, so an uncaught throw here would re-queue the job and RE-SEND a
+        // second copy. Swallow it — the sent copy is best-effort and a later inbox
+        // re-sync dedupes it by the Message-ID stamped above.
+        try {
+            $this->storeSentCopy($account, $email);
+        } catch (\Throwable $e) {
+            Log::warning('SendUserEmail: send succeeded but storing the local sent copy failed', [
+                'account_id' => $account->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

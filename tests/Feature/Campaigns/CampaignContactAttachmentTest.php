@@ -298,6 +298,38 @@ class CampaignContactAttachmentTest extends TestCase
         Bus::assertDispatchedTimes(SendWhatsAppMessage::class, 1);
     }
 
+    public function test_message_logs_reject_a_duplicate_contact_per_campaign(): void
+    {
+        // C1 defense-in-depth: the DB unique (campaign_id, contact_id) is the
+        // backstop that stops a double-send even if two batch jobs ever race the
+        // app-level dedupe.
+        $admin = $this->makeAdmin();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+        $contact = Contact::factory()->create(['user_id' => $admin->id]);
+        $campaign = Campaign::create([
+            'user_id' => $admin->id,
+            'instance_id' => $instance->id,
+            'name' => 'Dup',
+            'message' => 'Hi',
+            'status' => 'RUNNING',
+        ]);
+
+        MessageLog::create([
+            'campaign_id' => $campaign->id,
+            'contact_id' => $contact->id,
+            'phone' => $contact->phone,
+            'status' => 'PENDING',
+        ]);
+
+        $this->expectException(\Illuminate\Database\QueryException::class);
+        MessageLog::create([
+            'campaign_id' => $campaign->id,
+            'contact_id' => $contact->id,
+            'phone' => $contact->phone,
+            'status' => 'PENDING',
+        ]);
+    }
+
     private function makeAdmin(): User
     {
         $user = User::factory()->create(['is_active' => true]);

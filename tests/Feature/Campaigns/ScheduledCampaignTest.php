@@ -92,4 +92,38 @@ class ScheduledCampaignTest extends TestCase
         $this->assertNull($future->fresh()->started_at, 'future campaign left alone');
         $this->assertNull($draft->fresh()->started_at, 'draft campaign left alone');
     }
+
+    public function test_scheduler_does_not_relaunch_an_already_claimed_campaign(): void
+    {
+        // C1: launch sets started_at, so a re-tick (the batch job still sitting in
+        // a backlogged queue) must NOT dispatch a SECOND batch job for the same
+        // campaign — concurrent batch jobs are what double-send the audience.
+        Bus::fake();
+
+        Campaign::factory()->create(['status' => 'QUEUED', 'scheduled_at' => now()->subMinute()]);
+
+        $this->artisan('campaigns:dispatch-scheduled')->assertSuccessful();
+        $this->artisan('campaigns:dispatch-scheduled')->assertSuccessful();
+
+        Bus::assertDispatchedTimes(CampaignBatchDispatch::class, 1);
+    }
+
+    public function test_launch_endpoint_is_forbidden_for_a_non_launchable_status(): void
+    {
+        // C1: the launch controller had no status guard — a replayed POST on a
+        // RUNNING campaign would dispatch a second batch job (double-send).
+        Bus::fake();
+        $admin = $this->makeAdmin();
+        $campaign = Campaign::factory()->create([
+            'user_id' => $admin->id,
+            'status' => 'RUNNING',
+            'scheduled_at' => null,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('campaigns.launch', $campaign))
+            ->assertForbidden();
+
+        Bus::assertNotDispatched(CampaignBatchDispatch::class);
+    }
 }

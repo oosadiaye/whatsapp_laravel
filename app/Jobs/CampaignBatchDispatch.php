@@ -45,19 +45,27 @@ class CampaignBatchDispatch implements ShouldQueue
 
     public function handle(): void
     {
-        $this->campaign = $this->campaign->fresh();
+        // Atomic claim: only ONE worker may transition this campaign QUEUED→RUNNING.
+        // The previous check-then-act (fresh() → status check → unconditional
+        // update) let two concurrent batch jobs — produced by the scheduler
+        // re-tick on a backlogged queue, or a double-clicked launch — both pass
+        // the guard, both fan out the full audience, and double-send every
+        // (billable) message. Mirrors EmailCampaignDispatch's proven claim.
+        $claimed = Campaign::query()
+            ->whereKey($this->campaign->id)
+            ->where('status', 'QUEUED')
+            ->update([
+                'status' => 'RUNNING',
+                'started_at' => Carbon::now(),
+            ]);
 
-        // The campaign may have been cancelled (or otherwise moved off QUEUED)
-        // between launch() dispatching this job and the worker picking it up.
-        // Bail rather than resurrecting it as RUNNING and fanning out sends.
-        if ($this->campaign->status !== 'QUEUED') {
+        if ($claimed === 0) {
+            // Cancelled/paused, or already claimed by a concurrent worker — do
+            // not resurrect it as RUNNING or fan out a second time.
             return;
         }
 
-        $this->campaign->update([
-            'status' => 'RUNNING',
-            'started_at' => Carbon::now(),
-        ]);
+        $this->campaign = $this->campaign->fresh();
 
         // Audience: contacts in any of the campaign's groups, deduped. Resolved
         // as a reusable query (not a materialized ->get()) so we can STREAM it in

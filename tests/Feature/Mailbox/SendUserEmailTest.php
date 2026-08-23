@@ -166,6 +166,30 @@ class SendUserEmailTest extends TestCase
         $this->assertDatabaseCount('email_messages', 0);
     }
 
+    public function test_a_failed_sent_copy_write_does_not_bubble_and_cause_a_resend(): void
+    {
+        // H1: retryUntil() overrides $tries=1, so if a post-send DB write threw
+        // out of handle() the job would re-queue and RE-SEND a second copy. The
+        // sent-copy write is best-effort — its failure must be swallowed, not
+        // bubbled. Simulate the write failing AFTER a successful send.
+        Mail::fake();
+        $account = $this->account();
+
+        EmailThread::creating(function () {
+            throw new \RuntimeException('simulated sent-copy write failure');
+        });
+
+        try {
+            // Must NOT throw despite the storeSentCopy failure.
+            $this->dispatchJob($account, new OutboundEmail(to: ['x@example.com'], subject: 'once'));
+
+            Mail::assertSent(UserMail::class, 1);            // sent exactly once — no resend
+            $this->assertDatabaseCount('email_messages', 0); // copy not stored (write failed, as simulated)
+        } finally {
+            EmailThread::getEventDispatcher()->forget('eloquent.creating: '.EmailThread::class);
+        }
+    }
+
     public function test_it_has_a_retry_window_so_a_throttle_release_is_not_a_permanent_drop(): void
     {
         // H4: retryUntil() is what lets the throttle-release retry despite

@@ -429,6 +429,18 @@ class CampaignController extends Controller
     {
         $campaign = Campaign::findOrFail($id);
 
+        // Only a DRAFT or (scheduled) QUEUED campaign may be launched. Without
+        // this guard a replayed/double-submitted POST — or a "launch" on a
+        // RUNNING/PAUSED/CANCELLED/COMPLETED campaign — dispatches a second
+        // CampaignBatchDispatch (a double-send), or relaunches a CANCELLED
+        // campaign and wedges it in RUNNING forever. edit/update/destroy already
+        // guard their statuses; launch() was the gap.
+        abort_unless(
+            in_array($campaign->status, ['DRAFT', 'QUEUED'], true),
+            403,
+            'This campaign cannot be launched from its current status.',
+        );
+
         // Reachability probe at launch — but warn-and-proceed rather than
         // hard-block. Two reasons:
         //   1. The app server's view of its own public URL doesn't always

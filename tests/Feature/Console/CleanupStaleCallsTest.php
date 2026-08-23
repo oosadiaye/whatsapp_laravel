@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Console;
 
 use App\Events\Calling\CallTerminated;
+use App\Jobs\TerminateProviderCall;
 use App\Models\CallLog;
 use App\Models\Contact;
 use App\Models\Conversation;
@@ -13,6 +14,7 @@ use App\Models\WhatsAppInstance;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -24,6 +26,32 @@ class CleanupStaleCallsTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolesAndPermissionsSeeder::class);
+        // The sweeper now dispatches a provider-hangup job; fake it so the sync
+        // queue doesn't fire a real provider HTTP call during these tests.
+        Bus::fake([TerminateProviderCall::class]);
+    }
+
+    public function test_thirty_minute_stale_initiated_marked_missed(): void
+    {
+        // Outbound AT calls sit at INITIATED until a status webhook advances them;
+        // if it never arrives the row must still terminalize (was previously skipped).
+        $call = $this->makeCall(CallLog::STATUS_INITIATED, now()->subMinutes(35));
+
+        $this->artisan('calls:cleanup-stale')->assertSuccessful();
+
+        $this->assertSame(CallLog::STATUS_MISSED, $call->fresh()->status);
+        $this->assertNotNull($call->fresh()->ended_at);
+    }
+
+    public function test_stale_call_terminates_the_provider_leg(): void
+    {
+        // A lost terminate webhook may leave the provider leg live/billing — the
+        // sweeper must ask the provider to hang up, not just mark the row ended.
+        $call = $this->makeCall(CallLog::STATUS_CONNECTED, now()->subMinutes(35));
+
+        $this->artisan('calls:cleanup-stale')->assertSuccessful();
+
+        Bus::assertDispatched(TerminateProviderCall::class, fn ($job) => $job->callLogId === $call->id);
     }
 
     public function test_thirty_minute_stale_ringing_marked_missed(): void

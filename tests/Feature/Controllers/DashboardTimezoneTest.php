@@ -25,12 +25,16 @@ class DashboardTimezoneTest extends TestCase
         $this->travelTo(Carbon::parse('2026-07-16 08:00', 'Africa/Lagos'));
 
         $campaign = Campaign::factory()->create();
-        $contact = Contact::factory()->create();
+        // Two distinct contacts — a campaign has at most one log per contact
+        // (enforced by the message_logs unique index), so reusing one contact for
+        // both rows would (correctly) violate that constraint.
+        $contactToday = Contact::factory()->create();
+        $contactYesterday = Contact::factory()->create();
 
         // 00:30 Lagos today == 23:30 UTC yesterday — must still count as "today".
-        MessageLog::create(['campaign_id' => $campaign->id, 'contact_id' => $contact->id, 'phone' => '2348000000001', 'status' => 'SENT', 'sent_at' => Carbon::parse('2026-07-16 00:30', 'Africa/Lagos')]);
+        MessageLog::create(['campaign_id' => $campaign->id, 'contact_id' => $contactToday->id, 'phone' => '2348000000001', 'status' => 'SENT', 'sent_at' => Carbon::parse('2026-07-16 00:30', 'Africa/Lagos')]);
         // Genuinely yesterday (Lagos) — must NOT count.
-        MessageLog::create(['campaign_id' => $campaign->id, 'contact_id' => $contact->id, 'phone' => '2348000000002', 'status' => 'SENT', 'sent_at' => Carbon::parse('2026-07-15 09:00', 'Africa/Lagos')]);
+        MessageLog::create(['campaign_id' => $campaign->id, 'contact_id' => $contactYesterday->id, 'phone' => '2348000000002', 'status' => 'SENT', 'sent_at' => Carbon::parse('2026-07-15 09:00', 'Africa/Lagos')]);
 
         $messagesToday = $this->actingAs($user)
             ->get(route('dashboard'))
