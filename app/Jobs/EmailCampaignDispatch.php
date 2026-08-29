@@ -60,22 +60,18 @@ class EmailCampaignDispatch implements ShouldQueue
 
         $campaign->refresh();
 
-        $recipients = $service->recipients($campaign);
+        // Cheap "was this ever launched before" probe for the completion logic
+        // below — no need to materialize the logged contact_ids.
+        $hasPriorLogs = EmailLog::where('email_campaign_id', $campaign->id)->exists();
 
-        // Relaunch safety: skip anyone who already has a log for this campaign so
-        // an operator relaunch after a partial/failed run (the recovery path for a
-        // $tries=1 job) doesn't create a second QUEUED log — and a duplicate send —
-        // per already-dispatched recipient. Mirrors CampaignBatchDispatch.
-        $alreadyLogged = EmailLog::query()
-            ->where('email_campaign_id', $campaign->id)
-            ->pluck('contact_id')
-            ->flip();
+        // Relaunch safety: recipients() excludes contacts already logged for this
+        // campaign in SQL (a whereNotIn subquery), so an operator relaunch after a
+        // partial/failed run doesn't create a second QUEUED log — and a duplicate
+        // send — per already-dispatched recipient, without plucking every logged
+        // contact_id into memory. Mirrors the WhatsApp CampaignBatchDispatch path.
+        $recipients = $service->recipients($campaign, excludeLogged: true);
 
-        if ($alreadyLogged->isNotEmpty()) {
-            $recipients = $recipients->reject(fn ($c) => $alreadyLogged->has($c->id))->values();
-        }
-
-        if ($recipients->isEmpty() && $alreadyLogged->isEmpty()) {
+        if ($recipients->isEmpty() && ! $hasPriorLogs) {
             $campaign->update([
                 'total_recipients' => 0,
                 'status' => EmailCampaign::STATUS_SENT,

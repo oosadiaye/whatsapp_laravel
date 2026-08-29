@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Jobs\EmailCampaignDispatch;
 use App\Models\Contact;
 use App\Models\EmailCampaign;
+use App\Models\EmailLog;
 use App\Models\EmailSuppression;
 use App\Support\MailConfig;
 use Illuminate\Support\Collection;
@@ -23,9 +24,13 @@ class EmailCampaignService
      * The addressable audience for a campaign: active contacts in its target
      * groups that have an email, are not suppressed, deduped by email.
      *
+     * $excludeLogged (relaunch): drop contacts that already have an EmailLog for
+     * this campaign in SQL, so the dispatch job doesn't have to pluck every
+     * logged contact_id into memory to reject in PHP.
+     *
      * @return Collection<int, Contact>
      */
-    public function recipients(EmailCampaign $campaign): Collection
+    public function recipients(EmailCampaign $campaign, bool $excludeLogged = false): Collection
     {
         $groupIds = $campaign->contactGroups()->pluck('contact_groups.id');
         if ($groupIds->isEmpty()) {
@@ -45,6 +50,10 @@ class EmailCampaignService
                 DB::raw('LOWER(email)'),
                 EmailSuppression::query()->select('email'),
             )
+            ->when($excludeLogged, fn ($q) => $q->whereNotIn(
+                'contacts.id',
+                EmailLog::query()->where('email_campaign_id', $campaign->id)->select('contact_id'),
+            ))
             ->get()
             // Case-insensitive dedupe still runs in PHP: two rows 'A@x'/'a@x' are
             // distinct contacts but one recipient.

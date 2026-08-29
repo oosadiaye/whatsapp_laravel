@@ -77,7 +77,9 @@ function awaitVoiceClient({ onReady, onTimeout, tickMs = ATTACH_TICK_MS, maxAtte
     let cancelled = false;
     const tick = setInterval(() => {
         if (cancelled) return;
-        if (vc?.isAvailable()) {
+        // Resolve on REGISTERED (ready), not merely constructed (isAvailable): a
+        // call can only be bridged/answered once the softphone has registered.
+        if (vc?.ready) {
             clearInterval(tick);
             if (onReady) onReady();
             return;
@@ -450,6 +452,7 @@ window.outgoingCall = (data) => ({
     keypadOpen: false,
     _statsHandle: null,
     _echoChannel: null,
+    _bridgeTimeout: null,
 
     init() {
         const vc = window.bqVoiceClient;
@@ -458,7 +461,11 @@ window.outgoingCall = (data) => ({
             this.errorMessage = 'Voice client unavailable. Reload the page.';
             return;
         }
-        if (vc.isAvailable()) {
+        // Gate on REGISTERED (ready), not merely constructed (isAvailable): AT can
+        // only bridge the answered leg to a registered client, so attaching before
+        // registration would just wait for a bridge that never comes. If not ready
+        // yet, wait below (awaitVoiceClient also gates on ready).
+        if (vc.ready) {
             this._attachOutgoing();
             return;
         }
@@ -487,9 +494,9 @@ window.outgoingCall = (data) => ({
 
     _attachOutgoing() {
         const vc = window.bqVoiceClient;
-        if (!vc || !vc.isAvailable()) {
-            // Timed out waiting for registration — only now give up and end the
-            // server-side call rather than leaving the customer ringing.
+        if (!vc || !vc.ready) {
+            // Not registered — give up and end the server-side call rather than
+            // leaving the customer ringing into a void.
             this.state = 'failed';
             this.errorMessage = "Voice softphone not registered. Configure Africa's Talking in Settings, then reload.";
             this.safePost(`/calls/${this.callId}/hangup`, {});
@@ -504,6 +511,30 @@ window.outgoingCall = (data) => ({
                 if (e.call_id === this.callId) this.teardown('remote');
             });
         }
+
+        // No-bridge safety net: the customer's phone is ringing server-side. If AT
+        // never bridges the answered leg to us AND no terminate webhook arrives
+        // (e.g. a webhook-secret mismatch means no <Dial> and no status callback),
+        // this banner would hang in 'calling' forever.
+        this._startBridgeTimeout();
+    },
+
+    /** End an outbound call that never bridged within a generous window (ring +
+     *  bridge). Guarded on !connected so it can NEVER drop a live call. */
+    _startBridgeTimeout() {
+        this._clearBridgeTimeout();
+        this._bridgeTimeout = setTimeout(() => {
+            this._bridgeTimeout = null;
+            if (this.state === 'connected') return;
+            this.state = 'failed';
+            this.errorMessage = 'The call could not be connected (no answer, or the softphone was not bridged). Try again.';
+            this.safePost(`/calls/${this.callId}/hangup`, {});
+            try { window.bqVoiceClient?.hangupCall?.(); } catch (_) { /* ignore */ }
+        }, 90000);
+    },
+
+    _clearBridgeTimeout() {
+        if (this._bridgeTimeout) { clearTimeout(this._bridgeTimeout); this._bridgeTimeout = null; }
     },
 
     /**
@@ -511,6 +542,7 @@ window.outgoingCall = (data) => ({
      * banner's DOM is removed. Prevents handler accumulation on re-mounts.
      */
     destroy() {
+        this._clearBridgeTimeout();
         if (this._cancelWait) { this._cancelWait(); this._cancelWait = null; }
         if (this._echoChannel) {
             try { this._echoChannel.stopListening('.call.terminated'); } catch (_) {}
@@ -529,6 +561,7 @@ window.outgoingCall = (data) => ({
         window.bqVoiceClient.answer();
     },
     onAccepted() {
+        this._clearBridgeTimeout(); // bridged — the safety net is no longer needed
         this.state = 'connected';
         this.startDurationTimer();
         this._tryStats();
@@ -539,6 +572,7 @@ window.outgoingCall = (data) => ({
     },
     onHangup() { this.teardown('remote'); },
     onError(err) {
+        this._clearBridgeTimeout();
         // Mic permission denied surfaces as an SDK error on the auto-answer
         // path. Give the agent a retry state instead of a dead-end 'failed'.
         const raw = String(err?.message ?? err?.name ?? err ?? '');
@@ -585,6 +619,7 @@ window.outgoingCall = (data) => ({
     },
 
     teardown(reason) {
+        this._clearBridgeTimeout();
         this.stopDurationTimer();
         window.bqCallRecorder?.stop();  // flush + upload the recording, if any
         const aggregate = this._statsHandle?.stop();
