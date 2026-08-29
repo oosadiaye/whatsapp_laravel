@@ -91,9 +91,12 @@
                     }
                 },
                 // The agent's browser softphone must be registered (window.bqVoiceClient.ready)
-                // BEFORE a call is placed. If it isn't, AT can't bridge the answered call
-                // to the browser and the call drops ("ring then abrupt end"). Surface that
-                // up front instead of letting the agent place a call that will fail.
+                // BEFORE a call is placed. If it isn't, AT can't bridge the answered call to
+                // the browser and the call drops (ring then abrupt end). Surface that up front
+                // instead of letting the agent place a call that will fail.
+                // NB: never put a double-quote character in this x-data — the attribute is
+                // itself double-quoted, so a stray one truncates the whole component and Alpine
+                // then fails to compile it (the keypad and Start Call silently stop working).
                 get voiceReady() {
                     return !!(window.bqVoiceClient && window.bqVoiceClient.ready);
                 },

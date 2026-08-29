@@ -36,6 +36,48 @@ class CallWorkspaceTest extends TestCase
             ->assertSee('Call Workspace');
     }
 
+    public function test_quick_dial_x_data_is_not_truncated_by_a_stray_double_quote(): void
+    {
+        // Regression: the Quick Dial keypad is an inline Alpine `x-data="{ ... }"`
+        // object. Because the attribute is double-quoted, ANY double-quote inside
+        // the expression (even in a // comment) ends the attribute early — the
+        // browser then hands Alpine a truncated, unparseable object, so every
+        // press()/number/Start Call binding throws ReferenceError and the dialer
+        // silently stops working ("the button and numbers are not dialing").
+        $admin = $this->makeUser('admin');
+
+        $html = $this->actingAs($admin)
+            ->get(route('calls.workspace'))
+            ->assertOk()
+            ->getContent();
+
+        $marker = strpos($html, 'open: false');
+        $this->assertNotFalse($marker, 'Quick Dial component (canDial) did not render on the workspace.');
+
+        $attrStart = strrpos(substr($html, 0, $marker), 'x-data="');
+        $this->assertNotFalse($attrStart);
+        $valueStart = $attrStart + strlen('x-data="');
+        // An HTML double-quoted attribute value ends at its FIRST double quote —
+        // this is exactly what the browser's parser sees.
+        $value = substr($html, $valueStart, strpos($html, '"', $valueStart) - $valueStart);
+
+        $this->assertStringContainsString(
+            'placeCall',
+            $value,
+            'Quick Dial x-data is truncated before placeCall() — a stray double-quote closed the attribute early.'
+        );
+
+        $depth = 0;
+        foreach (str_split($value) as $ch) {
+            if ($ch === '{') {
+                $depth++;
+            } elseif ($ch === '}') {
+                $depth--;
+            }
+        }
+        $this->assertSame(0, $depth, 'Quick Dial x-data has unbalanced braces — a stray double-quote truncated the attribute.');
+    }
+
     public function test_agent_can_log_a_note_on_a_call_they_are_assigned(): void
     {
         $agent = $this->makeUser('agent');
