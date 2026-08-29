@@ -373,14 +373,19 @@ class AfricasTalkingWebhookController extends Controller
         $sessionId = $event['sessionId'] ?? null;
         $call = $sessionId ? CallLog::where('provider_session_id', $sessionId)->first() : null;
 
-        Voicemail::create([
-            'call_log_id' => $call?->id,
-            'conversation_id' => $call?->conversation_id,
-            'contact_id' => $call?->contact_id,
-            'from_phone' => $event['callerNumber'] ?? $call?->from_phone,
-            'recording_url' => $event['recordingUrl'],
-            'duration_seconds' => isset($event['durationInSeconds']) ? (int) $event['durationInSeconds'] : null,
-        ]);
+        // Dedup on recording_url: AT delivers callbacks at-least-once, so an
+        // unconditional create() would double-count the voicemail inbox + unheard
+        // badge and make the agent listen to the same message twice on a retry.
+        Voicemail::firstOrCreate(
+            ['recording_url' => $event['recordingUrl']],
+            [
+                'call_log_id' => $call?->id,
+                'conversation_id' => $call?->conversation_id,
+                'contact_id' => $call?->contact_id,
+                'from_phone' => $event['callerNumber'] ?? $call?->from_phone,
+                'duration_seconds' => isset($event['durationInSeconds']) ? (int) $event['durationInSeconds'] : null,
+            ],
+        );
     }
 
     /**

@@ -232,6 +232,19 @@ class ContactImportServiceTest extends TestCase
      *
      * @param  array<int, array<int, string>>  $rows
      */
+    public function test_normalize_prepends_country_code_to_a_bare_local_number(): void
+    {
+        // M8: a national subscriber number pasted without the leading 0 OR a
+        // country code (common in NG lists) must get the country code prepended,
+        // not be stored bare — otherwise every send to it fails silently.
+        $service = app(ContactImportService::class);
+
+        $this->assertSame('2348012345678', $service->normalizePhone('8012345678', '234'), 'bare 10-digit local → +CC');
+        $this->assertSame('2348012345678', $service->normalizePhone('08012345678', '234'), 'leading-0 local still works');
+        $this->assertSame('2348012345678', $service->normalizePhone('+2348012345678', '234'), 'already-E.164 unchanged');
+        $this->assertNull($service->normalizePhone('not-a-phone', '234'));
+    }
+
     private function writeXlsx(string $absolutePath, array $rows): void
     {
         @mkdir(dirname($absolutePath), 0777, true);

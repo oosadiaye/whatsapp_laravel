@@ -411,6 +411,24 @@ class AfricasTalkingWebhookTest extends TestCase
         $response->assertSee('callerId="+'.$call->to_phone.'"', false);
     }
 
+    public function test_duplicate_recording_url_callback_does_not_create_a_second_voicemail(): void
+    {
+        // M2: AT delivers callbacks at-least-once; a retried recordingUrl callback
+        // must not double-count the voicemail inbox.
+        $payload = [
+            'sessionId' => 'sess_vm_dup',
+            'direction' => 'Inbound',
+            'callerNumber' => '+2348044444444',
+            'recordingUrl' => 'https://voice.at/recordings/dup.mp3',
+            'durationInSeconds' => '15',
+        ];
+
+        $this->postWebhook($payload)->assertOk();
+        $this->postWebhook($payload)->assertOk(); // AT retry
+
+        $this->assertSame(1, \App\Models\Voicemail::where('recording_url', $payload['recordingUrl'])->count());
+    }
+
     private function postWebhook(array $payload)
     {
         // AT posts form-encoded callbacks to the URL carrying the secret path

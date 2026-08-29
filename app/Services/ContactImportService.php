@@ -177,14 +177,20 @@ class ContactImportService
             return null;
         }
 
-        if (str_starts_with($phone, '0') && strlen($phone) === 11) {
+        if (str_starts_with($phone, '0')) {
+            // Leading-0 local number: strip the 0 and prepend the country code.
+            // Only the correct national length (11 digits incl. the 0) is valid.
+            if (strlen($phone) !== 11) {
+                return null;
+            }
             $phone = $defaultCountryCode.substr($phone, 1);
-        } elseif (! str_starts_with($phone, '1') && ! str_starts_with($phone, '2') &&
-                  ! str_starts_with($phone, '3') && ! str_starts_with($phone, '4') &&
-                  ! str_starts_with($phone, '5') && ! str_starts_with($phone, '6') &&
-                  ! str_starts_with($phone, '7') && ! str_starts_with($phone, '8') &&
-                  ! str_starts_with($phone, '9')) {
-            return null;
+        } elseif (strlen($phone) === 10 && ! str_starts_with($phone, $defaultCountryCode)) {
+            // Bare national subscriber number pasted without the leading 0 OR a
+            // country code — e.g. an NG list as "8012345678". Prepend the country
+            // code so the stored value is full E.164. Without this the send side
+            // (which only strips non-digits and assumes E.164) ships a number with
+            // no country prefix and every such message fails silently.
+            $phone = $defaultCountryCode.$phone;
         }
 
         if (! preg_match('/^[1-9]\d{7,14}$/', $phone)) {

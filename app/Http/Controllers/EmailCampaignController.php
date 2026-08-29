@@ -85,7 +85,7 @@ class EmailCampaignController extends Controller
 
         return view('email-campaigns.show', [
             'campaign' => $campaign,
-            'recipientCount' => $this->service->recipients($campaign)->count(),
+            'recipientCount' => $this->service->recipientCount($campaign),
         ]);
     }
 

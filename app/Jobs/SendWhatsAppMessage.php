@@ -49,6 +49,14 @@ class SendWhatsAppMessage implements ShouldQueue
 
     public int $backoff = 30;
 
+    /**
+     * How many times this send has re-queued itself waiting for a PAUSED campaign
+     * to resume. Used to back off the re-check interval (2→30 min) so a
+     * long-paused campaign doesn't cycle every pending send job through the queue
+     * every 2 minutes indefinitely.
+     */
+    public int $pauseRequeues = 0;
+
     public function __construct(
         public MessageLog $log,
         public Campaign $campaign,
@@ -73,9 +81,15 @@ class SendWhatsAppMessage implements ShouldQueue
         $this->campaign->refresh();
 
         if ($this->campaign->status === 'PAUSED') {
-            self::dispatch($this->log, $this->campaign, $this->contact)
-                ->delay(now()->addMinutes(2))
-                ->onQueue('messages');
+            // Re-check later with an exponential backoff (2→30 min ceiling), not a
+            // flat 2-min loop, so a long-paused campaign doesn't churn every
+            // pending send job through the queue every 2 minutes forever. A resume
+            // is picked up on the next re-check; no sends are lost.
+            $delayMinutes = min(30, 2 ** min($this->pauseRequeues + 1, 5));
+
+            $next = new self($this->log, $this->campaign, $this->contact);
+            $next->pauseRequeues = $this->pauseRequeues + 1;
+            dispatch($next)->delay(now()->addMinutes($delayMinutes))->onQueue('messages');
 
             return;
         }

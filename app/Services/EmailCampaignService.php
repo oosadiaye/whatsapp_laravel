@@ -53,6 +53,30 @@ class EmailCampaignService
     }
 
     /**
+     * The recipient COUNT without materializing every Contact model — used by the
+     * campaign show page, which only needs the number (recipients() loads the full
+     * audience into memory to dedupe in PHP, which is wasteful for a plain view).
+     * A case-insensitive SQL COUNT(DISTINCT LOWER(email)); it may very rarely
+     * differ from recipients()->count() on odd Unicode-fold cases, which is
+     * immaterial for a displayed estimate.
+     */
+    public function recipientCount(EmailCampaign $campaign): int
+    {
+        $groupIds = $campaign->contactGroups()->pluck('contact_groups.id');
+        if ($groupIds->isEmpty()) {
+            return 0;
+        }
+
+        return (int) Contact::query()
+            ->whereHas('groups', fn ($q) => $q->whereIn('contact_groups.id', $groupIds))
+            ->where('is_active', true)
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->whereNotIn(DB::raw('LOWER(email)'), EmailSuppression::query()->select('email'))
+            ->count(DB::raw('DISTINCT LOWER(email)'));
+    }
+
+    /**
      * Queue a campaign for immediate sending.
      */
     public function launch(EmailCampaign $campaign): void

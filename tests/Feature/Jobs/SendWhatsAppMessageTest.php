@@ -201,6 +201,25 @@ class SendWhatsAppMessageTest extends TestCase
         $this->assertSame(0, $campaign->fresh()->failed_count);
     }
 
+    public function test_a_paused_campaign_requeues_the_send_without_sending(): void
+    {
+        // A paused campaign re-queues the send for a later re-check (with a
+        // backoff) and does NOT send. Queue::fake() stops the re-queue running
+        // inline under the sync driver (which would otherwise recurse).
+        \Illuminate\Support\Facades\Queue::fake();
+        Http::fake();
+
+        $user = User::factory()->create();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $user->id]);
+        [$campaign, $contact, $log] = $this->setupSend($user, $instance, ['status' => 'PAUSED']);
+
+        (new SendWhatsAppMessage($log, $campaign, $contact))->handle(app(\App\Services\WhatsAppMessenger::class));
+
+        \Illuminate\Support\Facades\Queue::assertPushed(SendWhatsAppMessage::class);
+        Http::assertNothingSent();
+        $this->assertSame('PENDING', $log->fresh()->status, 'the send stays pending for resume');
+    }
+
     /**
      * @return array{0: Campaign, 1: Contact, 2: MessageLog}
      */

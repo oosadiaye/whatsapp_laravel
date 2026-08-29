@@ -119,11 +119,16 @@ class InboundMessageProcessor
             'received_at' => $receivedAt,
         ]);
 
-        // Update denormalized inbox indicators.
-        $conversation->update([
+        // Update denormalized inbox indicators. unread_count uses an atomic SQL
+        // increment (not a read-modify-write): inbound webhooks are processed
+        // synchronously in the request, so two concurrent inbound messages for one
+        // conversation could otherwise both read the same value and lose a count.
+        // increment() emits `unread_count = unread_count + 1` in one UPDATE along
+        // with the extra columns (a raw expression in update() would be flattened
+        // to 0 by the integer cast).
+        $conversation->increment('unread_count', 1, [
             'last_message_at' => $receivedAt,
             'last_inbound_at' => $receivedAt,
-            'unread_count' => $conversation->unread_count + 1,
         ]);
     }
 

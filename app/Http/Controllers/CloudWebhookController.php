@@ -219,9 +219,26 @@ class CloudWebhookController extends Controller
         match ($mappedStatus) {
             'DELIVERED' => ! $alreadyDelivered && $campaign->increment('delivered_count'),
             'READ' => ! $alreadyRead && $campaign->increment('read_count'),
-            'FAILED' => ! $alreadyFailed && $campaign->increment('failed_count'),
+            'FAILED' => $this->recordFailedTransition($campaign, $alreadyFailed),
             default => null,
         };
+    }
+
+    /**
+     * Record a message that failed AFTER Meta accepted it (a `failed` status
+     * webhook only arrives for a message that was already SENT, so sent_count was
+     * incremented at send time). Move it out of sent_count so the same message
+     * isn't counted in both sent and failed — which skewed delivery/read rates.
+     * The sent_count decrement is guarded so it can't go negative.
+     */
+    private function recordFailedTransition(?Campaign $campaign, bool $alreadyFailed): void
+    {
+        if ($campaign === null || $alreadyFailed) {
+            return;
+        }
+
+        $campaign->increment('failed_count');
+        Campaign::whereKey($campaign->id)->where('sent_count', '>', 0)->decrement('sent_count');
     }
 
     /**

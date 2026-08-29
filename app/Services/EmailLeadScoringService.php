@@ -56,16 +56,21 @@ class EmailLeadScoringService
 
     public function scoreAll(): int
     {
-        $contacts = Contact::query()
+        $count = 0;
+
+        // Chunk rather than ->get(): this runs hourly over a bulk-marketing
+        // product's core contacts table, so loading every engaged contact (plus
+        // its recipient rows) at once would exhaust the worker's memory at scale.
+        // Scoring updates non-key columns, so the id-keyed chunk set is stable.
+        Contact::query()
             ->whereHas('emailSequenceRecipients')
             ->with('emailSequenceRecipients')
-            ->get();
-
-        $count = 0;
-        foreach ($contacts as $contact) {
-            $this->scoreContact($contact);
-            $count++;
-        }
+            ->chunkById(500, function ($contacts) use (&$count): void {
+                foreach ($contacts as $contact) {
+                    $this->scoreContact($contact);
+                    $count++;
+                }
+            });
 
         if ($count > 0) {
             Log::info("Lead scoring: updated scores for {$count} contact(s).");

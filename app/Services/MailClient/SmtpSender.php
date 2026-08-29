@@ -47,9 +47,11 @@ class SmtpSender implements MailSender
         ];
 
         // "none" means plaintext on the wire — disable opportunistic STARTTLS so
-        // Symfony doesn't silently upgrade a connection the operator asked to
-        // keep unencrypted.
-        if ($encryption === 'none') {
+        // Symfony doesn't silently upgrade a connection the operator asked to keep
+        // unencrypted. The account controller persists the "No encryption" choice
+        // as an EMPTY STRING (not the literal 'none'), so both must map to
+        // plaintext here — otherwise a real saved account never disables auto_tls.
+        if (in_array($encryption, ['none', ''], true)) {
             $mailerConfig['auto_tls'] = false;
         }
 

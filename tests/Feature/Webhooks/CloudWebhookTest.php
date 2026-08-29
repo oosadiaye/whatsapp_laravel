@@ -139,6 +139,24 @@ class CloudWebhookTest extends TestCase
         $this->assertSame(1, $log->campaign->fresh()->failed_count);
     }
 
+    public function test_a_failed_status_moves_a_sent_message_out_of_sent_count(): void
+    {
+        // A message Meta accepted (already counted in sent_count at send time)
+        // that later fails must not be counted in BOTH sent and failed —
+        // sent_count is reconciled down so delivery/read rates stay correct.
+        [$instance, $log] = $this->seedInstanceWithLog('SECRET');
+        $log->campaign->update(['sent_count' => 1]); // it was accepted/sent
+
+        $payload = $this->statusPayload($log->whatsapp_message_id, 'failed', errors: [
+            ['code' => 131_026, 'title' => 'x', 'message' => 'not on WhatsApp'],
+        ]);
+        $this->postWithSignature($instance, $payload, 'SECRET')->assertOk();
+
+        $campaign = $log->campaign->fresh();
+        $this->assertSame(1, $campaign->failed_count);
+        $this->assertSame(0, $campaign->sent_count, 'the failed message left sent_count');
+    }
+
     public function test_unknown_message_id_is_silently_dropped(): void
     {
         $instance = WhatsAppInstance::factory()->create(['app_secret' => 'S']);

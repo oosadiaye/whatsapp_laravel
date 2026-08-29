@@ -83,7 +83,10 @@ class SettingsController extends Controller
             // is encrypted at rest (see ENCRYPTED_SETTING_KEYS) and follows the
             // "leave blank to keep existing" rule via the skip-empty loop below.
             'mail_mailer' => ['nullable', 'in:smtp,log'],
-            'mail_host' => ['nullable', 'string', 'max:255'],
+            // Parity with the per-employee mailbox: block loopback/link-local/RFC1918
+            // hosts so a settings.edit user can't point campaign SMTP at an internal
+            // address (SSRF). SafeMailHost skips DNS in the testing env.
+            'mail_host' => ['nullable', 'string', 'max:255', new \App\Rules\SafeMailHost],
             'mail_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'mail_encryption' => ['nullable', 'in:tls,ssl,starttls,none'],
             'mail_username' => ['nullable', 'string', 'max:255'],

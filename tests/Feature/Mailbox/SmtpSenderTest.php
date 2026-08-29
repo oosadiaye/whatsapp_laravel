@@ -50,13 +50,17 @@ class SmtpSenderTest extends TestCase
         return $account;
     }
 
-    public function test_none_maps_to_plaintext_with_auto_tls_disabled(): void
+    public function test_no_encryption_maps_to_plaintext_with_auto_tls_disabled(): void
     {
-        $account = $this->sendWith('none');
-
-        $config = config('mail.mailers.mailbox_'.$account->id);
-        $this->assertSame('smtp', $config['scheme']);   // not implicit smtps
-        $this->assertFalse($config['auto_tls']);        // no opportunistic upgrade
+        // The account controller persists "No encryption" as an EMPTY STRING, so
+        // the real stored value is '' — not the literal 'none' the old test used
+        // (which the app never stores). Both must disable opportunistic STARTTLS.
+        foreach (['', 'none'] as $enc) {
+            $account = $this->sendWith($enc);
+            $config = config('mail.mailers.mailbox_'.$account->id);
+            $this->assertSame('smtp', $config['scheme'], "scheme for '{$enc}'");   // not implicit smtps
+            $this->assertFalse($config['auto_tls'], "auto_tls disabled for '{$enc}'"); // no opportunistic upgrade
+        }
     }
 
     public function test_tls_maps_to_smtp_scheme(): void

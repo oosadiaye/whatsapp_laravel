@@ -96,14 +96,23 @@ class CallController extends Controller
             ->groupBy('status')
             ->pluck('aggregate', 'status');
 
+        // These two tiles compute an average in PHP (a timestamp diff, and a value
+        // buried in quality_metrics JSON), so they must hydrate rows rather than
+        // use a SQL aggregate like the counts above. Cap the hydration so a very
+        // high-volume day can't blow up page memory — on such a day the average
+        // becomes an estimate over a large sample, which is fine for a dashboard.
+        $tileSampleCap = 10000;
+
         $timeToAnswer = $todayScoped()
             ->whereNotNull('connected_at')
             ->whereNotNull('started_at')
+            ->limit($tileSampleCap)
             ->get(['started_at', 'connected_at'])
             ->map(fn (CallLog $c) => max(0, $c->connected_at->getTimestamp() - $c->started_at->getTimestamp()));
 
         $mos = $todayScoped()
             ->whereNotNull('quality_metrics')
+            ->limit($tileSampleCap)
             ->get(['quality_metrics'])
             ->map(fn (CallLog $c) => $c->quality_metrics['mos'] ?? null)
             ->filter();
@@ -183,7 +192,11 @@ class CallController extends Controller
         // Dial pad (calls.dial): the contact list is no longer serialized into
         // the page. It is fetched lazily by the Quick Dial modal from
         // route('calls.contacts') on first open (see resources/js + workspace.blade).
-        $canDial = (bool) $user->can('calls.dial');
+        // Require BOTH calls.dial (see the feature) AND conversations.call (the
+        // gate on the calls.outbound endpoint Quick Dial posts to). Gating on
+        // calls.dial alone rendered the pad for a role that then 403'd on every
+        // Start Call — a silent dead-end.
+        $canDial = (bool) $user->can('calls.dial') && (bool) $user->can('conversations.call');
 
         // Wrap-up prompt: only for a call THIS user just handled — one they placed
         // or one on a conversation assigned to them — and only recently. Using the
@@ -485,6 +498,13 @@ class CallController extends Controller
         $sessionId = $request->input('session_id');
         $sdp = $request->input('sdp');
 
+        // Require a real, prior claim. An empty session_id must be rejected up
+        // front — otherwise an UNCLAIMED call (answered_by_session_id === null) +
+        // a missing session_id makes the check below `null !== null` (false) and
+        // bypasses claim()'s first-tab-wins guarantee.
+        if (! is_string($sessionId) || $sessionId === '') {
+            return response()->json(['error' => 'session_id required'], 422);
+        }
         if ($call->answered_by_session_id !== $sessionId) {
             return response()->json(['error' => 'must claim before answering, or different session'], 409);
         }

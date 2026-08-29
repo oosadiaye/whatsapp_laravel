@@ -45,14 +45,19 @@
                             <div class="flex flex-wrap gap-2">
                                 @foreach($savedTpls as $st)
                                     <button type="button"
-                                            @click="const ta = document.getElementById('body_html'); ta.value = document.getElementById('saved-tpl-{{ $st->id }}').innerHTML.trim(); ta.dispatchEvent(new Event('input', { bubbles: true }));"
+                                            @click="const ta = document.getElementById('body_html'); ta.value = JSON.parse(document.getElementById('saved-tpl-{{ $st->id }}').textContent).trim(); ta.dispatchEvent(new Event('input', { bubbles: true }));"
                                             class="inline-flex items-center rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-400">
                                         {{ $st->name }}
                                     </button>
                                 @endforeach
                             </div>
                             @foreach($savedTpls as $st)
-                                <template id="saved-tpl-{{ $st->id }}">{!! $st->body_html !!}</template>
+                                {{-- Stash the user-authored template HTML as inert JSON, not a parseable
+                                     <template> — a </template> in the body could otherwise break out and
+                                     inject live DOM (overlay/phishing) into a colleague's compose form.
+                                     JSON_HEX_TAG prevents any </script> break-out; the click handler
+                                     JSON.parses it straight into the textarea value (never rendered). --}}
+                                <script type="application/json" id="saved-tpl-{{ $st->id }}">@json($st->body_html, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)</script>
                             @endforeach
                         </div>
                     @endif
