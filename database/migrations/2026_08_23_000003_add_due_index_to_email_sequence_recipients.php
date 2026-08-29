@@ -16,17 +16,23 @@ use Illuminate\Support\Facades\Schema;
  */
 return new class extends Migration
 {
+    // MySQL caps identifier names at 64 chars; the auto-generated name
+    // (email_sequence_recipients_email_sequence_id_status_next_send_at_index, 69)
+    // overflows it, so name the index explicitly. SQLite has no such cap, which is
+    // why the default name passed the test DB but failed on prod MySQL.
+    private const INDEX = 'esr_seq_status_send_idx';
+
     public function up(): void
     {
         Schema::table('email_sequence_recipients', function (Blueprint $table) {
-            $table->index(['email_sequence_id', 'status', 'next_send_at']);
+            $table->index(['email_sequence_id', 'status', 'next_send_at'], self::INDEX);
         });
     }
 
     public function down(): void
     {
         Schema::table('email_sequence_recipients', function (Blueprint $table) {
-            $table->dropIndex(['email_sequence_id', 'status', 'next_send_at']);
+            $table->dropIndex(self::INDEX);
         });
     }
 };
