@@ -738,13 +738,19 @@ class CallController extends Controller
      * returns, prompting AT to re-request control — verify that re-request
      * behaviour on a live account before enabling.
      */
-    public function transfer(Request $request, CallLog $call): JsonResponse
+    public function transfer(Request $request, CallLog $call, ContactImportService $normalizer): JsonResponse
     {
         $this->authorizeCallAccess($call);
 
         if (! config('voice.transfer_enabled')) {
             return response()->json(['error' => 'Call transfer is disabled.'], 403);
         }
+
+        // Transferring bridges a live call — it is a calling action. Require the
+        // calling permission explicitly (the route sits under conversations.reply,
+        // so the gate alone doesn't enforce it), independent of the seeded roles
+        // that happen to pair the two today.
+        abort_unless((bool) $request->user()->can('conversations.call'), 403);
 
         $validated = $request->validate([
             'target_type' => ['required', 'in:agent,number'],
@@ -767,8 +773,29 @@ class CallController extends Controller
             $call->conversation?->update(['assigned_to_user_id' => $targetId]);
             CallRinging::dispatch($call->fresh());
         } else {
+            // Dialing an arbitrary PSTN number — apply the SAME safety controls as
+            // placeOutbound(), which this path previously bypassed entirely: the
+            // operational kill-switch, the per-user outbound rate limit, and E.164
+            // normalization (raw string|max:32 was persisted and dialed verbatim).
+            if (! config('voice.outbound_calls_enabled', true)) {
+                return response()->json(['error' => 'Outbound calling is temporarily disabled.'], 503);
+            }
+
+            $key = 'outbound-call:'.$request->user()->id;
+            if (RateLimiter::tooManyAttempts($key, 10)) {
+                return response()->json(['error' => 'rate_limit'], 429);
+            }
+            RateLimiter::hit($key, 60);
+
+            // normalizePhone validates + canonicalizes to digits-only; the AT <Dial>
+            // target must be +E.164 (see the webhook dial), so re-prepend '+'.
+            $digits = $normalizer->normalizePhone((string) $validated['target_number'], Setting::get('default_country_code'));
+            if ($digits === null || $digits === '') {
+                return response()->json(['error' => 'Invalid phone number.'], 422);
+            }
+
             $call->update([
-                'transfer_target' => $validated['target_number'],
+                'transfer_target' => '+'.$digits,
                 'transfer_type' => 'blind',
                 'transferred_at' => now(),
             ]);

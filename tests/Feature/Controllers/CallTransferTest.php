@@ -97,6 +97,84 @@ class CallTransferTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_transfer_to_number_is_blocked_by_the_outbound_kill_switch(): void
+    {
+        // #7: the number-transfer path dials a live PSTN number, so it must honour
+        // the same kill-switch placeOutbound does — previously it bypassed it.
+        config(['voice.outbound_calls_enabled' => false]);
+        $from = $this->makeAgent();
+        $call = $this->callAssignedTo($from);
+
+        $this->actingAs($from)
+            ->postJson(route('calls.transfer', $call), ['target_type' => 'number', 'target_number' => '+2348099998888'])
+            ->assertStatus(503);
+
+        $this->assertNull($call->fresh()->transfer_target, 'no target recorded when outbound is disabled');
+    }
+
+    public function test_transfer_to_number_rejects_an_invalid_number(): void
+    {
+        // Previously target_number was stored raw (string|max:32) and dialed verbatim.
+        $from = $this->makeAgent();
+        $call = $this->callAssignedTo($from);
+
+        $this->actingAs($from)
+            ->postJson(route('calls.transfer', $call), ['target_type' => 'number', 'target_number' => '12'])
+            ->assertStatus(422);
+    }
+
+    public function test_transfer_to_number_normalizes_to_e164(): void
+    {
+        $from = $this->makeAgent();
+        $call = $this->callAssignedTo($from);
+
+        $this->actingAs($from)
+            ->postJson(route('calls.transfer', $call), ['target_type' => 'number', 'target_number' => '08099998888'])
+            ->assertOk();
+
+        // 0-led national (11 digits) → +234 + subscriber, dialable +E.164.
+        $this->assertSame('+2348099998888', $call->fresh()->transfer_target);
+    }
+
+    public function test_transfer_to_number_is_rate_limited_per_user(): void
+    {
+        $from = $this->makeAgent();
+        $call = $this->callAssignedTo($from);
+
+        // Exhaust the shared 10/min outbound budget for this user.
+        for ($i = 0; $i < 10; $i++) {
+            \Illuminate\Support\Facades\RateLimiter::hit('outbound-call:'.$from->id, 60);
+        }
+
+        $this->actingAs($from)
+            ->postJson(route('calls.transfer', $call), ['target_type' => 'number', 'target_number' => '+2348099998888'])
+            ->assertStatus(429);
+    }
+
+    public function test_a_completed_blind_transfer_ends_the_call_instead_of_looping(): void
+    {
+        // #7 (voice): once a transfer's <Dial> was issued (transfer_target cleared,
+        // transferred_at stamped), a re-request must Reject — not redial the
+        // reassigned target (inbound loop) or bridge back to the transferring agent
+        // (outbound).
+        $from = $this->makeAgent();
+        $call = $this->callAssignedTo($from);
+        $call->update(['transferred_at' => now(), 'transfer_target' => null]);
+
+        $response = $this->post(
+            route('webhook.africastalking.voice', ['secret' => 'test-secret']),
+            [
+                'isActive' => '1',
+                'sessionId' => $call->provider_session_id,
+                'direction' => 'Inbound',
+                'callerNumber' => '+2348011112222',
+            ],
+        );
+
+        $response->assertOk();
+        $response->assertSee('<Reject/>', false);
+    }
+
     public function test_pending_transfer_dials_the_target_on_next_call_control(): void
     {
         $from = $this->makeAgent();

@@ -179,6 +179,62 @@ class AfricasTalkingWebhookTest extends TestCase
         ])->assertOk();
     }
 
+    public function test_no_queue_entry_is_created_when_an_agent_is_assigned(): void
+    {
+        // #8: with queue_enabled on, a call that gets an agent assigned is dialed to
+        // that agent and never enters AT's queue. Creating a WAITING CallQueueEntry
+        // for it would show a phantom "waiting" caller and inflate real callers'
+        // positions on the queue dashboard.
+        config(['voice.queue_enabled' => true]);
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
+        $admin->assignRole(User::ROLE_ADMIN);
+        WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+
+        $agent = User::factory()->create(['role' => User::ROLE_AGENT, 'is_active' => true, 'last_seen_at' => now()]);
+        $agent->assignRole(User::ROLE_AGENT);
+
+        $this->postWebhook([
+            'sessionId' => 'sess_q_assigned',
+            'status' => 'Ringing',
+            'direction' => 'Inbound',
+            'callerNumber' => '+2348022222222',
+            'destinationNumber' => '+2348100000000',
+        ])->assertOk();
+
+        $call = CallLog::where('provider_session_id', 'sess_q_assigned')->first();
+        $this->assertNotNull($call->conversation->assigned_to_user_id, 'an available agent was assigned');
+        $this->assertSame(0, \App\Models\CallQueueEntry::count(), 'an assigned call must not create a queue entry');
+    }
+
+    public function test_queue_entry_is_created_when_no_agent_is_available(): void
+    {
+        // Complement to the above: with no online agent, the call really does fall
+        // through to the queue, so a WAITING entry IS expected.
+        config(['voice.queue_enabled' => true]);
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
+        $admin->assignRole(User::ROLE_ADMIN);
+        WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+        // No ONLINE agent → round-robin returns null → assignment stays null.
+
+        $this->postWebhook([
+            'sessionId' => 'sess_q_waiting',
+            'status' => 'Ringing',
+            'direction' => 'Inbound',
+            'callerNumber' => '+2348033333333',
+            'destinationNumber' => '+2348100000000',
+        ])->assertOk();
+
+        $call = CallLog::where('provider_session_id', 'sess_q_waiting')->first();
+        $this->assertNull($call->conversation->assigned_to_user_id, 'no agent available to assign');
+        $this->assertSame(
+            1,
+            \App\Models\CallQueueEntry::where('status', \App\Models\CallQueueEntry::STATUS_WAITING)->count(),
+            'an unassigned call should be enqueued',
+        );
+    }
+
     public function test_completed_event_broadcasts_call_terminated(): void
     {
         Event::fake([CallTerminated::class]);

@@ -255,7 +255,12 @@ class AfricasTalkingWebhookController extends Controller
         $call->appendRawEvent('inbound_first', $event);
         $call->save();
 
-        if ($created && config('voice.queue_enabled')) {
+        // Only enqueue when the call will ACTUALLY fall through to <Enqueue> — i.e.
+        // no agent was assigned above. If an agent was found, CallFlowRouter dials
+        // that agent directly and the call never enters AT's queue; creating a
+        // WAITING CallQueueEntry for it would show a phantom "waiting" caller on the
+        // queue dashboard and inflate every genuinely-queued caller's position.
+        if ($created && config('voice.queue_enabled') && $conversation->assigned_to_user_id === null) {
             // Serialise the read-then-write position calc so two inbound calls
             // webhooked concurrently don't both read N and both claim position N+1
             // (M5). The lock holds the WAITING set for the duration of the insert.
@@ -425,6 +430,18 @@ class AfricasTalkingWebhookController extends Controller
             return VoiceXml::make()
                 ->dial($target, ['callerId' => $this->normalizeCallerId($event['callerNumber'] ?? $pending->from_phone)])
                 ->toResponse();
+        }
+
+        // A blind transfer whose <Dial> was already issued has transferred_at set
+        // and transfer_target cleared. AT re-requesting control now means the
+        // transfer target didn't answer / hung up. Do NOT fall through to
+        // entryXml()/the outbound-bridge below — for an inbound transfer that would
+        // redial the (already-reassigned) target in a loop, and for an outbound one
+        // it would bridge the customer back to the agent who transferred them away.
+        // End the call instead.
+        $transferred = $this->lookupCall($sessionId);
+        if ($transferred !== null && $transferred->transferred_at !== null && $transferred->transfer_target === null) {
+            return $this->xmlResponse('<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>');
         }
 
         if ($direction === 'inbound') {
