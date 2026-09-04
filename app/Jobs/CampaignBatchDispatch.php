@@ -83,19 +83,51 @@ class CampaignBatchDispatch implements ShouldQueue
         $intervalMs = (60 / $this->campaign->rate_per_minute) * 1000;
         $delay = 0.0;
 
-        // Fan out only contacts that don't ALREADY have a log for this campaign.
-        // message_logs has no unique (campaign_id, contact_id) constraint, so
-        // without this an operator relaunch after a partial failure (the recovery
-        // path failed()/$tries=1 recommends) would insert a second PENDING log
-        // per already-dispatched contact and double-send.
+        // Step 1 — INSERT (no dispatch): create a PENDING log for every contact
+        // that doesn't already have one for this campaign. The unique
+        // (campaign_id, contact_id) index means a relaunch never double-inserts.
         $audience()
             ->whereNotIn('id', function ($q) {
                 $q->select('contact_id')
                     ->from('message_logs')
                     ->where('campaign_id', $this->campaign->id);
             })
-            ->chunkById(500, function ($contacts) use (&$delay, $intervalMs): void {
-                $this->fanOutChunk($contacts, $delay, $intervalMs);
+            ->chunkById(500, function ($contacts): void {
+                $this->insertPendingLogs($contacts);
+            });
+
+        // Step 2 — DISPATCH: fan a paced send out for EVERY still-PENDING log of
+        // this campaign, not just the rows we inserted above. This closes the
+        // silent-loss gap: previously insert+dispatch were interleaved per chunk,
+        // so a crash/restart/OOM mid-fan-out left contacts with a PENDING log but
+        // no send job — and the relaunch's "skip already-logged contacts" dedupe
+        // then excluded them forever. Driving all PENDING logs means a relaunch
+        // re-drives exactly those orphans. It cannot double-send: SendWhatsAppMessage
+        // refreshes its log and bails when it is no longer PENDING (handle()), so a
+        // second dispatch for a log that already has an in-flight/finished job is a
+        // no-op.
+        MessageLog::query()
+            ->where('campaign_id', $this->campaign->id)
+            ->where('status', 'PENDING')
+            ->with('contact')
+            ->chunkById(500, function ($logs) use (&$delay, $intervalMs): void {
+                foreach ($logs as $log) {
+                    $contact = $log->contact;
+                    if ($contact === null) {
+                        // Contact soft-deleted since enrolment — never message it.
+                        continue;
+                    }
+
+                    $jitter = rand(
+                        (int) ($this->campaign->delay_min * 1000),
+                        (int) ($this->campaign->delay_max * 1000),
+                    );
+                    $delay += $intervalMs + $jitter;
+
+                    SendWhatsAppMessage::dispatch($log, $this->campaign, $contact)
+                        ->delay(now()->addMilliseconds((int) $delay))
+                        ->onQueue('messages');
+                }
             });
 
         // total_contacts = the ACTUAL number of logs for this campaign — the
@@ -123,13 +155,13 @@ class CampaignBatchDispatch implements ShouldQueue
 
     /**
      * Bulk-insert the PENDING logs for one chunk in a single statement (instead
-     * of one INSERT per contact), then dispatch a spaced send per contact. The
-     * running $delay accumulator is threaded by reference so pacing is
-     * continuous across chunks.
+     * of one INSERT per contact). Dispatch is intentionally decoupled — see the
+     * two-step comment in handle() — so a crash between insert and dispatch is
+     * recoverable by a relaunch rather than silently dropping recipients.
      *
      * @param  Collection<int, Contact>  $contacts
      */
-    private function fanOutChunk($contacts, float &$delay, float $intervalMs): void
+    private function insertPendingLogs($contacts): void
     {
         $now = Carbon::now();
 
@@ -142,32 +174,6 @@ class CampaignBatchDispatch implements ShouldQueue
             'created_at' => $now,
             'updated_at' => $now,
         ])->all());
-
-        // Re-read the rows we just created to get their ids. Each contact appears
-        // once in the audience, so keying by contact_id is unambiguous.
-        $logs = MessageLog::query()
-            ->where('campaign_id', $this->campaign->id)
-            ->whereIn('contact_id', $contacts->pluck('id'))
-            ->where('status', 'PENDING')
-            ->get()
-            ->keyBy('contact_id');
-
-        foreach ($contacts as $contact) {
-            $log = $logs->get($contact->id);
-            if ($log === null) {
-                continue;
-            }
-
-            $jitter = rand(
-                (int) ($this->campaign->delay_min * 1000),
-                (int) ($this->campaign->delay_max * 1000),
-            );
-            $delay += $intervalMs + $jitter;
-
-            SendWhatsAppMessage::dispatch($log, $this->campaign, $contact)
-                ->delay(now()->addMilliseconds((int) $delay))
-                ->onQueue('messages');
-        }
     }
 
     /**

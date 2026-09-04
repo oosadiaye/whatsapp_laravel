@@ -186,14 +186,67 @@ class CampaignContactAttachmentTest extends TestCase
         $this->assertSame(3, MessageLog::where('campaign_id', $campaign->id)->count());
         Bus::assertDispatchedTimes(SendWhatsAppMessage::class, 3);
 
+        // Those sends complete (what the real SendWhatsAppMessage jobs would do —
+        // flip each log out of PENDING). A relaunch must then NOT re-send them.
+        MessageLog::where('campaign_id', $campaign->id)->update(['status' => 'SENT']);
+
         // Operator relaunch of the campaign.
         $campaign->update(['status' => 'QUEUED']);
         (new CampaignBatchDispatch($campaign->fresh()))->handle();
 
-        // No duplicate logs and no extra sends — already-logged contacts are
-        // excluded from the re-fan-out.
+        // No duplicate logs, and no extra sends — the re-drive only touches
+        // still-PENDING logs, and these are all SENT.
         $this->assertSame(3, MessageLog::where('campaign_id', $campaign->id)->count(), 'no duplicate logs on relaunch');
         Bus::assertDispatchedTimes(SendWhatsAppMessage::class, 3);
+    }
+
+    public function test_relaunch_redispatches_orphaned_pending_logs(): void
+    {
+        // #2 (review): a crash/restart mid-fan-out can leave a contact with a
+        // PENDING log but no send job ever dispatched. Previously the relaunch
+        // skipped every already-logged contact, so that orphan's message was
+        // silently never sent. The re-drive must pick it up — without creating a
+        // duplicate log and without double-sending the contacts that DID complete.
+        Http::fake();
+        Bus::fake([SendWhatsAppMessage::class]);
+
+        $admin = $this->makeAdmin();
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $admin->id]);
+        $group = ContactGroup::create(['user_id' => $admin->id, 'name' => 'Targets']);
+
+        $contacts = Contact::factory()->count(2)->create(['user_id' => $admin->id, 'is_active' => true]);
+        foreach ($contacts as $c) {
+            $group->contacts()->attach($c->id);
+        }
+
+        $campaign = Campaign::create([
+            'user_id' => $admin->id,
+            'instance_id' => $instance->id,
+            'name' => 'Crashed',
+            'message' => 'Hi',
+            'status' => 'QUEUED',
+            'rate_per_minute' => 60,
+            'delay_min' => 0,
+            'delay_max' => 1,
+        ]);
+        $campaign->contactGroups()->attach($group->id);
+
+        // Simulate the crashed prior run: contact[0] got a PENDING log but its send
+        // job was lost; contact[1] was never reached at all (no log).
+        $orphan = MessageLog::create([
+            'campaign_id' => $campaign->id,
+            'contact_id' => $contacts[0]->id,
+            'phone' => $contacts[0]->phone,
+            'status' => 'PENDING',
+        ]);
+
+        (new CampaignBatchDispatch($campaign))->handle();
+
+        // Exactly one log per contact (orphan not duplicated), and BOTH get a send
+        // dispatched — the orphan is re-driven instead of silently skipped.
+        $this->assertSame(2, MessageLog::where('campaign_id', $campaign->id)->count(), 'orphan log not duplicated');
+        Bus::assertDispatched(SendWhatsAppMessage::class, fn ($job) => $job->log->id === $orphan->id);
+        Bus::assertDispatchedTimes(SendWhatsAppMessage::class, 2);
     }
 
     public function test_batch_dispatch_with_no_groups_marks_campaign_completed_with_zero_contacts(): void

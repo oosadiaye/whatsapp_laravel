@@ -325,6 +325,18 @@ class CampaignController extends Controller
         // status stayed DRAFT — the exact bug user reported as
         // 'still remain in draft status' after edit + launch.
         if ($request->validated('status') === 'QUEUED' && $campaign->status === 'DRAFT') {
+            // Defer to the scheduler when a future send time was set — mirrors
+            // store(). Without this, "Save & Launch" on an edit carrying a future
+            // scheduled_at fans out the whole audience immediately instead of at
+            // the scheduled time (the exact bug store() already guards against).
+            if ($campaign->scheduled_at !== null && $campaign->scheduled_at->isFuture()) {
+                $this->campaignService->schedule($campaign);
+
+                return redirect()
+                    ->route('campaigns.show', $campaign)
+                    ->with('success', 'Campaign updated and scheduled.');
+            }
+
             if ($campaign->header_media_url) {
                 try {
                     $response = Http::timeout(5)->head($campaign->header_media_url);
@@ -491,6 +503,19 @@ class CampaignController extends Controller
     public function pause(string $id): RedirectResponse
     {
         $campaign = Campaign::findOrFail($id);
+
+        // Only a RUNNING campaign can be paused (mirrors EmailCampaignController).
+        // Without this guard, pausing a QUEUED campaign before its
+        // CampaignBatchDispatch job runs makes the job's atomic
+        // where('status','QUEUED') claim fail — the audience is NEVER fanned out —
+        // and a subsequent resume() would flip it to RUNNING with 0 contacts
+        // dispatched, leaving it stuck RUNNING forever.
+        abort_unless(
+            $campaign->status === 'RUNNING',
+            403,
+            "Cannot pause a campaign with status \"{$campaign->status}\".",
+        );
+
         $this->campaignService->pause($campaign);
 
         return redirect()->back()->with('success', 'Campaign paused.');
@@ -499,6 +524,16 @@ class CampaignController extends Controller
     public function resume(string $id): RedirectResponse
     {
         $campaign = Campaign::findOrFail($id);
+
+        // Only a PAUSED campaign can be resumed. resume() flips status straight to
+        // RUNNING without re-dispatching a batch, so resuming anything else (e.g. a
+        // QUEUED/DRAFT campaign) would strand it in RUNNING with nothing sending.
+        abort_unless(
+            $campaign->status === 'PAUSED',
+            403,
+            "Cannot resume a campaign with status \"{$campaign->status}\".",
+        );
+
         $this->campaignService->resume($campaign);
 
         return redirect()->back()->with('success', 'Campaign resumed.');
