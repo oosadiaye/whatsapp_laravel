@@ -159,8 +159,14 @@ class ProcessEmailSequences extends Command
             unsubscribeUrl: SequenceEmailContent::unsubscribeUrl($recipientId),
         );
 
-        SendUserEmail::dispatch($account->id, $outbound);
-
+        // Advance the recipient BEFORE dispatching. If the process is killed
+        // between the dispatch and this update, the row would stay SENDING with an
+        // elapsed 10-min claim TTL — the next tick's stale-claim reclaim would then
+        // re-dispatch the SAME step (current_step never advanced) and the recipient
+        // would receive a DUPLICATE email. Finalizing first makes a crash-in-the-gap
+        // lose (at most) this one step instead of duplicating it — the safer failure
+        // mode for a nurture sequence. (The atomic claim above already prevents the
+        // concurrent-pass duplicate; this closes the crash-recovery duplicate.)
         $nextStep = $sequence->steps->firstWhere('order', $step->order + 1);
 
         if ($nextStep === null) {
@@ -180,5 +186,7 @@ class ProcessEmailSequences extends Command
                 'next_send_at' => $delayHours > 0 ? now()->addHours($delayHours) : now(),
             ]);
         }
+
+        SendUserEmail::dispatch($account->id, $outbound);
     }
 }

@@ -70,13 +70,25 @@ final class MailConfig
             config(['mail.default' => $mailer]);
 
             if ($mailer === 'smtp') {
+                $encryption = Setting::get('mail_encryption');
+
                 config([
                     'mail.mailers.smtp.host' => Setting::get('mail_host') ?: config('mail.mailers.smtp.host'),
                     'mail.mailers.smtp.port' => (int) (Setting::get('mail_port') ?: 587),
                     'mail.mailers.smtp.username' => Setting::get('mail_username') ?: null,
                     'mail.mailers.smtp.password' => Setting::getEncrypted('mail_password') ?: null,
-                    'mail.mailers.smtp.scheme' => self::scheme(Setting::get('mail_encryption')),
+                    'mail.mailers.smtp.scheme' => self::scheme($encryption),
                 ]);
+
+                // An explicit "no encryption" choice must actually disable TLS.
+                // Symfony's EsmtpTransport defaults auto_tls=true and will still
+                // opportunistically STARTTLS whenever the server advertises it —
+                // silently overriding the operator's choice and, on a broken/self-
+                // signed cert, failing the ENTIRE campaign (every recipient's
+                // EmailLog marked FAILED). Mirror SmtpSender's per-mailbox fix.
+                if (in_array($encryption, ['none', '', null], true)) {
+                    config(['mail.mailers.smtp.auto_tls' => false]);
+                }
             }
 
             $fromAddress = Setting::get('mail_from_address');

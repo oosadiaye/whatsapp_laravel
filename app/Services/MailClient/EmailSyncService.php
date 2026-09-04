@@ -115,9 +115,13 @@ class EmailSyncService
             ]);
         }
 
-        $thread->update([
+        // Atomic increment (single UPDATE ... SET unread_count = unread_count + 1).
+        // SyncEmailAccount has no ShouldBeUnique/overlap guard, so two syncs for the
+        // same account can run concurrently; a read-then-write ($thread->unread_count
+        // + 1) would let the second overwrite the first's increment and permanently
+        // undercount the badge. Mirrors InboundMessageProcessor's fix.
+        $thread->increment('unread_count', 1, [
             'last_message_at' => $receivedAt,
-            'unread_count' => $thread->unread_count + 1,
             'subject' => $thread->subject ?: $fetched->subject,
         ]);
 

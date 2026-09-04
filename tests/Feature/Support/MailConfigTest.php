@@ -65,6 +65,33 @@ class MailConfigTest extends TestCase
         $this->assertSame('smtps', config('mail.mailers.smtp.scheme'));
     }
 
+    public function test_no_encryption_disables_auto_tls(): void
+    {
+        // #3: 'none' must actually disable TLS. Without auto_tls=false Symfony
+        // opportunistically STARTTLS-es and, on a broken cert, fails the whole
+        // campaign — silently overriding the operator's explicit choice.
+        Setting::set('mail_mailer', 'smtp');
+        Setting::set('mail_host', 'relay.internal');
+        Setting::set('mail_encryption', 'none');
+
+        MailConfig::apply();
+
+        $this->assertSame('smtp', config('mail.mailers.smtp.scheme'));
+        $this->assertFalse(config('mail.mailers.smtp.auto_tls'));
+    }
+
+    public function test_starttls_leaves_auto_tls_enabled(): void
+    {
+        Setting::set('mail_mailer', 'smtp');
+        Setting::set('mail_host', 'smtp.db.test');
+        Setting::set('mail_encryption', 'tls');
+
+        MailConfig::apply();
+
+        // Not forced off — the transport may still negotiate STARTTLS.
+        $this->assertNotSame(false, config('mail.mailers.smtp.auto_tls'));
+    }
+
     public function test_mailer_prefers_the_db_value_over_env(): void
     {
         config(['mail.default' => 'log']);
