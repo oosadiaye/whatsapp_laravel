@@ -91,7 +91,16 @@ class ConversationController extends Controller
         // read receipt to Meta so the customer sees blue ticks. The Meta call is
         // best-effort: a failure must never block the thread from rendering.
         if ($conversation->unread_count > 0) {
-            $conversation->update(['unread_count' => 0]);
+            // Clear the unread badge atomically. A plain update(['unread_count'=>0])
+            // would clobber an inbound webhook's increment() that landed between
+            // page load and here — losing the new-message signal. Zero only while
+            // the count hasn't grown past what we read: if a message raced in, its
+            // increment survives and the badge self-heals on the next open. The
+            // guard also prevents a negative badge if the same thread is opened
+            // from two tabs at once.
+            Conversation::whereKey($conversation->getKey())
+                ->where('unread_count', '<=', $conversation->unread_count)
+                ->update(['unread_count' => 0]);
 
             $latestInbound = $conversation->messages()
                 ->where('direction', ConversationMessage::DIRECTION_INBOUND)
