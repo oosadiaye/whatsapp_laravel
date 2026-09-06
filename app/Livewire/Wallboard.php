@@ -22,6 +22,10 @@ class Wallboard extends Component
 {
     public function render()
     {
+        // Re-authorize on every render — Livewire updates bypass the route
+        // permission gate (see TeamLoad / the app's documented invariant).
+        abort_unless((bool) auth()->user()?->can('team.view'), 403);
+
         $liveCalls = CallLog::query()
             ->whereIn('status', CallLog::STATUSES_IN_FLIGHT)
             ->with(['contact', 'placedBy', 'conversation'])

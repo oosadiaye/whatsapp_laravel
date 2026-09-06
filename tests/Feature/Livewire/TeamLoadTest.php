@@ -23,6 +23,14 @@ class TeamLoadTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolesAndPermissionsSeeder::class);
+
+        // TeamLoad now re-authorizes on render (team.view — Livewire updates bypass
+        // the route gate). These tests exercise its rendering logic, so act as an
+        // authorized viewer. A super_admin isn't an agent, so it never appears in
+        // the rendered agent list and can't skew the assertions below.
+        $viewer = User::factory()->create(['is_active' => true]);
+        $viewer->assignRole('super_admin');
+        $this->actingAs($viewer);
     }
 
     public function test_renders_active_agents_with_their_active_count(): void

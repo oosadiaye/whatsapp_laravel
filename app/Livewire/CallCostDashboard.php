@@ -13,6 +13,11 @@ class CallCostDashboard extends Component
 
     public function render()
     {
+        // Re-authorize on every render — Livewire updates bypass the route
+        // permission gate; without this a revoked agent's open tab keeps polling
+        // company call-spend data (see TeamLoad / the app's documented invariant).
+        abort_unless((bool) auth()->user()?->can('reports.view'), 403);
+
         $query = CallLog::query()->whereNotNull('cost_estimate_kobo');
 
         $now = now();

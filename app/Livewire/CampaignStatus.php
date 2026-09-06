@@ -18,6 +18,10 @@ class CampaignStatus extends Component
 
     public function render()
     {
+        // Re-authorize on every render — Livewire updates bypass the route
+        // permission gate (see TeamLoad / the app's documented invariant).
+        abort_unless((bool) auth()->user()?->can('campaigns.view'), 403);
+
         $campaign = Campaign::find($this->campaignId);
 
         return view('livewire.campaign-status', [

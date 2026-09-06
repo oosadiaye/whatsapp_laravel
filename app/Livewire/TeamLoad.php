@@ -30,6 +30,12 @@ class TeamLoad extends Component
 {
     public function render()
     {
+        // Re-authorize on every render: Livewire poll/update requests hit
+        // livewire/update (web middleware only) and bypass this page's route
+        // permission gate, so a mid-session permission revocation must be caught
+        // here too — the app's documented invariant (see Mailbox\Inbox, CallWrapUp).
+        abort_unless((bool) auth()->user()?->can('team.view'), 403);
+
         $cap = (int) Setting::get('round_robin_cap_per_agent', 5);
         $cutoff = now()->subHours(RoundRobinAssigner::ACTIVE_WINDOW_HOURS);
         $availabilityCutoff = now()->subMinutes(

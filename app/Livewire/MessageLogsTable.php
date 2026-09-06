@@ -34,6 +34,11 @@ class MessageLogsTable extends Component
 
     public function render()
     {
+        // Re-authorize on every render — Livewire updates bypass the route
+        // permission gate; without this a revoked agent's open tab keeps polling
+        // per-recipient phone/status data (see TeamLoad / the documented invariant).
+        abort_unless((bool) auth()->user()?->can('campaigns.view'), 403);
+
         $query = MessageLog::where('campaign_id', $this->campaignId)
             ->with('contact');
 
