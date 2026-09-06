@@ -105,6 +105,13 @@ window.bqVoiceClient = {
     _booted: false,
     // All attached banners, oldest first. The most recent is the "primary".
     _banners: [],
+    // The banner that owns the CURRENT live call — the one the last incomingcall
+    // was routed to. africastalking-client is a single-line softphone (one active
+    // WebRTC leg), so callaccepted/hangup/error all pertain to this banner, NOT
+    // merely the last-attached one. Routing those to _primaryBanner() dropped the
+    // wrong call when a second banner was attached (e.g. an inbound ringing while
+    // an outbound call is live).
+    _activeBanner: null,
     // Buffer the most recent incoming call from AT. The banner that handles
     // it (outbound auto-answer / inbound accept) is mounted by a 3s Livewire
     // poll, so AT's `incomingcall` event can arrive BEFORE the banner has
@@ -151,11 +158,19 @@ window.bqVoiceClient = {
                 return want !== '' && want === phone;
             });
             if (expecting) {
+                this._activeBanner = expecting;
                 expecting.onIncoming?.(params);
-                return;
+                return true;
             }
         }
-        this._primaryBanner()?.onIncoming?.(params);
+        const primary = this._primaryBanner();
+        if (primary) {
+            this._activeBanner = primary;
+            primary.onIncoming?.(params);
+            return true;
+        }
+        // No banner attached yet — caller keeps _lastIncoming buffered for attach().
+        return false;
     },
 
     /** Register the WebRTC client with a real AT capability token. Idempotent. */
@@ -208,11 +223,20 @@ window.bqVoiceClient = {
         // Route call lifecycle to the banner that's expecting this call.
         on('incomingcall', (params) => {
             this._lastIncoming = params;
-            this._routeIncoming(params);
+            // Clear the buffer once delivered — it exists ONLY to replay a call
+            // that arrived before any banner attached (see attach()). Leaving it
+            // set let attach() later replay this stale payload onto the now-live
+            // call, snapping its UI back to "Connecting…".
+            if (this._routeIncoming(params)) {
+                this._lastIncoming = null;
+            }
         });
-        on('callaccepted', () => { this._primaryBanner()?.onAccepted?.(); });
-        on('hangup', (cause) => { this._primaryBanner()?.onHangup?.(cause); });
-        on('error', (err) => { console.error('[BQ Voice] SDK error', err); this._primaryBanner()?.onError?.(err); });
+        // callaccepted/hangup/error belong to the CURRENT live call → its banner,
+        // not whichever attached last. Fall back to primary only if we somehow have
+        // no active banner (e.g. an event before any incomingcall was routed).
+        on('callaccepted', () => { (this._activeBanner ?? this._primaryBanner())?.onAccepted?.(); });
+        on('hangup', (cause) => { (this._activeBanner ?? this._primaryBanner())?.onHangup?.(cause); });
+        on('error', (err) => { console.error('[BQ Voice] SDK error', err); (this._activeBanner ?? this._primaryBanner())?.onError?.(err); });
     },
 
     /** Wrap window.WebSocket for the SYNCHRONOUS span of the SDK constructor so
@@ -336,6 +360,9 @@ window.bqVoiceClient = {
     },
     detach(banner) {
         this._banners = this._banners.filter(b => b !== banner);
+        if (this._activeBanner === banner) {
+            this._activeBanner = null;
+        }
         // Only drop the buffered incoming once EVERY banner has detached. A
         // transient unmount (Livewire re-render, navigation, the 3s poll
         // re-rendering) must not lose a call that another still-attached banner
@@ -557,10 +584,17 @@ window.outgoingCall = (data) => ({
     // client. We initiated it, so answer automatically. The mic-permission
     // prompt fires here on the first call.
     onIncoming() {
+        // Re-entry guard: a live call must not be snapped back to 'connecting' by a
+        // duplicate/stale incomingcall routed to it.
+        if (this.state === 'connected' || this.state === 'connecting') return;
         this.state = 'connecting';
         window.bqVoiceClient.answer();
     },
     onAccepted() {
+        // Re-entry guard: a duplicate callaccepted must not double-start the
+        // duration timer / stats collector / recorder (the second _tryStats() would
+        // orphan the first setInterval).
+        if (this.state === 'connected') return;
         this._clearBridgeTimeout(); // bridged — the safety net is no longer needed
         this.state = 'connected';
         this.startDurationTimer();
@@ -714,6 +748,10 @@ window.incomingAtCall = (data) => ({
         }
     },
     onAccepted() {
+        // Re-entry guard (see outgoingCall.onAccepted) — prevents a duplicate
+        // callaccepted from orphaning a second stats setInterval.
+        if (this.state === 'connected') return;
+        this._clearAcceptTimeout(); // bridged — the accept recovery net is done
         this.state = 'connected';
         this.startDurationTimer();
         this._tryStats();
@@ -765,20 +803,26 @@ window.incomingAtCall = (data) => ({
             if (!vc?.isAvailable()) {
                 throw new Error("Voice softphone not registered — reload the page (check Africa's Talking settings / script blockers).");
             }
-            // Answer the AT leg. If the incomingcall hasn't arrived yet, defer
-            // until onIncoming fires — but bound the wait so a never-arriving
-            // leg can't leave the banner in 'connecting' forever.
-            if (this._incomingArrived) vc.answer();
-            else {
-                this._answerPending = true;
-                this._acceptTimeout = setTimeout(() => {
-                    this._answerPending = false;
-                    this._acceptTimeout = null;
-                    if (this.state === 'connecting') {
-                        this.state = 'connect_failed';
-                        this.errorMessage = 'The voice leg never arrived. Try again, or decline.';
-                    }
-                }, 20000);
+            // Bound the wait REGARDLESS of branch: vc.answer() swallows SDK errors,
+            // so even on the "already arrived" path a silent answer() failure would
+            // otherwise leave the banner stuck in 'connecting' forever with no
+            // callaccepted and no recovery. Arm the timeout first, then answer; it
+            // is cleared by onIncoming / onAccepted / teardown.
+            this._answerPending = true;
+            this._acceptTimeout = setTimeout(() => {
+                this._answerPending = false;
+                this._acceptTimeout = null;
+                if (this.state === 'connecting') {
+                    this.state = 'connect_failed';
+                    this.errorMessage = 'The voice leg never arrived. Try again, or decline.';
+                }
+            }, 20000);
+
+            // Answer now if the incomingcall already arrived; otherwise onIncoming
+            // will answer when it fires (both clear the timeout above).
+            if (this._incomingArrived) {
+                this._answerPending = false;
+                vc.answer();
             }
         } catch (error) {
             const msg = error?.message ?? String(error);

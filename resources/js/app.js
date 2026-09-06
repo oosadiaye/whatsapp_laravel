@@ -104,17 +104,42 @@ import './call-recorder';
  * The `kind` argument is the suffix of the data attribute, e.g. 'unread' →
  * data-unread, 'missed-calls' → data-missed-calls.
  */
+// Shared morph.updated fan-out.
+//
+// Livewire.hook() has no documented unsubscribe, and the factories below live in
+// the app layout / navigation, which Livewire re-mounts on every wire:navigate.
+// Registering a hook per component init() therefore accumulated one stale handler
+// per navigation — each firing on every subsequent morph with its own captured
+// state, producing duplicate message pings + desktop notifications and growing
+// CPU over a shift. Instead install ONE global hook and fan it out to a Set of
+// live subscribers; each component adds itself in init() and removes itself in
+// destroy() (Alpine calls destroy() when the element is torn down).
+const bqMorphSubscribers = new Set();
+let bqMorphHookInstalled = false;
+function bqInstallMorphHook() {
+    if (bqMorphHookInstalled || !window.Livewire) return;
+    bqMorphHookInstalled = true;
+    window.Livewire.hook('morph.updated', () => {
+        bqMorphSubscribers.forEach((fn) => { try { fn(); } catch (_) {} });
+    });
+}
+
 window.bqBadgeWatcher = (kind) => ({
     count: 0,
+    _onMorph: null,
     init() {
         this.refresh();
         // Re-read the count after every Livewire DOM morph. For calls this fires
         // on the push-driven refresh; otherwise on the 15s consistency poll.
         // morph.updated fires AFTER the new attribute is in the DOM, so we always
-        // read fresh values.
-        if (window.Livewire) {
-            window.Livewire.hook('morph.updated', () => this.refresh());
-        }
+        // read fresh values. Registered via the shared fan-out so re-mounts don't
+        // leak handlers.
+        this._onMorph = () => this.refresh();
+        bqMorphSubscribers.add(this._onMorph);
+        bqInstallMorphHook();
+    },
+    destroy() {
+        if (this._onMorph) { bqMorphSubscribers.delete(this._onMorph); this._onMorph = null; }
     },
     refresh() {
         const el = document.getElementById('bq-realtime-data');
@@ -339,6 +364,9 @@ window.bqSoundIndicator = () => ({
         this.refresh();
         this._timer = setInterval(() => this.refresh(), 1000);
     },
+    destroy() {
+        if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    },
     refresh() {
         const ctx = window.bqAudioState?.audioCtx;
         this.locked = !ctx || ctx.state !== 'running';
@@ -356,6 +384,7 @@ window.realtimePulse = () => ({
     seenCallIds: [],
     lastUnread: 0,
     audioUnlocked: false,
+    _onMorph: null,
 
     init() {
         // Read initial state from data attributes.
@@ -421,10 +450,19 @@ window.realtimePulse = () => ({
         // document silently never fires (verified by reviewer reading livewire.js
         // internals: trigger2('morph.updated') routes through the hooks `listeners`
         // map, not document.dispatchEvent).
-        window.Livewire.hook('morph.updated', () => this.handleUpdate());
+        // Registered via the shared fan-out (see bqInstallMorphHook) so a
+        // wire:navigate re-mount doesn't leave a stale handler firing duplicate
+        // pings/notifications.
+        this._onMorph = () => this.handleUpdate();
+        bqMorphSubscribers.add(this._onMorph);
+        bqInstallMorphHook();
 
         // Run once on mount in case the initial payload already has a call
         this.handleUpdate();
+    },
+
+    destroy() {
+        if (this._onMorph) { bqMorphSubscribers.delete(this._onMorph); this._onMorph = null; }
     },
 
     handleUpdate() {
@@ -522,7 +560,10 @@ window.bqMissedCallToast = () => ({
 
     init() {
         this.lastCount = this.currentCount();
-        setInterval(() => this.tick(), 3000);
+        this._timer = setInterval(() => this.tick(), 3000);
+    },
+    destroy() {
+        if (this._timer) { clearInterval(this._timer); this._timer = null; }
     },
 
     currentCount() {
