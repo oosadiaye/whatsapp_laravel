@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AfricasTalkingWebhookController;
+use App\Http\Controllers\BoardController;
+use App\Http\Controllers\BoardReportController;
 use App\Http\Controllers\CallController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CloudWebhookController;
@@ -21,6 +23,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SequenceTrackingController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\TaskStatusController;
 use App\Http\Controllers\TeamLoadController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Http\Controllers\UserController;
@@ -364,6 +367,63 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/contacts/{contact}/call', [ContactController::class, 'startCall'])
             ->name('contacts.startCall');
     });
+
+    // ─── Task Management (Trello-style board) ──────────────────────────────
+    // Whole feature gated on tasks.view. Livewire re-checks permissions on
+    // every action (Livewire updates bypass route middleware).
+    //
+    // Ordering matters: the static /boards/create segment is registered BEFORE
+    // the {board} wildcard, otherwise Laravel matches /boards/create to
+    // {board}="create" and 404s. Same rule the campaigns/contacts/template
+    // groups above already document.
+    Route::middleware('permission:tasks.create')->group(function () {
+        Route::get('/boards/create', [BoardController::class, 'create'])->name('boards.create');
+        Route::post('/boards', [BoardController::class, 'store'])->name('boards.store');
+        // Duplicate is a create in spirit: it stands up a new board. It reads an
+        // existing board's structure but writes only a fresh, empty one — never
+        // the source's cards. See BoardController::duplicate.
+        Route::post('/boards/{board}/duplicate', [BoardController::class, 'duplicate'])->name('boards.duplicate');
+    });
+    Route::middleware('permission:tasks.view')->group(function () {
+        Route::get('/boards', [BoardController::class, 'index'])->name('boards.index');
+        // Convenience route: the default/only board renders the kanban board.
+        Route::get('/tasks', [BoardController::class, 'showDefault'])->name('tasks.index');
+        Route::get('/boards/{board}', [BoardController::class, 'show'])->name('boards.show');
+    });
+    Route::middleware('permission:tasks.edit')->group(function () {
+        Route::get('/boards/{board}/edit', [BoardController::class, 'edit'])->name('boards.edit');
+        Route::put('/boards/{board}', [BoardController::class, 'update'])->name('boards.update');
+    });
+    // Board reporting. Its own permission, not tasks.view: the page answers
+    // "who is carrying what" and "how long does work sit here", which is a
+    // manager's view of the team rather than the board itself. An agent who can
+    // work cards does not need it. See RolesAndPermissionsSeeder.
+    Route::middleware('permission:tasks.report')->group(function () {
+        Route::get('/boards/{board}/report', [BoardReportController::class, 'show'])->name('boards.report');
+        Route::get('/boards/{board}/report/export', [BoardReportController::class, 'export'])->name('boards.report.export');
+    });
+    Route::middleware('permission:tasks.delete')->group(function () {
+        // Archiving and deleting both take tasks.delete: archiving hides shared
+        // work from everyone at once, which is the same blast radius as removing
+        // it — the only difference is that it can be undone. See BoardController.
+        Route::delete('/boards/{board}', [BoardController::class, 'destroy'])->name('boards.destroy');
+        Route::post('/boards/{board}/archive', [BoardController::class, 'archive'])->name('boards.archive');
+        Route::post('/boards/{board}/unarchive', [BoardController::class, 'unarchive'])->name('boards.unarchive');
+    });
+
+    // Board columns (statuses) are runtime-editable. Static paths only, so no
+    // wildcard-shadowing concern, and gated on the admin-level
+    // tasks.status.manage rather than tasks.edit — an agent may work cards
+    // without being able to redefine which stages exist.
+    Route::middleware('permission:tasks.status.manage')
+        ->prefix('task-statuses')
+        ->name('task-statuses.')
+        ->group(function (): void {
+            Route::get('/', [TaskStatusController::class, 'index'])->name('index');
+            Route::post('/', [TaskStatusController::class, 'store'])->name('store');
+            Route::put('/{taskStatus}', [TaskStatusController::class, 'update'])->name('update');
+            Route::delete('/{taskStatus}', [TaskStatusController::class, 'destroy'])->name('destroy');
+        });
 
     // ─── Settings ──────────────────────────────────────────────────────────
     Route::middleware('permission:settings.view')->group(function () {

@@ -42,5 +42,9 @@ class DatabaseSeeder extends Seeder
 
         // Roles + permissions + admin role assignment.
         $this->call(RolesAndPermissionsSeeder::class);
+
+        // Board columns. Idempotent; administrators manage further statuses
+        // from Settings rather than by editing config.
+        $this->call(TaskStatusSeeder::class);
     }
 }

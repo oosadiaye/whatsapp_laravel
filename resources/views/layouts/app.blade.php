@@ -4,6 +4,8 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
+        {{-- Per-page <meta> tags (e.g. the task board's Echo channel id). --}}
+        @stack('head')
         @auth
             <meta name="user-id" content="{{ auth()->id() }}">
             {{-- Africa's Talking WebRTC softphone registration. Minting a real
@@ -216,7 +218,7 @@
             </header>
 
             {{-- Flash messages — pinned just below topbar --}}
-            @if(session('success') || session('error') || session('warning'))
+            @if(session('success') || session('error') || session('warning') || session('info'))
                 <div class="px-4 sm:px-6 lg:px-8 pt-4">
                     @if(session('success'))
                         <div class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800 flex items-start gap-2"
@@ -224,6 +226,14 @@
                             <svg class="w-5 h-5 flex-shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                             <span class="flex-1">{{ session('success') }}</span>
                             <button @click="show=false" class="text-green-600 hover:text-green-800">&times;</button>
+                        </div>
+                    @endif
+                    @if(session('info'))
+                        <div class="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800 flex items-start gap-2"
+                             x-data="{show:true}" x-show="show" x-cloak>
+                            <svg class="w-5 h-5 flex-shrink-0 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span class="flex-1">{{ session('info') }}</span>
+                            <button @click="show=false" class="text-blue-600 hover:text-blue-800">&times;</button>
                         </div>
                     @endif
                     @if(session('warning'))

@@ -26,6 +26,10 @@ class ProfileUpdateRequest extends FormRequest
                 'max:255',
                 Rule::unique(User::class)->ignore($this->user()->id),
             ],
+            // 'sometimes' so a client that only posts name/email leaves the
+            // current level alone instead of silently resetting it to the
+            // default.
+            'task_notifications' => ['sometimes', 'string', Rule::in(User::TASK_NOTIFICATION_LEVELS)],
         ];
     }
 }

@@ -127,6 +127,30 @@ class RolesAndPermissionsSeeder extends Seeder
             'mailbox.view',
             'mailbox.view_all',
             'mailbox.admin',
+
+            // Task management (Trello-style board). Split create/edit because
+            // moving a card between columns is an EDIT, not a create — a
+            // read-only agent can still be given tasks.view + tasks.create
+            // (own their own cards) without letting them shuffle the team's
+            // board. tasks.delete is separate for the same reason.
+            'tasks.view',
+            'tasks.create',
+            'tasks.edit',
+            'tasks.delete',
+
+            // Reshaping the board's vocabulary (adding/renaming/retiring a
+            // column) is a structural, admin-level action — deliberately NOT
+            // in the agent allowlist below, so agents work cards rather than
+            // redefine what stages exist.
+            'tasks.status.manage',
+
+            // Board reporting (/boards/{board}/report). Separate from tasks.view
+            // because the page reports on the *team* — per-person load, how long
+            // work sits in a column — which is a manager's view rather than the
+            // board. In $allPermissions, so manager and up get it; the agent
+            // allowlist below omits it, so agents work cards without being handed
+            // a view of everyone's workload.
+            'tasks.report',
         ];
 
         foreach ($perms as $perm) {
@@ -189,6 +213,12 @@ class RolesAndPermissionsSeeder extends Seeder
             'calls.dial',
             // Own mailbox only (never view_all/admin).
             'mailbox.view',
+            // Task board: agents see the board and create their own cards,
+            // but do NOT get tasks.edit (reordering/shuffling the shared
+            // board) or tasks.delete, nor tasks.status.manage (changing which
+            // stages exist is an admin action).
+            'tasks.view',
+            'tasks.create',
         ]);
     }
 

@@ -202,6 +202,39 @@
                 </div>
             @endcanany
 
+            {{-- Section: Tasks (Trello-style board) --}}
+            @can('tasks.view')
+                <div>
+                    <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('Tasks') }}</h3>
+                    <div class="space-y-1">
+                        <x-sidebar-link :href="route('tasks.index')" :active="request()->routeIs('tasks.*') || request()->routeIs('boards.*')">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                            </svg>
+                            {{ __('Board') }}
+                        </x-sidebar-link>
+
+                        <x-sidebar-link :href="route('boards.index')" :active="false">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm4 4h8m-8 4h8m-8 4h4"/>
+                            </svg>
+                            {{ __('All Boards') }}
+                        </x-sidebar-link>
+
+                        {{-- Reshaping the workflow (adding/retiring a column) is an
+                             admin-level action, gated separately from tasks.edit. --}}
+                        @can('tasks.status.manage')
+                            <x-sidebar-link :href="route('task-statuses.index')" :active="request()->routeIs('task-statuses.*')">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10"/>
+                                </svg>
+                                {{ __('Statuses') }}
+                            </x-sidebar-link>
+                        @endcan
+                    </div>
+                </div>
+            @endcan
+
             {{-- Section: Configuration. Single-instance app — the WhatsApp number
                  is configured on the Settings page, so there's no Instances link. --}}
             @can('settings.view')

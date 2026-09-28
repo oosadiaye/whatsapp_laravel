@@ -47,6 +47,29 @@
             @endif
         </div>
 
+        <div>
+            <x-input-label for="task_notifications" :value="__('Task email notifications')" />
+
+            <select id="task_notifications" name="task_notifications"
+                    class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                @foreach([
+                    \App\Models\User::TASK_NOTIFICATIONS_OFF => 'Off - never email me about task boards',
+                    \App\Models\User::TASK_NOTIFICATIONS_TRANSITIONS => 'Column moves only - when a card I am on changes status',
+                    \App\Models\User::TASK_NOTIFICATIONS_ALL => 'All activity - moves, comments, assignments and deletions',
+                ] as $level => $label)
+                    <option value="{{ $level }}" @selected(old('task_notifications', $user->taskNotificationLevel()) === $level)>
+                        {{ $label }}
+                    </option>
+                @endforeach
+            </select>
+
+            <x-input-error class="mt-2" :messages="$errors->get('task_notifications')" />
+
+            <p class="mt-2 text-sm text-gray-600">
+                {{ __('You are emailed about cards where you are the board owner, an assignee or a watcher. Your own changes are never emailed back to you.') }}
+            </p>
+        </div>
+
         <div class="flex items-center gap-4">
             <x-primary-button>{{ __('Save') }}</x-primary-button>
 

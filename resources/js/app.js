@@ -57,6 +57,35 @@ if (window.userId && window.Echo) {
     });
 }
 
+// Live task board: subscribe to the board currently on screen so a teammate's
+// drag, new card or deletion shows up here without a reload. The board id is
+// published by boards/show.blade.php as <meta name="task-board-id">, which
+// keeps this generic module free of board-specific logic.
+//
+// The component re-renders from the database (it does not apply the remote
+// change locally), so one refresh is the whole job — no diffing, no merge. A
+// drag in progress is left alone: re-rendering mid-gesture would rip the card
+// out from under the pointer.
+const boardIdMeta = document.querySelector('meta[name="task-board-id"]');
+window.taskBoardId = boardIdMeta ? parseInt(boardIdMeta.getAttribute('content'), 10) : null;
+
+if (window.taskBoardId && window.Echo) {
+    const board = window.Echo.private(`boards.${window.taskBoardId}`);
+
+    // One handler for every board event. The two events differ only in why the
+    // board changed, and the client treats them identically: re-read and
+    // re-render. A move is delivered as .task.status.changed and never also as
+    // .task.board.changed, so one drag causes exactly one re-render.
+    const refreshBoard = (event) => {
+        if (window.bqBoardDragActive) return;
+        if (event?.boardId && event.boardId !== window.taskBoardId) return;
+        window.Livewire?.dispatch('task-board:refresh');
+    };
+
+    board.listen('.task.status.changed', refreshBoard);
+    board.listen('.task.board.changed', refreshBoard);
+}
+
 // Idempotent Alpine bootstrap.
 //
 // Why the guard: Livewire 4 ships its own Alpine bundle internally and starts
