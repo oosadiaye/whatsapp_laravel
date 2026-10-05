@@ -35,13 +35,19 @@ return new class extends Migration
             }
         }
 
+        // Add the unique index FIRST, then drop the old plain one. On MySQL the
+        // user_id foreign key is backed by the leftmost prefix of the plain
+        // (user_id, slug) index, so dropping that index before a replacement exists
+        // fails with error 1553 ("needed in a foreign key constraint"). Creating the
+        // unique (also user_id-leftmost) first gives the FK a backing index, so the
+        // plain one then becomes droppable. Separate statements guarantee the order;
+        // SQLite has no such FK-index rule, so this ordering is harmless there.
         Schema::table('boards', function (Blueprint $table) {
-            // Drop the non-unique composite index and replace with a unique
-            // constraint. Two boards owned by different users may share a slug,
-            // but the same user must not reuse one. The race is in validation;
-            // the database must be the source of truth.
-            $table->dropIndex(['user_id', 'slug']);
             $table->unique(['user_id', 'slug']);
+        });
+
+        Schema::table('boards', function (Blueprint $table) {
+            $table->dropIndex(['user_id', 'slug']);
         });
     }
 

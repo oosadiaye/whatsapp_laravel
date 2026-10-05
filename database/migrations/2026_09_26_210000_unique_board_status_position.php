@@ -50,16 +50,21 @@ return new class extends Migration
             DB::table('tasks')->where('id', $task->id)->update(['position' => $n]);
         }
 
+        // Add the unique index FIRST, then drop the old plain one — same MySQL
+        // foreign-key-index constraint as the boards slug migration: the board_id
+        // FK is backed by the leftmost prefix of the plain (board_id, position)
+        // index, so it can't be dropped until the new unique (board_id-leftmost)
+        // exists to back the FK instead. Separate statements guarantee the order.
+        //
+        // Unique within a column: two cards in the same column may never share a
+        // position. Across columns duplicate values are fine — the board groups by
+        // status, so position only has to be unique per (board, status).
         Schema::table('tasks', function (Blueprint $table) {
-            // Drop the old non-unique composite index so it does not shadow the
-            // unique one we are about to add.
-            $table->dropIndex(['board_id', 'position']);
-
-            // Unique within a column: two cards in the same column may never
-            // share a position. Across columns duplicate values are fine — the
-            // board groups by status, so position only has to be unique per
-            // (board, status).
             $table->unique(['board_id', 'status', 'position']);
+        });
+
+        Schema::table('tasks', function (Blueprint $table) {
+            $table->dropIndex(['board_id', 'position']);
         });
     }
 
