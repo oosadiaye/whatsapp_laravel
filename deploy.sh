@@ -54,10 +54,14 @@ if grep -q "^BROADCAST_CONNECTION=reverb" .env 2>/dev/null; then
 fi
 
 echo "[4/11] Installing JS deps + building assets..."
-# `npm ci` is faster + reproducible (uses package-lock.json verbatim).
-# `--omit=dev` flag only skips devDependencies; build itself works fine because
-# laravel-vite-plugin and vite are in dependencies, not devDependencies.
-npm ci --omit=dev || npm install --omit=dev
+# Install WITH devDependencies: the Vite build toolchain (vite,
+# laravel-vite-plugin, tailwindcss, ...) lives in devDependencies, so a
+# production build REQUIRES them — `npm ci --omit=dev` skips vite and the build
+# dies with "sh: vite: command not found". node_modules is a BUILD-TIME artifact
+# only (nothing under it is served at runtime — only the compiled public/build/
+# is), so installing dev deps here has no production footprint. `npm ci` is
+# faster + reproducible (uses package-lock.json verbatim).
+npm ci || npm install
 npm run build
 
 echo "[5/11] Ensuring storage symlink + permissions..."
