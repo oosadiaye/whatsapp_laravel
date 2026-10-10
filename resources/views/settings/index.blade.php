@@ -234,38 +234,138 @@
                                 @error('voice_recording_retention_days')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                                 <p class="mt-1 text-xs text-gray-400">{{ __('Recording audio is deleted after this many days (the transcript is kept). 0 = keep forever.') }}</p>
                             </div>
-                        </div>
+</div>
                     </div>
 
-                    {{-- Gemini AI — call transcription --}}
-                    <div x-data="{ showGemini: false }" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                    {{-- AI Provider (OpenRouter + Gemini) — powers all AI draft/suggest features --}}
+                    <div x-data="{ showOpenRouter: false, provider: '{{ $aiProvider }}' }" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                         <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
-                            <span class="grid place-items-center w-9 h-9 rounded-lg bg-violet-50 text-violet-600">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"/></svg>
+                            <span class="grid place-items-center w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 .25M5 10c0 .938.605 1.812 1.5 2.25A6.062 6.062 0 0015 18a6.062 6.062 0 008.5-5.75c0-.89-.56-1.748-1.5-2.25m0 0A4.5 4.5 0 1010.5 8.5M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                             </span>
                             <div>
-                                <h3 class="text-base font-bold text-gray-900">{{ __('AI — Call transcription (Gemini)') }}</h3>
-                                <p class="text-xs text-gray-500">{{ __('Powers the Call Workspace transcript, summary & key points. Also requires call recording to be enabled.') }}</p>
+                                <h3 class="text-base font-bold text-gray-900">{{ __('AI Provider') }}</h3>
+                                <p class="text-xs text-gray-500">{{ __('Select the LLM provider for AI drafting, suggestions, and summaries. All AI outputs are drafts requiring human review.') }}</p>
                             </div>
                         </div>
-                        <div class="p-6">
-                            <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Gemini API Key') }}</label>
-                            <div class="relative sm:w-2/3">
-                                <input :type="showGemini ? 'text' : 'password'" name="gemini_api_key"
-                                       placeholder="{{ $geminiKeySet ? '••••••••••••••••' : __('Enter key') }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-data focus:border-[#25D366] focus:ring-[#25D366]">
-                                <button type="button" @click="showGemini = !showGemini"
-                                        class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
-                                        :title="showGemini ? '{{ __('Hide') }}' : '{{ __('Show') }}'">
-                                    <svg x-show="!showGemini" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                    <svg x-show="showGemini" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
-                                </button>
+                        <div class="p-6 space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Provider') }}</label>
+                                <select name="ai_provider" x-model="provider" class="block w-full sm:w-1/2 rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                    <option value="gemini" @selected($aiProvider === 'gemini')>{{ __('Google Gemini') }}</option>
+                                    <option value="openrouter" @selected($aiProvider === 'openrouter')>{{ __('OpenRouter') }}</option>
+                                </select>
                             </div>
-                            @error('gemini_api_key')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                            <p class="mt-1 text-xs text-gray-500">{{ __('Leave blank to keep existing key. New value is encrypted at rest. Get one free at aistudio.google.com.') }}</p>
-                            <p class="mt-2 text-xs {{ $geminiConfigured ? 'text-emerald-600' : 'text-gray-400' }}">
-                                {{ $geminiConfigured ? __('✓ Gemini is configured — AI summaries will run once recording is on.') : __('No key set — AI call summaries are off.') }}
-                            </p>
+
+                            <div x-show="provider === 'gemini'" x-cloak class="space-y-3 border-t border-gray-100 pt-4">
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Gemini API Key') }}</label>
+                                <div class="relative sm:w-2/3">
+                                    <input :type="showGemini ? 'text' : 'password'" name="gemini_api_key"
+                                           placeholder="{{ $geminiKeySet ? '••••••••••••••••' : __('Enter key') }}"
+                                           class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-data focus:border-[#25D366] focus:ring-[#25D366]">
+                                    <button type="button" @click="showGemini = !showGemini"
+                                            class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
+                                            :title="showGemini ? '{{ __('Hide') }}' : '{{ __('Show') }}'">
+                                        <svg x-show="!showGemini" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                        <svg x-show="showGemini" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
+                                    </button>
+                                </div>
+                                @error('gemini_api_key')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                <p class="mt-1 text-xs text-gray-500">{{ __('Leave blank to keep existing key. New value is encrypted at rest. Get one free at aistudio.google.com.') }}</p>
+                            </div>
+
+                            <div x-show="provider === 'openrouter'" x-cloak class="space-y-3 border-t border-gray-100 pt-4">
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('OpenRouter API Key') }}</label>
+                                <div class="relative sm:w-2/3">
+                                    <input :type="showOpenRouter ? 'text' : 'password'" name="openrouter_api_key"
+                                           placeholder="{{ $openRouterKeySet ? '••••••••••••••••' : __('Enter key') }}"
+                                           class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-data focus:border-[#25D366] focus:ring-[#25D366]">
+                                    <button type="button" @click="showOpenRouter = !showOpenRouter"
+                                            class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
+                                            :title="showOpenRouter ? '{{ __('Hide') }}' : '{{ __('Show') }}'">
+                                        <svg x-show="!showOpenRouter" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                        <svg x-show="showOpenRouter" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
+                                    </button>
+                                </div>
+                                @error('openrouter_api_key')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                <p class="mt-1 text-xs text-gray-500">{{ __('Leave blank to keep existing key. New value is encrypted at rest. Get one at openrouter.ai/keys.') }}</p>
+                            </div>
+
+                            <div class="border-t border-gray-100 pt-4">
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Models (per tier)') }}</label>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">{{ __('Drafting') }}</label>
+                                        <select name="ai_model_draft" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                            @foreach($aiCuratedModels as $id => $label)
+                                                <option value="{{ $id }}" @selected($aiModels['draft'] === $id)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">{{ __('Classification') }}</label>
+                                        <select name="ai_model_classify" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                            @foreach($aiCuratedModels as $id => $label)
+                                                <option value="{{ $id }}" @selected($aiModels['classify'] === $id)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">{{ __('Summarisation') }}</label>
+                                        <select name="ai_model_summarise" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                            @foreach($aiCuratedModels as $id => $label)
+                                                <option value="{{ $id }}" @selected($aiModels['summarise'] === $id)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">{{ __('Models are provider-specific. Changing provider shows that provider\'s curated list.') }}</p>
+                            </div>
+
+                            <div class="border-t border-gray-100 pt-4">
+                                <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Feature Flags') }}</label>
+                                <p class="text-xs text-gray-500 mb-3">{{ __('Enable individual AI features. All are OFF by default.') }}</p>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" name="ai_feature_whatsapp_suggest" value="1"
+                                               {{ old('ai_feature_whatsapp_suggest', $aiFeatures['whatsapp_suggest'] ?? false) ? 'checked' : '' }}
+                                               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <span class="text-sm text-gray-700">{{ __('WhatsApp: Suggest replies') }}</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" name="ai_feature_email_draft" value="1"
+                                               {{ old('ai_feature_email_draft', $aiFeatures['email_draft'] ?? false) ? 'checked' : '' }}
+                                               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <span class="text-sm text-gray-700">{{ __('Email: Draft replies & campaigns') }}</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" name="ai_feature_campaign_content" value="1"
+                                               {{ old('ai_feature_campaign_content', $aiFeatures['campaign_content'] ?? false) ? 'checked' : '' }}
+                                               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <span class="text-sm text-gray-700">{{ __('Campaigns: Generate content') }}</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" name="ai_feature_call_followup" value="1"
+                                               {{ old('ai_feature_call_followup', $aiFeatures['call_followup'] ?? false) ? 'checked' : '' }}
+                                               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <span class="text-sm text-gray-700">{{ __('Calls: Draft follow-ups') }}</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {{-- Test AI connection --}}
+                            <div class="px-6 pb-6 border-t border-gray-100 pt-4">
+                                <form action="{{ route('settings.test-ai') }}" method="POST" id="settings-test-ai">
+                                    @csrf
+                                    <input type="hidden" name="ai_provider" value="{{ $aiProvider }}">
+                                    <input type="hidden" name="{{ $aiProvider === 'openrouter' ? 'openrouter_api_key' : 'gemini_api_key' }}" value="{{ $settings[$aiProvider === 'openrouter' ? 'openrouter_api_key' : 'gemini_api_key'] ?? '' }}">
+                                    <div class="flex flex-wrap items-center justify-between gap-3">
+                                        <p class="text-xs text-gray-500 max-w-md">{{ __('Verify the AI provider credentials work before enabling features — sends a minimal test prompt and shows the exact error if it fails. Save any changes above first.') }}</p>
+                                        <button type="submit"
+                                                class="shrink-0 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500">{{ __('Test AI connection') }}</button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
 

@@ -4,55 +4,48 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Support\GeminiConfig;
-use Illuminate\Support\Facades\Http;
+use App\Services\Ai\AiClient;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Drafts email content via the provider-agnostic AiClient.
+ * Keeps the same public API (returns ?string) so existing callers/tests keep working.
+ */
 class AiEmailDraftService
 {
+    public function __construct(
+        private readonly AiClient $ai,
+    ) {}
+
     public function draft(array $params): ?string
     {
-        $key = GeminiConfig::key();
-        if ($key === null) {
+        if (! $this->ai instanceof \App\Services\Ai\AiClient) {
             return null;
         }
 
         $prompt = $this->buildPrompt($params);
 
         try {
-            $response = Http::timeout(30)
-                ->withHeader('Content-Type', 'application/json')
-                ->post('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='.$key, [
-                    'contents' => [
-                        [
-                            'parts' => [['text' => $prompt]],
-                        ],
-                    ],
-                    'generationConfig' => [
-                        'temperature' => 0.7,
-                        'maxOutputTokens' => 1024,
-                    ],
-                ]);
-
-            if (! $response->successful()) {
-                Log::warning('Gemini email draft failed', ['status' => $response->status(), 'body' => $response->body()]);
-
-                return null;
-            }
-
-            $body = $response->json();
-            $text = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
-
-            if ($text === null) {
-                return null;
-            }
-
-            return trim($text);
+            $result = $this->ai->chat(
+                messages: [
+                    ['role' => 'user', 'content' => $prompt],
+                ],
+                opts: [
+                    'tier' => 'draft',
+                    'temperature' => 0.7,
+                    'max_tokens' => 1024,
+                ],
+            );
         } catch (\Throwable $e) {
-            Log::warning('Gemini email draft exception', ['error' => $e->getMessage()]);
-
+            Log::warning('AiEmailDraftService exception', ['error' => $e->getMessage()]);
             return null;
         }
+
+        if ($result === null) {
+            return null;
+        }
+
+        return trim($result->text);
     }
 
     private function buildPrompt(array $params): string

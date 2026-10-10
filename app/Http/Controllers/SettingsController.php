@@ -10,7 +10,9 @@ use App\Exceptions\WhatsAppApiException;
 use App\Models\Setting;
 use App\Models\WhatsAppInstance;
 use App\Services\AfricasTalkingVoiceService;
+use App\Services\Ai\AiClient;
 use App\Services\WhatsAppCloudApiService;
+use App\Support\AiConfig;
 use App\Support\GeminiConfig;
 use App\Support\MailConfig;
 use App\Support\VoiceConfig;
@@ -38,7 +40,12 @@ class SettingsController extends Controller
      * it will get '1' instead — failing loudly instead of silently echoing
      * encrypted bytes into the page source.
      */
-    private const ENCRYPTED_SETTING_KEYS = ['africastalking_api_key', 'gemini_api_key', 'mail_password'];
+    private const ENCRYPTED_SETTING_KEYS = [
+        'africastalking_api_key',
+        'gemini_api_key',
+        'openrouter_api_key',
+        'mail_password',
+    ];
 
     public function index(): View
     {
@@ -50,12 +57,30 @@ class SettingsController extends Controller
             }
         }
 
+        $openRouterKeySet = (string) ($settings['openrouter_api_key'] ?? '') !== '';
+        $geminiKeySet = (string) ($settings['gemini_api_key'] ?? '') !== '';
+        $aiProvider = $settings['ai_provider'] ?? config('ai.provider', 'gemini');
+        $aiModels = [];
+        foreach (['draft', 'classify', 'summarise'] as $tier) {
+            $aiModels[$tier] = $settings['ai_model_'.$tier] ?? config("ai.models.{$tier}");
+        }
+        $aiFeatures = AiConfig::features();
+
         return view('settings.index', [
             'settings' => $settings,
             // Single-instance app: the one WhatsApp number is configured here.
             'instance' => WhatsAppInstance::primary(),
             // Whether the Call Workspace AI has a usable key (Settings or env).
             'geminiConfigured' => filled(GeminiConfig::key()),
+            // AI provider configuration
+            'aiProvider' => $aiProvider,
+            'openRouterKeySet' => $openRouterKeySet,
+            'geminiKeySet' => $geminiKeySet,
+            'aiModels' => $aiModels,
+            'aiFeatures' => $aiFeatures,
+            'aiCuratedModels' => AiConfig::curatedModels(),
+            'aiConfigured' => AiConfig::isConfigured(),
+            'aiProviderDisplayName' => AiConfig::providerDisplayName(),
             // Compliance-sensitive call recording (pre-fills the toggle + notice).
             'recordingEnabled' => VoiceConfig::recordingEnabled(),
             'recordingConsent' => VoiceConfig::recordingConsentNotice() ?? '',
@@ -79,6 +104,15 @@ class SettingsController extends Controller
             'africastalking_virtual_number' => ['nullable', 'string', 'regex:/^\+\d{10,15}$/'],
             'africastalking_rate_per_minute_kobo' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'gemini_api_key' => ['nullable', 'string', 'min:10', 'max:512'],
+            'openrouter_api_key' => ['nullable', 'string', 'min:10', 'max:512'],
+            'ai_provider' => ['nullable', 'in:gemini,openrouter'],
+            'ai_model_draft' => ['nullable', 'string', 'max:128'],
+            'ai_model_classify' => ['nullable', 'string', 'max:128'],
+            'ai_model_summarise' => ['nullable', 'string', 'max:128'],
+            'ai_feature_whatsapp_suggest' => ['nullable', 'boolean'],
+            'ai_feature_email_draft' => ['nullable', 'boolean'],
+            'ai_feature_campaign_content' => ['nullable', 'boolean'],
+            'ai_feature_call_followup' => ['nullable', 'boolean'],
             // Bulk-email (SMTP) transport — drives campaign delivery. mail_password
             // is encrypted at rest (see ENCRYPTED_SETTING_KEYS) and follows the
             // "leave blank to keep existing" rule via the skip-empty loop below.
@@ -116,6 +150,13 @@ class SettingsController extends Controller
         // as unconfigured and env config stands.
         Setting::set('mail_mailer', (string) $request->input('mail_mailer', ''));
         unset($validated['mail_mailer']);
+
+        // AI feature flags — checkboxes don't submit when unchecked, so explicitly
+        // persist 0/1 for each to allow turning them OFF.
+        foreach (['whatsapp_suggest', 'email_draft', 'campaign_content', 'call_followup'] as $feature) {
+            Setting::set('ai_feature_'.$feature, $request->boolean('ai_feature_'.$feature) ? '1' : '0');
+            unset($validated['ai_feature_'.$feature]);
+        }
 
         foreach ($validated as $key => $value) {
             if ($value === null || $value === '') {
@@ -321,5 +362,45 @@ class SettingsController extends Controller
 
             return 'WhatsApp saved, but graph.facebook.com could not be reached to verify the credentials.';
         }
+    }
+
+    /**
+     * Validate the saved AI provider credentials by sending a minimal test request.
+     * Returns the provider's actual error (e.g., invalid key) as a flash message.
+     * Uses the persisted settings, so save the AI card first, then test.
+     */
+    public function testAiConnection(Request $request): RedirectResponse
+    {
+        $provider = $request->input('ai_provider') ?? 'gemini';
+        $key = $request->input($provider === 'openrouter' ? 'openrouter_api_key' : 'gemini_api_key');
+
+        if (blank($key)) {
+            return redirect()->back()->with('warning',
+                'AI provider ('.$provider.') has no API key saved. Add a key and save before testing.');
+        }
+
+        $client = match ($provider) {
+            'openrouter' => new \App\Services\Ai\OpenRouterClient(),
+            'gemini'     => new \App\Services\Ai\GeminiClient(),
+            default      => new \App\Services\Ai\GeminiClient(),
+        };
+
+        // Send a minimal 1-token ping: "ping" → expect "pong"
+        $result = $client->chat([
+            ['role' => 'user', 'content' => 'Reply with exactly: pong'],
+        ], ['max_tokens' => 5, 'temperature' => 0]);
+
+        if ($result === null) {
+            return redirect()->back()->with('error',
+                $provider.' connection failed: no response (check key, network, and provider status).');
+        }
+
+        $lower = strtolower(trim($result->text));
+        if (! str_contains($lower, 'pong')) {
+            Log::warning('AI test connection unexpected response', ['provider' => $provider, 'response' => $result->text]);
+        }
+
+        return redirect()->back()->with('success',
+            $provider.' connection verified — AI features can now generate drafts.');
     }
 }

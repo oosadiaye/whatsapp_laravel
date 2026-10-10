@@ -205,7 +205,7 @@ class SettingsControllerTest extends TestCase
         $this->actingAs($this->makeAdmin())
             ->get(route('settings.index'))
             ->assertOk()
-            ->assertSee('Call transcription')
+            ->assertSee('AI Provider')
             ->assertSee('gemini_api_key', false);
     }
 
