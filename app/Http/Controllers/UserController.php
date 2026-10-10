@@ -67,9 +67,13 @@ class UserController extends Controller
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
-            // Keep the denormalized `role` column in sync — some rosters query
-            // it directly (e.g. team/wallboard `where('role', ROLE_AGENT)`).
-            'role' => in_array($validated['role'], [User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN], true) ? 'admin' : 'user',
+            // Keep the denormalized `role` column in sync with the SAME granular
+            // role as the spatie assignment below — call routing + the roster/
+            // metric surfaces query it directly via User::callStaff()
+            // (whereIn CALL_STAFF_ROLES). Writing a collapsed 'admin'/'user' here
+            // (the old behaviour) meant the column was never 'agent'/'manager', so
+            // no user was ever routable — every inbound call hit "agents busy".
+            'role' => $validated['role'],
             'is_active' => true,
             'email_verified_at' => now(),
         ]);
@@ -126,7 +130,8 @@ class UserController extends Controller
         $user->update([
             'name' => $validated['name'],
             'email' => $validated['email'],
-            'role' => in_array($validated['role'], [User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN], true) ? 'admin' : 'user',
+            // Mirror the granular role into the denormalized column (see store()).
+            'role' => $validated['role'],
         ]);
 
         if (! empty($validated['password'])) {

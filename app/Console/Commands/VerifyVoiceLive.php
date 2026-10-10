@@ -203,7 +203,7 @@ class VerifyVoiceLive extends Command
     private function checkCapabilityToken(AfricasTalkingVoiceService $voice): void
     {
         $agent = User::query()
-            ->where('role', User::ROLE_AGENT)
+            ->callStaff()
             ->where('is_active', true)
             ->orderBy('id')
             ->first();

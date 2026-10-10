@@ -65,7 +65,7 @@ class RoundRobinAssigner
 
         return DB::transaction(function () use ($cap, $cutoff): ?User {
             $agent = User::query()
-                ->where('role', User::ROLE_AGENT)
+                ->callStaff()
                 ->where('is_active', true)
                 ->where('presence_status', '!=', User::PRESENCE_AWAY)
                 ->where('last_seen_at', '>=', now()->subMinutes(self::AVAILABILITY_WINDOW_MINUTES))

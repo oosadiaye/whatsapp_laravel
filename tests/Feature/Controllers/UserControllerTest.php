@@ -75,6 +75,46 @@ class UserControllerTest extends TestCase
         $this->assertTrue($created->is_active);
     }
 
+    public function test_store_writes_the_granular_role_to_the_denormalized_column(): void
+    {
+        // The denormalized `role` column must hold the granular role ('agent'),
+        // not a collapsed 'admin'/'user'. Six call-routing features query it via
+        // where('role', ...). Regression: store() used to always write 'user' for
+        // non-admins, so no user was ever routable as an agent.
+        $this->actingAs($this->makeUser('super_admin'))
+            ->post(route('users.store'), [
+                'name' => 'Routed Agent',
+                'email' => 'routed.agent@example.com',
+                'password' => 'password123',
+                'role' => 'agent',
+            ])
+            ->assertRedirect(route('users.index'));
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'routed.agent@example.com',
+            'role' => 'agent',
+        ]);
+    }
+
+    public function test_update_writes_the_granular_role_to_the_denormalized_column(): void
+    {
+        $superAdmin = $this->makeUser('super_admin');
+        $target = $this->makeUser('agent', 'promote.me@example.com');
+
+        $this->actingAs($superAdmin)
+            ->put(route('users.update', $target), [
+                'name' => $target->name,
+                'email' => $target->email,
+                'role' => 'manager',
+            ])
+            ->assertRedirect(route('users.index'));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $target->id,
+            'role' => 'manager',
+        ]);
+    }
+
     public function test_create_user_validates_required_fields(): void
     {
         $this->actingAs($this->makeUser('super_admin'))

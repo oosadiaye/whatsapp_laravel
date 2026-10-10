@@ -13,6 +13,7 @@ use App\Services\RoundRobinAssigner;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class RoundRobinAssignerTest extends TestCase
@@ -41,24 +42,47 @@ class RoundRobinAssignerTest extends TestCase
         $this->assertNull($assigner->next());
     }
 
-    public function test_picks_only_user_with_agent_role(): void
+    public function test_excludes_users_whose_role_is_not_call_staff(): void
     {
-        // An online admin (NOT in the pool) and an online agent.
-        $admin = User::factory()->create([
-            'role' => User::ROLE_ADMIN,
+        // A user whose denormalized role column is the legacy non-staff value
+        // 'user' must never be routed, even when online — only CALL_STAFF_ROLES
+        // (agent/manager/admin/super_admin) are eligible.
+        $nonStaff = User::factory()->create([
+            'role' => 'user',
             'is_active' => true,
             'last_seen_at' => now(),
         ]);
-        $admin->assignRole(User::ROLE_ADMIN);
 
         $agent = $this->makeAgent(lastSeenAt: now());
 
-        $assigner = new RoundRobinAssigner;
-
-        $picked = $assigner->next();
+        $picked = (new RoundRobinAssigner)->next();
 
         $this->assertNotNull($picked);
-        $this->assertSame($agent->id, $picked->id);
+        $this->assertSame($agent->id, $picked->id, 'a non-call-staff role column must be excluded');
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function callStaffRoleProvider(): iterable
+    {
+        yield 'agent' => [User::ROLE_AGENT];
+        yield 'manager' => [User::ROLE_MANAGER];
+        yield 'admin' => [User::ROLE_ADMIN];
+        yield 'super_admin' => [User::ROLE_SUPER_ADMIN];
+    }
+
+    #[DataProvider('callStaffRoleProvider')]
+    public function test_routes_to_any_online_call_staff_role(string $role): void
+    {
+        // Managers/admins/super_admins handle calls alongside agents (small-team
+        // model), so an online user of ANY call-staff role must be routable.
+        $user = $this->makeStaffMember($role, lastSeenAt: now());
+
+        $picked = (new RoundRobinAssigner)->next();
+
+        $this->assertNotNull($picked, "an online {$role} must be routable");
+        $this->assertSame($user->id, $picked->id);
     }
 
     public function test_excludes_inactive_agents(): void
@@ -358,6 +382,23 @@ class RoundRobinAssignerTest extends TestCase
             'last_message_at' => $lastInboundAt,
             'unread_count' => 0,
         ]);
+    }
+
+    private function makeStaffMember(
+        string $role,
+        ?string $email = null,
+        ?Carbon $lastSeenAt = null,
+        bool $isActive = true,
+    ): User {
+        $user = User::factory()->create([
+            'email' => $email ?? $role.'-'.uniqid().'@example.com',
+            'role' => $role,
+            'is_active' => $isActive,
+            'last_seen_at' => $lastSeenAt,
+        ]);
+        $user->assignRole($role);
+
+        return $user;
     }
 
     private function makeAgent(

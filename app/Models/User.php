@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,9 +16,11 @@ use Spatie\Permission\Traits\HasRoles;
 /**
  * Authorization is via spatie/laravel-permission roles (super_admin / admin /
  * manager / agent) + the HasRoles trait; every route gates on a permission or
- * role. The denormalized `role` string column is retained because some queries
- * filter on it directly (e.g. the team/wallboard rosters use
- * `where('role', ROLE_AGENT)`); it's kept in sync in UserController.
+ * role. The denormalized `role` string column is retained because call routing
+ * and the roster/metric surfaces filter on it directly via the callStaff()
+ * scope. UserController keeps it in sync with the SAME granular role as the
+ * spatie assignment — it previously collapsed it to 'admin'/'user', so the
+ * column was never 'agent'/'manager' and every call-staff query matched nothing.
  */
 class User extends Authenticatable
 {
@@ -31,6 +34,22 @@ class User extends Authenticatable
     public const ROLE_MANAGER = 'manager';
 
     public const ROLE_AGENT = 'agent';
+
+    /**
+     * Roles whose users handle inbound calls + conversations. Call routing
+     * (RoundRobinAssigner) and every agent-roster/metric surface (Team Load,
+     * Wallboard, reports, auto-away) target this set via the callStaff() scope.
+     * Kept broad: in a small team, managers/admins take calls alongside agents —
+     * opt a specific account out via presence/is_active, not by role.
+     *
+     * @var list<string>
+     */
+    public const CALL_STAFF_ROLES = [
+        self::ROLE_SUPER_ADMIN,
+        self::ROLE_ADMIN,
+        self::ROLE_MANAGER,
+        self::ROLE_AGENT,
+    ];
 
     public const PRESENCE_AVAILABLE = 'available';
 
@@ -148,6 +167,19 @@ class User extends Authenticatable
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * Users eligible to handle calls/conversations, by their denormalized `role`
+     * column (see {@see self::CALL_STAFF_ROLES}). Routing and every agent-roster/
+     * metric surface share this scope so their notions of "call staff" can't drift.
+     *
+     * @param  Builder<User>  $query
+     * @return Builder<User>
+     */
+    public function scopeCallStaff(Builder $query): Builder
+    {
+        return $query->whereIn('role', self::CALL_STAFF_ROLES);
     }
 
     /**

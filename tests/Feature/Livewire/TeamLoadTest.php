@@ -26,8 +26,9 @@ class TeamLoadTest extends TestCase
 
         // TeamLoad now re-authorizes on render (team.view — Livewire updates bypass
         // the route gate). These tests exercise its rendering logic, so act as an
-        // authorized viewer. A super_admin isn't an agent, so it never appears in
-        // the rendered agent list and can't skew the assertions below.
+        // authorized viewer. The viewer is created via assignRole() only, so its
+        // denormalized `role` column stays the factory default 'user' (not a
+        // call-staff value) and it never appears in the rendered roster below.
         $viewer = User::factory()->create(['is_active' => true]);
         $viewer->assignRole('super_admin');
         $this->actingAs($viewer);
@@ -57,20 +58,18 @@ class TeamLoadTest extends TestCase
             ->assertDontSee('InactiveAgent');
     }
 
-    public function test_excludes_non_agent_roles(): void
+    public function test_includes_manager_and_admin_call_staff(): void
     {
-        $admin = User::factory()->create([
-            'name' => 'AdminPerson',
-            'role' => User::ROLE_ADMIN,
-            'is_active' => true,
-        ]);
-        $admin->assignRole(User::ROLE_ADMIN);
-
-        $agent = $this->makeAgent('AgentPerson');
+        // Managers/admins handle calls alongside agents, so the roster must show
+        // them. (Previously this filtered to role=agent only and excluded them.)
+        $this->makeStaff('AdminPerson', User::ROLE_ADMIN);
+        $this->makeStaff('ManagerPerson', User::ROLE_MANAGER);
+        $this->makeAgent('AgentPerson');
 
         Livewire::test(TeamLoad::class)
             ->assertSee('AgentPerson')
-            ->assertDontSee('AdminPerson');
+            ->assertSee('AdminPerson')
+            ->assertSee('ManagerPerson');
     }
 
     public function test_does_not_count_old_inbound_conversations(): void
@@ -105,15 +104,20 @@ class TeamLoadTest extends TestCase
 
     private function makeAgent(string $name, bool $isActive = true): User
     {
-        $agent = User::factory()->create([
+        return $this->makeStaff($name, User::ROLE_AGENT, $isActive);
+    }
+
+    private function makeStaff(string $name, string $role, bool $isActive = true): User
+    {
+        $user = User::factory()->create([
             'name' => $name,
             'email' => strtolower($name).'-'.uniqid().'@example.com',
-            'role' => User::ROLE_AGENT,
+            'role' => $role,
             'is_active' => $isActive,
         ]);
-        $agent->assignRole(User::ROLE_AGENT);
+        $user->assignRole($role);
 
-        return $agent;
+        return $user;
     }
 
     private function makeAssignedConversation(

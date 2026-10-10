@@ -74,7 +74,7 @@ class Wallboard extends Component
         ];
 
         $agents = User::query()
-            ->where('role', User::ROLE_AGENT)
+            ->callStaff()
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'presence_status', 'last_seen_at']);

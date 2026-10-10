@@ -19,7 +19,7 @@ class AutoAwayAgents extends Command
         $threshold = max(1, (int) $this->option('threshold'));
 
         $updated = User::query()
-            ->where('role', User::ROLE_AGENT)
+            ->callStaff()
             ->where('presence_status', '!=', User::PRESENCE_AWAY)
             ->where(function ($q) use ($threshold) {
                 $q->whereNull('last_seen_at')

@@ -33,8 +33,8 @@ class ReportController extends Controller
         ];
 
         $agentStats = [
-            'total' => User::where('role', User::ROLE_AGENT)->count(),
-            'online' => User::where('role', User::ROLE_AGENT)
+            'total' => User::callStaff()->count(),
+            'online' => User::callStaff()
                 ->where('presence_status', User::PRESENCE_AVAILABLE)
                 ->where('last_seen_at', '>=', now()->subMinutes(5))
                 ->count(),

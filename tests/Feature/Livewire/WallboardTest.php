@@ -54,6 +54,26 @@ class WallboardTest extends TestCase
             ->assertSee('Live now');
     }
 
+    public function test_includes_manager_call_staff_on_the_board(): void
+    {
+        // Managers handle calls alongside agents, so the wallboard roster must
+        // show them (previously filtered to role=agent only).
+        $viewer = $this->makeUser('super_admin');
+
+        $manager = User::factory()->create([
+            'name' => 'Mia Manager',
+            'role' => User::ROLE_MANAGER,
+            'is_active' => true,
+            'presence_status' => User::PRESENCE_AVAILABLE,
+            'last_seen_at' => now(),
+        ]);
+        $manager->assignRole('manager');
+
+        Livewire::actingAs($viewer)
+            ->test(Wallboard::class)
+            ->assertSee('Mia Manager');
+    }
+
     public function test_wallboard_page_requires_team_view_permission(): void
     {
         $this->actingAs($this->makeUser('manager'))

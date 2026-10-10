@@ -43,7 +43,7 @@ class TeamLoad extends Component
         );
 
         $agents = User::query()
-            ->where('role', User::ROLE_AGENT)
+            ->callStaff()
             ->where('is_active', true)
             ->withCount(['assignedConversations as active_count' => function ($q) use ($cutoff) {
                 $q->where('last_inbound_at', '>=', $cutoff);
