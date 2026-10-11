@@ -126,11 +126,13 @@
                         return;
                     }
 
-                    // Backspace deletes the last dialed digit — unless the agent is
-                    // editing the contact search box, where it must edit that text
-                    // instead. Also stops the browser treating it as history-back.
+                    // Backspace deletes the last dialed digit. Yield it to the contact
+                    // search box ONLY while that box actually holds text — the modal
+                    // autofocuses it on open, so bailing out for any focused input
+                    // meant Backspace never deleted a digit (caught in a live browser
+                    // session). Also stops the browser treating it as history-back.
                     if (k === 'Backspace') {
-                        if (typingInText) return;
+                        if (typingInText && t.value !== '') return;
                         e.preventDefault();
                         this.back();
                         return;
