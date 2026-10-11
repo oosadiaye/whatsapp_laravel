@@ -311,15 +311,21 @@ class AfricasTalkingWebhookController extends Controller
     }
 
     /**
-     * Decide the terminal status for an AT "Completed" callback. An inbound call
-     * the customer abandoned before the agent answered (never connected) is a
-     * MISSED call, not an ENDED one — otherwise missed-call metrics/badges that
-     * filter on STATUS_MISSED silently under-count. Outbound and any inbound that
-     * did connect stay ENDED.
+     * Decide the terminal status for an AT "Completed"/"Success" callback. An
+     * inbound call nobody answered is a MISSED call, not an ENDED one — otherwise
+     * missed-call metrics/badges that filter on STATUS_MISSED silently under-count.
+     *
+     * "Answered" cannot be read from connected_at: that is only ever set by an
+     * InProgress event, which Africa's Talking does not send, so it is null on every
+     * AT call. The app's real record that an agent took the call is
+     * answered_by_session_id, set by claim() when the agent accepts on the banner.
+     * Outbound calls, and any inbound an agent accepted, stay ENDED.
      */
     private function resolveCompletedStatus(CallLog $call): string
     {
-        if ($call->direction === CallLog::DIRECTION_INBOUND && $call->connected_at === null) {
+        $unanswered = $call->connected_at === null && $call->answered_by_session_id === null;
+
+        if ($call->direction === CallLog::DIRECTION_INBOUND && $unanswered) {
             return CallLog::STATUS_MISSED;
         }
 

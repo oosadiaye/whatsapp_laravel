@@ -540,6 +540,31 @@ class AfricasTalkingWebhookTest extends TestCase
         $this->assertSame(CallLog::STATUS_MISSED, $call->fresh()->status);
     }
 
+    public function test_success_event_for_an_inbound_call_an_agent_accepted_is_ended_not_missed(): void
+    {
+        // connected_at is only ever set by an InProgress event, which Africa's
+        // Talking does not send, so it is null on every AT call. The app's real
+        // record that an agent took the call is answered_by_session_id, set when the
+        // agent accepts on the banner. Without this, every answered inbound call
+        // was recorded as missed.
+        $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_inbound_accepted');
+        $call->update(['direction' => 'inbound', 'connected_at' => null]);
+        \Illuminate\Support\Facades\DB::table('call_logs')
+            ->where('id', $call->id)
+            ->update(['answered_by_session_id' => 'browser-session-1']);
+
+        $this->postWebhook([
+            'sessionId' => 'sess_inbound_accepted',
+            'status' => 'Success',
+            'callSessionState' => 'Completed',
+            'direction' => 'Inbound',
+            'durationInSeconds' => '90',
+            'isActive' => '0',
+        ])->assertOk();
+
+        $this->assertSame(CallLog::STATUS_ENDED, $call->fresh()->status);
+    }
+
     public function test_success_event_dismisses_the_banner(): void
     {
         Event::fake([CallTerminated::class]);
