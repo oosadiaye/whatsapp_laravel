@@ -436,10 +436,23 @@ function bqBootVoiceFromMeta() {
     const token = document.querySelector('meta[name="at-voice-token"]')?.getAttribute('content');
     if (token) window.bqVoiceClient.boot(token);
 }
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bqBootVoiceFromMeta, { once: true });
-} else {
+// Boot only once EVERY deferred script has executed. DOMContentLoaded is the
+// first moment that is guaranteed — including the SDK's own
+// <script defer data-at-sdk> in layouts/app.blade.php, which sits AFTER
+// @vite(app.js) in document order and therefore runs after THIS module.
+//
+// The old check booted whenever readyState was not 'loading'. But while
+// deferred scripts are still executing the readyState is already 'interactive',
+// so a fresh page load took the immediate branch and raced the SDK: boot() found
+// no window.Africastalking, logged 'SDK not available' and returned WITHOUT
+// retrying. The softphone then never registered (bqVoiceClient.ready stayed
+// false), so Africa's Talking had no client to bridge an inbound <Dial> to and
+// every call dropped after the greeting. It only recovered by accident, when a
+// tab refocus fired bqRevalidateVoice().
+if (document.readyState === 'complete') {
     bqBootVoiceFromMeta();
+} else {
+    document.addEventListener('DOMContentLoaded', bqBootVoiceFromMeta, { once: true });
 }
 
 // Re-verify the softphone when the tab regains focus or the network returns.
