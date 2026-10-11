@@ -234,6 +234,27 @@ class AfricasTalkingVoiceService
         return $username.'.'.self::clientNameForUser($userId);
     }
 
+    /**
+     * The <Dial callerId="..."> value to use on every Dial we emit: the account's
+     * OWN virtual number in +E.164.
+     *
+     * Africa's Talking only accepts a callerId the account owns. Passing the
+     * customer's number (so the agent's softphone would show who is calling) made
+     * AT abort the live call about 1s after the customer answered:
+     *
+     *   "Your account is not authorized to use the callerId [+2347045716987]"
+     *
+     * Who is calling is already shown by the app from the CallLog/contact, so
+     * nothing is lost. Returns null when no virtual number is configured; callers
+     * then omit the attribute, which AT allows.
+     */
+    public static function dialCallerId(): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) Setting::get('africastalking_virtual_number', ''));
+
+        return $digits === '' || $digits === null ? null : '+'.$digits;
+    }
+
     public function clientName(User $user): string
     {
         return self::clientNameForUser($user->id);

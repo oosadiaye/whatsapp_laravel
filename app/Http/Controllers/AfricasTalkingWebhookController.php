@@ -428,7 +428,7 @@ class AfricasTalkingWebhookController extends Controller
             $pending->update(['transfer_target' => null]);
 
             return VoiceXml::make()
-                ->dial($target, ['callerId' => $this->normalizeCallerId($event['callerNumber'] ?? $pending->from_phone)])
+                ->dial($target, ['callerId' => AfricasTalkingVoiceService::dialCallerId()])
                 ->toResponse();
         }
 
@@ -494,32 +494,16 @@ class AfricasTalkingWebhookController extends Controller
 
         return $this->xmlResponse($this->dialClientXml(
             $target,
-            // The agent's softphone shows the customer's number — normalise it to
-            // +E.164 (stored to_phone is digits-only per ContactImportService).
-            $this->normalizeCallerId($call->to_phone),
+            // callerId must be a number the AT account owns; the customer's number
+            // is rejected ("Your account is not authorized to use the callerId").
+            AfricasTalkingVoiceService::dialCallerId(),
         ));
     }
 
     /**
-     * Normalise a caller-id to +E.164 for AT's <Dial callerId>. AT expects a
-     * leading '+' over bare digits; numbers we store (Contact.phone / to_phone)
-     * are digits-only, and an inbound callerNumber could carry spaces/dashes.
-     * Strip everything to digits and re-prepend '+' so the result is fully
-     * idempotent (a clean '+E.164' round-trips unchanged) and never carries a
-     * character AT would reject. Returns null for blank/digit-less input so
-     * dialClientXml / VoiceXml omit the attribute entirely.
-     */
-    private function normalizeCallerId(?string $raw): ?string
-    {
-        $digits = preg_replace('/\D+/', '', (string) $raw);
-
-        return $digits === '' || $digits === null ? null : '+'.$digits;
-    }
-
-    /**
-     * Build a <Dial> Voice XML action routing the call to a registered
-     * browser client by name. callerId (when given) is what the agent's
-     * softphone displays for the far party.
+     * Build a <Dial> Voice XML action routing the call to a registered browser
+     * client. $callerId, when given, MUST be a number the AT account owns (see
+     * AfricasTalkingVoiceService::dialCallerId()); AT aborts the call otherwise.
      */
     private function dialClientXml(string $clientName, ?string $callerId): string
     {

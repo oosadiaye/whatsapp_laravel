@@ -287,8 +287,11 @@ class AfricasTalkingWebhookTest extends TestCase
         // client name is validated as a phone number and aborts the live call with
         // "Invalid phone number agent_N in Dial action" (seen in production).
         $response->assertSee('phoneNumbers="sandbox.agent_'.$agent->id.'"', false);
-        // callerId is the customer's number so the agent's softphone shows who's calling.
-        $response->assertSee('callerId="+2348033333333"', false);
+        // callerId must be a number the AT account OWNS. Sending the customer's
+        // number made AT abort the call: "Your account is not authorized to use
+        // the callerId [+...]" (seen in production).
+        $response->assertSee('callerId="+2348100000000"', false);
+        $response->assertDontSee('callerId="+2348033333333"', false);
     }
 
     public function test_inbound_call_control_with_no_agent_returns_say(): void
@@ -457,7 +460,7 @@ class AfricasTalkingWebhookTest extends TestCase
     public function test_outbound_call_control_normalizes_caller_id_to_e164(): void
     {
         // to_phone is stored digits-only (ContactImportService convention); AT's
-        // <Dial callerId> needs +E.164 so the agent's softphone shows a real number.
+        // <Dial callerId> must be the account's own number in +E.164 — never the customer's.
         $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_ctrl_callerid');
 
         $response = $this->postWebhook([
@@ -468,7 +471,8 @@ class AfricasTalkingWebhookTest extends TestCase
         ]);
 
         $response->assertOk();
-        $response->assertSee('callerId="+'.$call->to_phone.'"', false);
+        $response->assertSee('callerId="+2348100000000"', false);
+        $response->assertDontSee('callerId="+'.$call->to_phone.'"', false);
     }
 
     public function test_duplicate_recording_url_callback_does_not_create_a_second_voicemail(): void

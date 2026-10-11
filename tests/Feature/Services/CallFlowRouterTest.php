@@ -23,6 +23,8 @@ class CallFlowRouterTest extends TestCase
         // <at-username>.<clientName> — so the username must be configured or
         // there is no dialable target and the flow falls through to busy.
         Setting::set('africastalking_username', 'sandbox');
+        // The only callerId AT accepts is a number the account owns.
+        Setting::set('africastalking_virtual_number', '+2348100000000');
         // Start from a known all-off baseline; each test opts features on.
         config([
             'voice.business_hours_enabled' => false,
@@ -60,7 +62,11 @@ class CallFlowRouterTest extends TestCase
 
         $xml = $this->router()->entryXml($call)->render();
 
-        $this->assertStringContainsString('<Dial phoneNumbers="sandbox.agent_'.$agentId.'" callerId="+2348011112222"/>', $xml);
+        // callerId must be the account's OWN number. AT aborts the call with
+        // "Your account is not authorized to use the callerId [<customer number>]"
+        // when we pass the customer's number (seen in production).
+        $this->assertStringContainsString('<Dial phoneNumbers="sandbox.agent_'.$agentId.'" callerId="+2348100000000"/>', $xml);
+        $this->assertStringNotContainsString('2348011112222"', $xml, 'the customer number must never be sent as callerId');
     }
 
     public function test_recording_consent_notice_is_announced_before_dialing(): void

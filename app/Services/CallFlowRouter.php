@@ -98,9 +98,12 @@ class CallFlowRouter
             $xml = VoiceXml::make();
             $this->announceRecording($xml);
 
+            // callerId must be a number the AT account owns — the customer's number
+            // (call->from_phone) makes AT abort with "Your account is not authorized
+            // to use the callerId". See AfricasTalkingVoiceService::dialCallerId().
             return $xml->dial(
                 $dialTarget,
-                ['callerId' => $call->from_phone ?: null],
+                ['callerId' => AfricasTalkingVoiceService::dialCallerId()],
             );
         }
 

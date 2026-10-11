@@ -257,4 +257,27 @@ class AfricasTalkingVoiceServiceTest extends TestCase
         // Callers must not emit a <Dial> AT would abort anyway.
         $this->assertNull(AfricasTalkingVoiceService::dialTargetForUser(7));
     }
+
+    public function test_dial_caller_id_is_the_accounts_own_virtual_number_in_e164(): void
+    {
+        // AT only accepts a callerId the account owns; the customer's number makes
+        // it abort with "Your account is not authorized to use the callerId".
+        Setting::set('africastalking_virtual_number', '2342017001511');
+
+        $this->assertSame('+2342017001511', AfricasTalkingVoiceService::dialCallerId());
+    }
+
+    public function test_dial_caller_id_round_trips_an_already_e164_number(): void
+    {
+        Setting::set('africastalking_virtual_number', '+2342017001511');
+
+        $this->assertSame('+2342017001511', AfricasTalkingVoiceService::dialCallerId());
+    }
+
+    public function test_dial_caller_id_is_null_when_no_virtual_number_is_configured(): void
+    {
+        Setting::set('africastalking_virtual_number', '');
+
+        $this->assertNull(AfricasTalkingVoiceService::dialCallerId());
+    }
 }
