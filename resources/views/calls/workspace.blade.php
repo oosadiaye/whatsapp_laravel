@@ -102,19 +102,43 @@
                 },
                 press(k) { this.number += k; this.contactId = null; this.selectedContactName = ''; },
                 back() { this.number = this.number.slice(0, -1); this.contactId = null; this.selectedContactName = ''; },
-                // Number keys typed anywhere in the modal go to the CALL field,
-                // never the contact search field. Letters still reach the search
-                // input so agents can look up a contact by name.
+                // Keyboard dialing. Bound at WINDOW level (see @keydown.window on the
+                // root) so typing works wherever focus sits while the modal is open —
+                // clicking the backdrop or a keypad button leaves focus outside the
+                // dialog, and a dialog-scoped listener never saw those keystrokes.
+                // Guarded on `open` so it is inert while the modal is closed, and the
+                // binding exists only once so a key cannot register twice.
                 handleKey(e) {
+                    if (!this.open) return;
+                    // Leave browser/OS shortcuts (copy, paste, reload) alone.
+                    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
                     const k = e.key;
+                    const t = e.target;
+                    const typingInText = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA');
+
                     // Enter places the call from the keyboard (dials on Quick Call).
                     if (k === 'Enter') {
-                        if (this.number.trim()) {
+                        if (this.number.trim() && !this.calling) {
                             e.preventDefault();
                             this.placeCall();
                         }
                         return;
                     }
+
+                    // Backspace deletes the last dialed digit — unless the agent is
+                    // editing the contact search box, where it must edit that text
+                    // instead. Also stops the browser treating it as history-back.
+                    if (k === 'Backspace') {
+                        if (typingInText) return;
+                        e.preventDefault();
+                        this.back();
+                        return;
+                    }
+
+                    // Number keys typed anywhere in the modal go to the CALL field,
+                    // never the contact search field. Letters still reach the search
+                    // input so agents can look up a contact by name.
                     if (k === '+' || (k.length === 1 && /[0-9*#]/.test(k))) {
                         e.preventDefault();
                         this.press(k);
@@ -159,11 +183,11 @@
                 }
             }"
                  @open-quick-dial.window="open = true; loadContacts(); $nextTick(() => $refs.searchInput && $refs.searchInput.focus())"
-                 @keydown.escape.window="open = false">
+                 @keydown.escape.window="open = false"
+                 @keydown.window="handleKey($event)">
                 <template x-teleport="body">
                     <div x-show="open" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4"
-                         role="dialog" aria-modal="true" aria-label="{{ __('Quick Dial') }}"
-                         @keydown="handleKey($event)">
+                         role="dialog" aria-modal="true" aria-label="{{ __('Quick Dial') }}">
                         <div x-show="open" x-transition.opacity
                              class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="open = false"></div>
 
@@ -256,6 +280,10 @@
                                         <span x-text="calling ? '{{ __('Calling…') }}' : '{{ __('Start Call') }}'"></span>
                                     </button>
                                 </div>
+                                {{-- Discoverability: the keypad is also fully typeable. --}}
+                                <p class="mt-2 text-center text-[11px] text-slate-400">
+                                    {{ __('Type on your keyboard — Enter to call, Backspace to delete.') }}
+                                </p>
                                 <p x-show="!voiceReady" x-cloak
                                    class="mt-2 flex items-center gap-1.5 justify-center text-xs text-amber-600">
                                     <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>

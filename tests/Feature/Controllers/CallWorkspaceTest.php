@@ -36,6 +36,36 @@ class CallWorkspaceTest extends TestCase
             ->assertSee('Call Workspace');
     }
 
+    public function test_quick_dial_keypad_is_typeable_from_the_keyboard(): void
+    {
+        // Agents must be able to TYPE a number instead of mouse-clicking each key.
+        // handleKey is bound at WINDOW level so it fires wherever focus sits while
+        // the modal is open — a dialog-scoped listener missed every keystroke once
+        // focus left the dialog (e.g. after clicking the backdrop or a keypad key).
+        $html = $this->actingAs($this->makeUser('admin'))
+            ->get(route('calls.workspace'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString(
+            '@keydown.window="handleKey($event)"',
+            $html,
+            'Quick Dial must listen at window level so typing works regardless of focus.'
+        );
+
+        // A second, dialog-scoped binding would run handleKey twice for any key
+        // pressed inside the modal and double every digit entered.
+        $this->assertStringNotContainsString(
+            '@keydown="handleKey($event)"',
+            $html,
+            'handleKey must be bound exactly once (window level) — a dialog-scoped copy doubles each digit.'
+        );
+
+        // Enter dials and Backspace deletes, so the pad is fully usable mouse-free.
+        $this->assertStringContainsString("if (k === 'Enter')", $html);
+        $this->assertStringContainsString("if (k === 'Backspace')", $html);
+    }
+
     public function test_quick_dial_x_data_is_not_truncated_by_a_stray_double_quote(): void
     {
         // Regression: the Quick Dial keypad is an inline Alpine `x-data="{ ... }"`
