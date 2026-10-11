@@ -493,6 +493,159 @@ class AfricasTalkingWebhookTest extends TestCase
         $this->assertSame(1, \App\Models\Voicemail::where('recording_url', $payload['recordingUrl'])->count());
     }
 
+    // ── AT's REAL terminal-event vocabulary ──────────────────────────────────
+    //
+    // The webhook used to act only on status 'Completed'/'Failed', but Africa's
+    // Talking actually ends a session with status 'Success', 'Aborted' or
+    // 'NotAnswered' (payloads below are copied from production call logs). Every
+    // call therefore sat "in progress" until the 30-minute stale sweeper, which
+    // left a finished call resurfacing as a phantom incoming-call banner.
+
+    public function test_success_event_finalizes_the_call_with_duration_and_provider_cost(): void
+    {
+        $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_success');
+
+        $this->postWebhook([
+            'sessionId' => 'sess_success',
+            'status' => 'Success',
+            'callSessionState' => 'Completed',
+            'direction' => 'Outbound',
+            'durationInSeconds' => '25',
+            'amount' => '6.25000000000000050',
+            'currencyCode' => 'NGN',
+            'isActive' => '0',
+        ])->assertOk();
+
+        $fresh = $call->fresh();
+        $this->assertSame(CallLog::STATUS_ENDED, $fresh->status);
+        $this->assertSame(25, $fresh->duration_seconds);
+        $this->assertNotNull($fresh->ended_at);
+        $this->assertSame(625, $fresh->cost_estimate_kobo, 'AT reports the real billed NGN amount, so it is preferred');
+    }
+
+    public function test_success_event_for_an_inbound_call_no_agent_answered_is_missed(): void
+    {
+        $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_inbound_unanswered');
+        $call->update(['direction' => 'inbound', 'connected_at' => null]);
+
+        $this->postWebhook([
+            'sessionId' => 'sess_inbound_unanswered',
+            'status' => 'Success',
+            'callSessionState' => 'Completed',
+            'direction' => 'Inbound',
+            'durationInSeconds' => '20',
+            'isActive' => '0',
+        ])->assertOk();
+
+        $this->assertSame(CallLog::STATUS_MISSED, $call->fresh()->status);
+    }
+
+    public function test_success_event_dismisses_the_banner(): void
+    {
+        Event::fake([CallTerminated::class]);
+        $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_success_banner');
+
+        $this->postWebhook([
+            'sessionId' => 'sess_success_banner',
+            'status' => 'Success',
+            'callSessionState' => 'Completed',
+            'direction' => 'Outbound',
+            'durationInSeconds' => '25',
+            'isActive' => '0',
+        ])->assertOk();
+
+        Event::assertDispatched(CallTerminated::class);
+    }
+
+    public function test_aborted_event_fails_the_call_and_keeps_ats_error_message(): void
+    {
+        $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_aborted');
+
+        $this->postWebhook([
+            'sessionId' => 'sess_aborted',
+            'status' => 'Aborted',
+            'callSessionState' => 'Completed',
+            'direction' => 'Outbound',
+            'durationInSeconds' => '1',
+            'errorMessage' => 'Invalid phone number agent_1 in Dial action',
+            'isActive' => '0',
+        ])->assertOk();
+
+        $fresh = $call->fresh();
+        $this->assertSame(CallLog::STATUS_FAILED, $fresh->status);
+        $this->assertStringContainsString('Invalid phone number agent_1 in Dial action', $fresh->failure_reason);
+    }
+
+    public function test_not_answered_event_does_not_finalize_so_the_final_event_still_lands(): void
+    {
+        // AT sends a NotAnswered notification alongside the session's final
+        // Success/Aborted event, and sends it FIRST. Finalizing on it would make
+        // the terminal guard discard the final event's duration and billed cost.
+        $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_not_answered');
+
+        $this->postWebhook([
+            'sessionId' => 'sess_not_answered',
+            'status' => 'NotAnswered',
+            'callSessionState' => 'NotAnswered',
+            'hangupCause' => 'UNSPECIFIED',
+            'direction' => 'Outbound',
+            'durationInSeconds' => '0',
+            'isActive' => '0',
+        ])->assertOk();
+
+        $this->assertSame(CallLog::STATUS_RINGING, $call->fresh()->status, 'NotAnswered alone must not end the call');
+
+        $this->postWebhook([
+            'sessionId' => 'sess_not_answered',
+            'status' => 'Success',
+            'callSessionState' => 'Completed',
+            'direction' => 'Outbound',
+            'durationInSeconds' => '25',
+            'isActive' => '0',
+        ])->assertOk();
+
+        $fresh = $call->fresh();
+        $this->assertSame(CallLog::STATUS_ENDED, $fresh->status);
+        $this->assertSame(25, $fresh->duration_seconds, 'the final event duration must not be dropped');
+    }
+
+    public function test_a_failed_bridge_to_the_agent_is_recorded_on_the_call(): void
+    {
+        // The customer answered but AT could not reach the agent browser. AT only
+        // says so in lastBridgeHangupCause - previously we had to read raw JSON on
+        // the server to find out why a call "ended immediately".
+        $call = $this->makeOutboundCall(CallLog::STATUS_RINGING, 'sess_bridge_fail');
+
+        $this->postWebhook([
+            'sessionId' => 'sess_bridge_fail',
+            'status' => 'Success',
+            'callSessionState' => 'Completed',
+            'direction' => 'Outbound',
+            'durationInSeconds' => '25',
+            'lastBridgeHangupCause' => 'NO_USER_RESPONSE',
+            'isActive' => '0',
+        ])->assertOk();
+
+        $this->assertStringContainsString('NO_USER_RESPONSE', (string) $call->fresh()->failure_reason);
+    }
+
+    public function test_a_clean_bridge_hangup_is_not_recorded_as_a_failure(): void
+    {
+        $call = $this->makeOutboundCall(CallLog::STATUS_CONNECTED, 'sess_bridge_ok');
+
+        $this->postWebhook([
+            'sessionId' => 'sess_bridge_ok',
+            'status' => 'Success',
+            'callSessionState' => 'Completed',
+            'direction' => 'Outbound',
+            'durationInSeconds' => '60',
+            'lastBridgeHangupCause' => 'NORMAL_CLEARING',
+            'isActive' => '0',
+        ])->assertOk();
+
+        $this->assertNull($call->fresh()->failure_reason);
+    }
+
     private function postWebhook(array $payload)
     {
         // AT posts form-encoded callbacks to the URL carrying the secret path

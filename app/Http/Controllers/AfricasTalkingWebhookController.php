@@ -142,14 +142,25 @@ class AfricasTalkingWebhookController extends Controller
         $call->appendRawEvent(strtolower((string) ($status ?? 'unknown')), $event);
         $call->save();
 
+        // 'Success' / 'Aborted' are what Africa's Talking REALLY sends when a
+        // session ends (copied from production call logs). 'Completed' was the
+        // original guess at that vocabulary and is kept for compatibility. Before
+        // these were handled every call sat "in progress" until the 30-minute
+        // stale sweeper, so a finished call kept resurfacing as a phantom
+        // incoming-call banner.
+        //
+        // 'NotAnswered' is deliberately NOT terminal here: AT sends it alongside
+        // (and BEFORE) the session's final Success/Aborted event, and finalizing
+        // on it would make the terminal guard above discard that final event's
+        // duration and billed cost. It is still kept in the raw event log.
         match ($status) {
             'Ringing' => $call->update(['status' => CallLog::STATUS_RINGING]),
             'InProgress' => $call->update([
                 'status' => CallLog::STATUS_CONNECTED,
                 'connected_at' => $call->connected_at ?? now(),
             ]),
-            'Completed' => $this->finalizeCall($call, $event, $this->resolveCompletedStatus($call)),
-            'Failed' => $this->finalizeCall($call, $event, CallLog::STATUS_FAILED),
+            'Completed', 'Success' => $this->finalizeCall($call, $event, $this->resolveCompletedStatus($call)),
+            'Failed', 'Aborted' => $this->finalizeCall($call, $event, CallLog::STATUS_FAILED),
             default => null,
         };
 
@@ -347,7 +358,10 @@ class AfricasTalkingWebhookController extends Controller
         // reconciliation; the flat estimate above stays the working figure,
         // but when a real amount is present we prefer it for accuracy.
         $providerAmount = $event['amount'] ?? null;
-        $providerCurrency = $event['currency'] ?? null;
+        // AT's real field is currencyCode ("currencyCode":"NGN" in production
+        // payloads). Reading only 'currency' meant the billed amount was never
+        // upgraded from the flat estimate. Keep 'currency' as a fallback.
+        $providerCurrency = $event['currencyCode'] ?? $event['currency'] ?? null;
         if (is_numeric($providerAmount)) {
             $update['provider_amount'] = (float) $providerAmount;
             $update['provider_currency'] = is_string($providerCurrency) && $providerCurrency !== ''
@@ -362,8 +376,25 @@ class AfricasTalkingWebhookController extends Controller
         }
 
         if ($endStatus === CallLog::STATUS_FAILED) {
-            $cause = $event['hangupCause'] ?? 'AT_FAILED';
+            // An Aborted event carries AT's own explanation in errorMessage
+            // (e.g. "Invalid phone number agent_1 in Dial action"), which beats
+            // the generic hangupCause — it is the only place AT says what it
+            // objected to.
+            $cause = $event['errorMessage'] ?? $event['hangupCause'] ?? 'AT_FAILED';
             $update['failure_reason'] = "AT failure: {$cause}";
+        }
+
+        // The customer leg can succeed while AT fails to bridge to the agent's
+        // browser; AT reports that ONLY in lastBridgeHangupCause (e.g.
+        // NO_USER_RESPONSE = the call never reached the browser). Record anything
+        // other than a clean hangup so the reason is on the call instead of in raw
+        // JSON that had to be read off the server.
+        $bridgeCause = $event['lastBridgeHangupCause'] ?? null;
+        if (! isset($update['failure_reason'])
+            && is_string($bridgeCause)
+            && $bridgeCause !== ''
+            && $bridgeCause !== 'NORMAL_CLEARING') {
+            $update['failure_reason'] = "AT bridge: {$bridgeCause}";
         }
 
         $call->update($update);
