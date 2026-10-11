@@ -71,7 +71,13 @@
         <script src="{{ asset('vendor/chart.min.js') }}"></script>
         @auth
             @if($bqAtVoiceReady)
-                <script defer data-at-sdk src="{{ asset('vendor/africastalking-1.0.7.js') }}"></script>
+                {{-- ?v=<mtime> cache-buster. Everything under /vendor keeps a STABLE
+                     filename behind the CDN's 4h max-age, so without this an updated
+                     vendored SDK keeps serving the old bytes for hours after a deploy
+                     (observed: the self-hosted-tones patch shipped but Cloudflare kept
+                     returning cf-cache-status: HIT on the previous file). Vite's build
+                     assets are content-hashed and never hit this. --}}
+                <script defer data-at-sdk src="{{ asset('vendor/africastalking-1.0.7.js') }}?v={{ @filemtime(public_path('vendor/africastalking-1.0.7.js')) ?: '1' }}"></script>
             @endif
         @endauth
         @livewireStyles

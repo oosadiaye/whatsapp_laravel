@@ -36,6 +36,33 @@ class CallWorkspaceTest extends TestCase
             ->assertSee('Call Workspace');
     }
 
+    public function test_vendored_at_sdk_script_is_cache_busted(): void
+    {
+        // Everything under /vendor keeps a STABLE filename behind the CDN's 4h
+        // max-age, so an updated SDK keeps serving stale bytes for hours after a
+        // deploy unless the URL changes. (Observed in production: the
+        // self-hosted-tones patch shipped but Cloudflare kept returning
+        // cf-cache-status: HIT for the previous file.) Vite's build assets are
+        // content-hashed and never hit this.
+        // The SDK <script> only renders once all three AT credentials are set
+        // (the layout's $bqAtVoiceConfigured gate), so configure them first.
+        // generateClientToken() short-circuits to a stub in the testing env.
+        \App\Models\Setting::set('africastalking_username', 'test-user');
+        \App\Models\Setting::set('africastalking_virtual_number', '+254700000000');
+        \App\Models\Setting::setEncrypted('africastalking_api_key', 'test-key');
+
+        $html = $this->actingAs($this->makeUser('admin'))
+            ->get(route('calls.workspace'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '~data-at-sdk src="[^"]*vendor/africastalking-1\.0\.7\.js\?v=\d+"~',
+            $html,
+            'the vendored AT SDK <script> must carry a ?v=<mtime> cache-buster'
+        );
+    }
+
     public function test_quick_dial_keypad_is_typeable_from_the_keyboard(): void
     {
         // Agents must be able to TYPE a number instead of mouse-clicking each key.

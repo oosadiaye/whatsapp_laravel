@@ -48,7 +48,10 @@ function loadAtSdk(forceReload = false) {
     delete window.Africastalking;
     return new Promise((resolve) => {
         const s = document.createElement('script');
-        s.src = `${AT_SDK_SRC}?t=${Date.now()}`;
+        // The layout's src already carries a ?v=<mtime> cache-buster, so pick the
+        // right separator — `${src}?t=` would otherwise build `...js?v=1?t=2`,
+        // folding the reload token into the v= value and defeating the bust.
+        s.src = `${AT_SDK_SRC}${AT_SDK_SRC.includes('?') ? '&' : '?'}t=${Date.now()}`;
         s.async = true;
         s.dataset.atSdk = '';
         const timer = setTimeout(() => { s.remove(); resolve(false); }, 15000);
