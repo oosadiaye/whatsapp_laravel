@@ -479,8 +479,21 @@ class AfricasTalkingWebhookController extends Controller
             return $this->xmlResponse('<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>');
         }
 
+        // AT addresses a browser client as <at-username>.<clientName>; a bare
+        // client name aborts the call with "Invalid phone number agent_N in Dial
+        // action". Without a configured username we cannot form a dialable target,
+        // so reject rather than emit a <Dial> AT will refuse anyway.
+        $target = AfricasTalkingVoiceService::dialTargetForUser((int) $call->placed_by_user_id);
+        if ($target === null) {
+            Log::warning("AT outbound call-control: Africa's Talking username not configured, cannot address the agent's browser client", [
+                'session_id' => $sessionId,
+            ]);
+
+            return $this->xmlResponse('<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>');
+        }
+
         return $this->xmlResponse($this->dialClientXml(
-            AfricasTalkingVoiceService::clientNameForUser((int) $call->placed_by_user_id),
+            $target,
             // The agent's softphone shows the customer's number — normalise it to
             // +E.164 (stored to_phone is digits-only per ContactImportService).
             $this->normalizeCallerId($call->to_phone),

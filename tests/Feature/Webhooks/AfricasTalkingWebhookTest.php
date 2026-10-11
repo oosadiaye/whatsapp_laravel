@@ -283,7 +283,10 @@ class AfricasTalkingWebhookTest extends TestCase
         $this->assertSame($agent->id, $call->conversation->assigned_to_user_id);
 
         $response->assertSee('<Dial', false);
-        $response->assertSee('phoneNumbers="agent_'.$agent->id.'"', false);
+        // AT addresses a browser client as <at-username>.<clientName>. A bare
+        // client name is validated as a phone number and aborts the live call with
+        // "Invalid phone number agent_N in Dial action" (seen in production).
+        $response->assertSee('phoneNumbers="sandbox.agent_'.$agent->id.'"', false);
         // callerId is the customer's number so the agent's softphone shows who's calling.
         $response->assertSee('callerId="+2348033333333"', false);
     }
@@ -325,7 +328,8 @@ class AfricasTalkingWebhookTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('<Dial', false);
-        $response->assertSee('phoneNumbers="agent_'.$call->placed_by_user_id.'"', false);
+        // <at-username>.<clientName> — see the inbound test for why a bare name fails.
+        $response->assertSee('phoneNumbers="sandbox.agent_'.$call->placed_by_user_id.'"', false);
     }
 
     public function test_outbound_call_control_unknown_session_rejects(): void

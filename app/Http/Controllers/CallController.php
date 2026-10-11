@@ -761,8 +761,18 @@ class CallController extends Controller
         if ($validated['target_type'] === 'agent') {
             $targetId = (int) $validated['target_user_id'];
 
+            // AT addresses a browser client as <at-username>.<clientName>; a bare
+            // client name aborts the transferred leg with "Invalid phone number
+            // agent_N in Dial action". No username configured means no dialable
+            // target, so fail loudly instead of transferring the caller into a
+            // leg AT will drop.
+            $target = AfricasTalkingVoiceService::dialTargetForUser($targetId);
+            if ($target === null) {
+                return response()->json(['error' => "Africa's Talking username is not configured."], 503);
+            }
+
             $call->update([
-                'transfer_target' => AfricasTalkingVoiceService::clientNameForUser($targetId),
+                'transfer_target' => $target,
                 'transferred_to_user_id' => $targetId,
                 'transfer_type' => 'blind',
                 'transferred_at' => now(),

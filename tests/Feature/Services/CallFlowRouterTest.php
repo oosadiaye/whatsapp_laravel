@@ -19,6 +19,10 @@ class CallFlowRouterTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Dialling an agent targets their browser client, which AT addresses as
+        // <at-username>.<clientName> — so the username must be configured or
+        // there is no dialable target and the flow falls through to busy.
+        Setting::set('africastalking_username', 'sandbox');
         // Start from a known all-off baseline; each test opts features on.
         config([
             'voice.business_hours_enabled' => false,
@@ -56,7 +60,7 @@ class CallFlowRouterTest extends TestCase
 
         $xml = $this->router()->entryXml($call)->render();
 
-        $this->assertStringContainsString('<Dial phoneNumbers="agent_'.$agentId.'" callerId="+2348011112222"/>', $xml);
+        $this->assertStringContainsString('<Dial phoneNumbers="sandbox.agent_'.$agentId.'" callerId="+2348011112222"/>', $xml);
     }
 
     public function test_recording_consent_notice_is_announced_before_dialing(): void
@@ -112,7 +116,7 @@ class CallFlowRouterTest extends TestCase
 
         $xml = $this->router()->digitSelectionXml($call, '1')->render();
 
-        $this->assertStringContainsString('<Dial phoneNumbers="agent_'.$agentId.'"', $xml);
+        $this->assertStringContainsString('<Dial phoneNumbers="sandbox.agent_'.$agentId.'"', $xml);
     }
 
     public function test_ivr_queue_option_enqueues(): void

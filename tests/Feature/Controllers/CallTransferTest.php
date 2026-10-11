@@ -7,6 +7,7 @@ namespace Tests\Feature\Controllers;
 use App\Events\Calling\CallRinging;
 use App\Models\CallLog;
 use App\Models\Conversation;
+use App\Models\Setting;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,6 +23,9 @@ class CallTransferTest extends TestCase
         parent::setUp();
         $this->seed(RolesAndPermissionsSeeder::class);
         config(['voice.transfer_enabled' => true, 'voice.at_webhook_secret' => 'test-secret']);
+        // Transferring to an agent dials their browser client, which AT addresses
+        // as <at-username>.<clientName> — so the username must be configured.
+        Setting::set('africastalking_username', 'sandbox');
     }
 
     private function makeAgent(?string $email = null): User
@@ -57,7 +61,7 @@ class CallTransferTest extends TestCase
             ->assertOk();
 
         $call->refresh();
-        $this->assertSame('agent_'.$to->id, $call->transfer_target);
+        $this->assertSame('sandbox.agent_'.$to->id, $call->transfer_target);
         $this->assertSame($to->id, $call->transferred_to_user_id);
         $this->assertSame($to->id, $call->conversation->assigned_to_user_id);
         Event::assertDispatched(CallRinging::class);

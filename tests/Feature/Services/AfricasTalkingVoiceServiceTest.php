@@ -221,4 +221,40 @@ class AfricasTalkingVoiceServiceTest extends TestCase
             $service->generateClientToken($user),
         );
     }
+
+    /**
+     * REGRESSION (production outage): every outbound call aborted ~1s after the
+     * customer answered, with Africa's Talking reporting:
+     *
+     *   "errorMessage": "Invalid phone number agent_1 in Dial action"
+     *
+     * AT validates <Dial phoneNumbers> as a DIALABLE destination, so a bare
+     * WebRTC client name is rejected. A browser client is addressed as
+     * <at-username>.<clientName>. These pin that split: clientNameForUser is the
+     * REGISTRATION identity (what the capability token is minted for) and must
+     * stay unprefixed; dialTargetForUser is what goes into <Dial>.
+     */
+    public function test_dial_target_prefixes_the_client_name_with_the_at_username(): void
+    {
+        Setting::set('africastalking_username', 'quo_call');
+
+        $this->assertSame('quo_call.agent_7', AfricasTalkingVoiceService::dialTargetForUser(7));
+    }
+
+    public function test_client_name_stays_unprefixed_for_token_registration(): void
+    {
+        Setting::set('africastalking_username', 'quo_call');
+
+        // The capability token is minted for the BARE client name; prefixing it
+        // here would stop the browser SDK registering under the name AT dials.
+        $this->assertSame('agent_7', AfricasTalkingVoiceService::clientNameForUser(7));
+    }
+
+    public function test_dial_target_is_null_when_the_at_username_is_not_configured(): void
+    {
+        Setting::set('africastalking_username', '');
+
+        // Callers must not emit a <Dial> AT would abort anyway.
+        $this->assertNull(AfricasTalkingVoiceService::dialTargetForUser(7));
+    }
 }

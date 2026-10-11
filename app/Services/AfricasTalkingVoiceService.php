@@ -195,15 +195,43 @@ class AfricasTalkingVoiceService
     }
 
     /**
-     * Deterministic per-agent WebRTC client identifier. Africa's Talking
-     * routes a call to a browser client by dialing this name in a
-     * <Dial phoneNumbers="..."/> voice action, so it MUST match the
-     * clientName the capability token was minted for. No spaces allowed
-     * per AT's requirement — `agent_<id>` satisfies that.
+     * Deterministic per-agent WebRTC client identifier — the REGISTRATION
+     * identity: the clientName the capability token is minted for, and the name
+     * the browser SDK registers under. No spaces allowed per AT's requirement,
+     * which `agent_<id>` satisfies.
+     *
+     * This is NOT what you put in <Dial phoneNumbers="...">; see
+     * {@see self::dialTargetForUser()}.
      */
     public static function clientNameForUser(int $userId): string
     {
         return 'agent_'.$userId;
+    }
+
+    /**
+     * The <Dial phoneNumbers="..."> value that routes a live call to an agent's
+     * registered browser client.
+     *
+     * Africa's Talking validates phoneNumbers as a DIALABLE destination and
+     * rejects a bare client name. A live outbound call aborted with:
+     *
+     *   "Invalid phone number agent_1 in Dial action"
+     *
+     * A WebRTC client is addressed as `<at-username>.<clientName>`, so the
+     * account username must prefix the registration identity.
+     *
+     * Returns null when the AT username isn't configured — callers must then
+     * NOT emit a <Dial>, because AT would abort the call the same way.
+     */
+    public static function dialTargetForUser(int $userId): ?string
+    {
+        $username = trim((string) Setting::get('africastalking_username', ''));
+
+        if ($username === '') {
+            return null;
+        }
+
+        return $username.'.'.self::clientNameForUser($userId);
     }
 
     public function clientName(User $user): string

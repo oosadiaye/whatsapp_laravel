@@ -85,12 +85,21 @@ class CallFlowRouter
     {
         $agentId = $call->conversation?->assigned_to_user_id;
 
-        if ($agentId !== null) {
+        // AT addresses a browser client as <at-username>.<clientName>; a bare
+        // client name aborts the call with "Invalid phone number agent_N in Dial
+        // action". With no configured username there is no dialable target, so
+        // fall through to queue/voicemail/busy rather than emit a <Dial> AT
+        // would refuse.
+        $dialTarget = $agentId !== null
+            ? AfricasTalkingVoiceService::dialTargetForUser((int) $agentId)
+            : null;
+
+        if ($dialTarget !== null) {
             $xml = VoiceXml::make();
             $this->announceRecording($xml);
 
             return $xml->dial(
-                AfricasTalkingVoiceService::clientNameForUser((int) $agentId),
+                $dialTarget,
                 ['callerId' => $call->from_phone ?: null],
             );
         }
