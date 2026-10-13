@@ -479,6 +479,84 @@ class TaskBoard extends Component
     }
 
     /**
+     * Move a card one column to the right ("send to next").
+     *
+     * Native HTML5 drag-and-drop does not fire on touch screens, so this gives every
+     * card a gesture-free way to advance. It delegates to moveTask() so permission,
+     * status validation, collision-safe positions, notifications and the WIP notice
+     * all behave exactly as they do for a drag. A card already in the last column
+     * has nowhere to go and is left alone.
+     */
+    public function advanceTask(int $taskId): void
+    {
+        abort_unless($this->canMove(), 403);
+
+        $task = $this->taskOnCurrentBoardOrFail($taskId);
+
+        $slugs = array_keys($this->statusColumns());
+        $index = array_search($task->status, $slugs, true);
+        $next = $index === false ? null : ($slugs[$index + 1] ?? null);
+
+        if ($next === null) {
+            return;
+        }
+
+        $this->moveTask($task->id, $next, $this->endSlot((int) $task->board_id, $next));
+    }
+
+    /**
+     * Mark a card done: jump it straight to the board's completed column.
+     *
+     * "Completed" is read from the columns' is_completed flag rather than a column
+     * called `done`, so it follows whatever an admin has configured; if no column is
+     * flagged, the last column is treated as the finish line. A card already in a
+     * completed column is left alone.
+     */
+    public function completeTask(int $taskId): void
+    {
+        abort_unless($this->canMove(), 403);
+
+        $task = $this->taskOnCurrentBoardOrFail($taskId);
+        $columns = $this->statusColumns();
+
+        if ($columns[$task->status]['completed'] ?? false) {
+            return;
+        }
+
+        $target = null;
+        foreach ($columns as $slug => $column) {
+            if ($column['completed'] ?? false) {
+                $target = $slug;
+                break;
+            }
+        }
+        $target ??= array_key_last($columns);
+
+        if ($target === null || $target === $task->status) {
+            return;
+        }
+
+        $this->moveTask($task->id, $target, $this->endSlot((int) $task->board_id, $target));
+    }
+
+    /**
+     * The slot that puts a card at the very END of a column.
+     *
+     * reservePosition() stores slot + 1 and shifts everything at or past it, so the
+     * slot that appends without disturbing any card is the highest position in use.
+     * Soft-deleted rows are counted because the unique (board, status, position)
+     * index counts them, and positions can have gaps where earlier moves vacated
+     * a slot, so a plain count would land mid-column.
+     */
+    private function endSlot(int $boardId, string $status): int
+    {
+        return (int) Task::withTrashed()
+            ->where('board_id', $boardId)
+            ->where('status', $status)
+            ->max('position');
+    }
+
+    /**
      * Put the WIP notice away.
      *
      * Writes nothing, so it needs no permission beyond the render() check —

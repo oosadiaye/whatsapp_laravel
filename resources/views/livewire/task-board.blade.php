@@ -266,6 +266,33 @@
                                 <span>{{ $task->updated_at?->diffForHumans() }}</span>
                             </div>
 
+                            {{-- One-tap movement. Native drag-and-drop does not fire on touch
+                                 screens, so these are the dependable way to move a card. They
+                                 call the same server path as a drag (moveTask). Hidden once the
+                                 card is finished, and "Next" is hidden in the last column. --}}
+                            @can('tasks.edit')
+                                @unless($col['completed'] ?? false)
+                                    <div class="mt-2 flex items-center gap-2 border-t border-gray-100 pt-2">
+                                        <button type="button"
+                                                wire:click="completeTask({{ $task->id }})"
+                                                wire:loading.attr="disabled"
+                                                title="Mark done — moves the card to the finished column"
+                                                class="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
+                                            <span aria-hidden="true">✓</span> Done
+                                        </button>
+                                        @if($key !== array_key_last($columns))
+                                            <button type="button"
+                                                    wire:click="advanceTask({{ $task->id }})"
+                                                    wire:loading.attr="disabled"
+                                                    title="Move to the next column"
+                                                    class="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
+                                                Next <span aria-hidden="true">→</span>
+                                            </button>
+                                        @endif
+                                    </div>
+                                @endunless
+                            @endcan
+
                             @can('tasks.delete')
                                 <button wire:click="deleteTask({{ $task->id }})"
                                         wire:confirm="Delete this task?"
@@ -486,7 +513,9 @@
 </div>
 
 @push('scripts')
-<script>
+{{-- The nonce is REQUIRED: production CSP is script-src 'self' 'nonce-...', so an
+     inline script without one is silently refused and dragging does nothing. --}}
+<script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
     // Vanilla HTML5 drag-and-drop → Livewire. Kept dependency-free so no new
     // npm package is required; the sortable library can replace this later
     // without touching the PHP component contract (`task-moved`).
