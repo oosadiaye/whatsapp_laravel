@@ -74,6 +74,40 @@ function candidateField(candidate, field) {
 }
 
 /**
+ * Does ONE STUN server answer from this network? Asked on its own connection, so a silent
+ * server cannot be mistaken for an agreeing one (see checkNetwork).
+ */
+export async function checkStunReachable({ PeerConnection, url, timeoutMs = 3500 }) {
+    let timer;
+    const pc = new PeerConnection({ iceServers: [{ urls: url }] });
+
+    try {
+        pc.createDataChannel('probe');
+
+        const answered = new Promise((resolve) => {
+            pc.onicecandidate = (event) => {
+                const candidate = event?.candidate;
+                if (!candidate) {
+                    resolve(false); // gathering finished without a server-reflexive candidate
+                } else if (candidateField(candidate, 'type') === 'srflx') {
+                    resolve(true);
+                }
+            };
+        });
+        const timeout = new Promise((resolve) => {
+            timer = setTimeout(() => resolve(false), timeoutMs);
+        });
+
+        await pc.setLocalDescription(await pc.createOffer());
+
+        return await Promise.race([answered, timeout]);
+    } finally {
+        clearTimeout(timer);
+        try { pc.close(); } catch { /* already closed */ }
+    }
+}
+
+/**
  * Gather ICE candidates exactly like a call would and classify what the network allows.
  *
  *  - srflx/prflx present  = this network has a UDP route to the internet (STUN works).
@@ -86,8 +120,18 @@ export async function checkNetwork({ PeerConnection, iceServers, timeoutMs = 700
     const counts = { host: 0, srflx: 0, prflx: 0, relay: 0 };
 
     if (typeof PeerConnection !== 'function') {
-        return { supported: false, udpRoute: false, symmetricNat: false, timedOut: false, counts };
+        return { supported: false, udpRoute: false, symmetricNat: false, timedOut: false, serversAnswered: 0, counts };
     }
+
+    // Which of the listed STUN servers answer AT ALL, each asked on its own connection.
+    // Needed because Chrome merges identical candidates: two servers that both see the same
+    // public address produce ONE srflx candidate, indistinguishable from "the second server
+    // was silent". Only when two servers answered does a single merged candidate prove the
+    // router uses one consistent public address (i.e. is NOT a symmetric NAT).
+    const stunUrls = (iceServers ?? [])
+        .flatMap((server) => [].concat(server.urls ?? []))
+        .filter((url) => /^stuns?:/i.test(url));
+    const reachability = Promise.all(stunUrls.map((url) => checkStunReachable({ PeerConnection, url }).catch(() => false)));
 
     const mappedPorts = new Map(); // local (related) port -> set of public ports seen
     let timedOut = false;
@@ -129,11 +173,14 @@ export async function checkNetwork({ PeerConnection, iceServers, timeoutMs = 700
         try { pc.close(); } catch { /* already closed */ }
     }
 
+    const serversAnswered = (await reachability).filter(Boolean).length;
+
     return {
         supported: true,
         udpRoute: counts.srflx + counts.prflx > 0,
         symmetricNat: [...mappedPorts.values()].some((ports) => ports.size > 1),
         timedOut,
+        serversAnswered,
         counts,
     };
 }
@@ -241,15 +288,15 @@ export function interpretResults(results) {
             'Your router assigns a different public address for each destination (a symmetric NAT). This is common on mobile data, phone hotspots and some offices, and call audio often fails across it without a TURN relay. '
             + 'If calls here connect but are silent, this is why.');
     } else if (net) {
-        // A symmetric NAT is only visible by comparing two STUN servers' answers for the same
-        // local port. With one answer there is nothing to compare, so say so rather than
-        // promising a clean route.
-        const confirmed = (net.counts?.srflx ?? 0) >= 2;
+        // A symmetric NAT shows up as TWO different public ports for one local port. With a
+        // normal router both test servers see the same address and Chrome merges them into
+        // one candidate, so a clean result is only proven when at least two servers answered.
+        const confirmed = (net.serversAnswered ?? 0) >= 2;
         add('ok', 'Network route found',
             (net.counts?.relay > 0 ? 'A relay server also answered. ' : '')
             + (confirmed
-                ? 'A direct route to the internet is confirmed against two test servers.'
-                : 'A route to the internet was found, but the second test server did not answer, so a symmetric NAT cannot be ruled out. If calls here connect but are silent, run the check again or ask for a TURN relay.'));
+                ? 'A direct route to the internet is confirmed: two independent test servers saw the same public address, so this is not a symmetric NAT.'
+                : 'A route to the internet was found, but fewer than two test servers answered, so a symmetric NAT cannot be ruled out. If calls here connect but are silent, run the check again or ask for a TURN relay.'));
     }
 
     if (typeof results.otherTabs === 'number' && results.otherTabs > 0) {
@@ -296,8 +343,8 @@ export function buildReport(results, { userAgent = '', now = '' } = {}) {
 
 // ── Alpine component ─────────────────────────────────────────────────────────
 
-/** A second public STUN server, used ONLY by the probe, to tell a symmetric NAT apart. */
-const PROBE_EXTRA_STUN = 'stun:stun1.l.google.com:19302';
+/** Extra public STUN servers, used ONLY by the probe, from two different providers, so a symmetric NAT shows up as differing addresses. */
+const PROBE_EXTRA_STUN = ['stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'];
 
 function configuredIceServers(doc) {
     try {
@@ -347,9 +394,8 @@ export const voiceCheck = () => ({
 
             this.stepNote = 'Testing your network route for call audio… (a few seconds)';
             const configured = configuredIceServers(document);
-            const probeServers = configured.some((s) => [].concat(s.urls ?? []).includes(PROBE_EXTRA_STUN))
-                ? configured
-                : [...configured, { urls: PROBE_EXTRA_STUN }];
+            const alreadyListed = (url) => configured.some((s) => [].concat(s.urls ?? []).includes(url));
+            const probeServers = [...configured, ...PROBE_EXTRA_STUN.filter((url) => !alreadyListed(url)).map((urls) => ({ urls }))];
             results.network = {
                 ...(await checkNetwork({ PeerConnection: window.RTCPeerConnection, iceServers: probeServers })),
                 turnConfigured: hasTurn(configured),

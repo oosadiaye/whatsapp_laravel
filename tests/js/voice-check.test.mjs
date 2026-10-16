@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     checkNetwork,
+    checkStunReachable,
     checkSoftphone,
     countOtherTabs,
     interpretResults,
@@ -118,6 +119,62 @@ test('network: reports unsupported browsers rather than throwing', async () => {
     assert.equal(result.supported, false);
 });
 
+// ── STUN reachability (is each test server answering at all?) ────────────────
+
+/** A PC whose single STUN server answers only if its url is in `answering`. */
+function fakeStunAwarePC(answering) {
+    return class FakePC {
+        constructor(config) { this.url = config.iceServers?.[0]?.urls; this.closed = false; FakePC.made.push(this); }
+        createDataChannel() {}
+        async createOffer() { return { type: 'offer' }; }
+        async setLocalDescription() {
+            queueMicrotask(() => {
+                if (answering.includes(this.url)) this.onicecandidate?.({ candidate: srflx(50001) });
+                else this.onicecandidate?.({ candidate: null }); // gathering finished, no srflx: it was silent
+            });
+        }
+        close() { this.closed = true; }
+    };
+}
+
+test('stun: a server that yields a server-reflexive candidate is reachable', async () => {
+    const PC = fakeStunAwarePC(['stun:a']);
+    PC.made = [];
+
+    assert.equal(await checkStunReachable({ PeerConnection: PC, url: 'stun:a' }), true);
+    assert.equal(await checkStunReachable({ PeerConnection: PC, url: 'stun:b' }), false);
+    assert.ok(PC.made.every((pc) => pc.closed), 'every probe connection is closed');
+});
+
+test('stun: a silent server is reported unreachable after the timeout instead of hanging', async () => {
+    class Hung {
+        createDataChannel() {}
+        async createOffer() { return {}; }
+        async setLocalDescription() {} // never yields a candidate nor completes
+        close() { this.closed = true; }
+    }
+
+    assert.equal(await checkStunReachable({ PeerConnection: Hung, url: 'stun:x', timeoutMs: 30 }), false);
+});
+
+test('network: counts how many of the listed STUN servers answered', async () => {
+    const PC = fakeStunAwarePC(['stun:a', 'stun:c']);
+    PC.made = [];
+
+    const result = await checkNetwork({
+        PeerConnection: PC,
+        iceServers: [{ urls: 'stun:a' }, { urls: 'stun:b' }, { urls: 'stun:c' }],
+    });
+
+    assert.equal(result.serversAnswered, 2);
+});
+
+test('network: serversAnswered is 0 when there are no STUN servers to ask', async () => {
+    const result = await checkNetwork({ PeerConnection: fakePeerConnection([host]), iceServers: [] });
+
+    assert.equal(result.serversAnswered, 0);
+});
+
 // ── Softphone ────────────────────────────────────────────────────────────────
 
 test('softphone: reads registration state and the client name from the page', () => {
@@ -169,23 +226,25 @@ const healthy = () => ({
     secureContext: true,
     microphone: { ok: true, message: '', deviceCount: 1 },
     softphone: { registered: true, hasToken: true, clientName: 'agent_1' },
-    network: { supported: true, udpRoute: true, symmetricNat: false, timedOut: false, counts: { host: 1, srflx: 2, relay: 0, prflx: 0 }, turnConfigured: false },
+    network: { supported: true, udpRoute: true, symmetricNat: false, timedOut: false, serversAnswered: 2, counts: { host: 1, srflx: 1, relay: 0, prflx: 0 }, turnConfigured: false },
     otherTabs: 0,
 });
 
 const levels = (results) => interpretResults(results).map((v) => v.level);
 
-test('verdict: only says the route is confirmed when two servers agreed', () => {
-    const confirmed = healthy(); // srflx: 2
-    const only = healthy();
-    only.network = { ...only.network, counts: { host: 6, srflx: 1, relay: 0, prflx: 0 } };
+test('verdict: only says the route is confirmed when two test servers were reachable', () => {
+    const confirmed = healthy(); // serversAnswered: 2, one merged candidate = same public address from both
+    confirmed.network = { ...confirmed.network, counts: { host: 6, srflx: 1, relay: 0, prflx: 0 } };
+    const unverified = healthy();
+    unverified.network = { ...unverified.network, serversAnswered: 1, counts: { host: 6, srflx: 1, relay: 0, prflx: 0 } };
 
     const detailOf = (r) => interpretResults(r).find((f) => f.title === 'Network route found').detail;
 
+    // Chrome merges identical candidates, so ONE srflx from two answering servers means
+    // both saw the same address: a consistent (non-symmetric) NAT.
     assert.match(detailOf(confirmed), /confirmed/i);
-    // With one answer there is nothing to compare, so a symmetric NAT is not ruled out.
-    assert.match(detailOf(only), /cannot be ruled out|could not|did not answer/i);
-    assert.doesNotMatch(detailOf(only), /confirmed/i);
+    assert.match(detailOf(unverified), /cannot be ruled out/i);
+    assert.doesNotMatch(detailOf(unverified), /confirmed/i);
 });
 
 test('verdict: a healthy setup has no problems', () => {
