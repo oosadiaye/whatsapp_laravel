@@ -3,6 +3,7 @@
         <div class="flex items-center justify-between gap-3 flex-wrap">
             <h2 class="font-display text-xl font-semibold leading-tight text-gray-800">{{ __('Call Workspace') }}</h2>
             <div class="flex items-center gap-3">
+                @include('calls._voice-check')
                 @if($canDial ?? false)
                     {{-- Opens the Quick Dial modal (component lives below, listens for the event). --}}
                     <button type="button" x-data @click="$dispatch('open-quick-dial')"
@@ -160,6 +161,12 @@
                     const payload = { phone: this.number };
                     if (this.contactId) payload.contact_id = this.contactId;
                     try {
+                        // Ask for the microphone on this click, before dialing the customer.
+                        // The softphone only asks mid-call and fails silently if blocked.
+                        if (window.bqEnsureMic) {
+                            try { await window.bqEnsureMic(); }
+                            catch (micError) { this.error = window.bqMicMessage(micError); return; }
+                        }
                         const res = await fetch(@js(route('calls.outbound')), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()), 'Accept': 'application/json' },

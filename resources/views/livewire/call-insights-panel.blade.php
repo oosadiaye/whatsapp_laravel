@@ -68,12 +68,21 @@
                         this.calling = true;
                         this.msg = '';
                         try {
+                            // Microphone first: it is asked for on this click instead of
+                            // mid-call, and a call is never dialed (and billed) without one.
+                            if (window.bqEnsureMic) {
+                                try { await window.bqEnsureMic(); }
+                                catch (micError) { this.ok = false; this.msg = window.bqMicMessage(micError); return; }
+                            }
                             const res = await fetch(@js(route('calls.outbound')), {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()), 'Accept': 'application/json' },
                                 body: JSON.stringify({ phone: @js($call->contact->phone), contact_id: @js($call->contact_id) }),
                             });
                             if (res.ok) {
+                                // Mount the call banner immediately (it would otherwise wait
+                                // for its 15s poll, longer than AT waits for the browser).
+                                if (window.Livewire) Livewire.dispatch('calls:refresh');
                                 this.ok = true;
                                 this.msg = @js(__('Calling…'));
                             } else {

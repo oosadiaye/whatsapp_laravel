@@ -87,6 +87,14 @@
                         this.placing = true;
                         this.error = '';
                         try {
+                            // Ask for the microphone BEFORE dialing the customer. The softphone
+                            // only asks while AT's call timer is already running and fails
+                            // silently if it is blocked, and a call placed with no usable
+                            // microphone is billed for nothing.
+                            if (window.bqEnsureMic) {
+                                try { await window.bqEnsureMic(); }
+                                catch (micError) { this.error = window.bqMicMessage(micError); return; }
+                            }
                             const res = await fetch(@js(route('calls.outbound')), {
                                 method: 'POST',
                                 headers: {
@@ -98,8 +106,11 @@
                                 body: JSON.stringify({ conversation_id: {{ $conversation->id }} }),
                             });
                             if (res.ok) {
-                                // The in-flight-call banner (polls every 3s) mounts the
-                                // softphone; it auto-answers when the customer picks up.
+                                // Mount the call banner NOW. Left to its poll (every 15s) it can
+                                // appear after the customer has already answered, and the voice
+                                // leg AT sends to this browser waits only about 25s to be
+                                // answered. The banner is what auto-answers it.
+                                if (window.Livewire) Livewire.dispatch('calls:refresh');
                                 this.open = false;
                                 return;
                             }

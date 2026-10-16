@@ -122,6 +122,34 @@ Recordings live on the **private** disk (`storage/app/private/call-recordings/`)
 and only stream via `GET /calls/{id}/recording`, which enforces the same
 per-call access check as every other call action. They are never web-public.
 
+### Calls ring but can't be answered, connect silently, or end at once
+
+Start with **Call Workspace → "Check my voice setup"**. It runs in *your* browser and
+tests what a server cannot see:
+
+| Check | What it tells you |
+|-------|-------------------|
+| Microphone | Allowed and working. The softphone only asks for the microphone *while Africa's Talking's call timer is running* and quietly declines the call if it is blocked, so a blocked microphone looks like "rings, then nothing". Starting or accepting a call now asks for it up front |
+| Phone line | The softphone is registered with Africa's Talking as `quo_call.agent_<id>` |
+| Network route | Gathers ICE candidates the way a call does. **No UDP route** = a firewall/VPN/hotspot is blocking call audio; **symmetric NAT** (common on mobile data and hotspots) = audio usually connects silent. Both need a **TURN relay**: set `VOICE_TURN_URLS`, `VOICE_TURN_USERNAME`, `VOICE_TURN_CREDENTIAL` |
+| Other tabs | Other BlastIQ tabs in the same browser register the *same* softphone identity; AT delivers a call to only one of them. Keep one tab open |
+| Sound | Plays a tone through the same stream→`<audio>` path call audio uses |
+
+**Copy report for support** gives plain text (no secrets) to send along.
+
+When a call dies before it connects, the banner now shows Africa's Talking's own reason
+(also stored in `call_logs.failure_reason`). Common ones:
+
+| Reason | Meaning |
+|--------|---------|
+| `AT bridge: NO_USER_RESPONSE` | AT never reached your browser — usually another tab/device registered as the same agent, or the softphone had lost its registration |
+| `AT bridge: NO_ANSWER` | The browser rang but nothing answered in time (microphone prompt left open, or banner not clicked) |
+| `AT bridge: RECOVERY_ON_TIMER_EXPIRE` | Answered, but the audio link never formed — microphone or network (see above) |
+
+An incoming call's banner and **Accept/Decline are only for the agent it was dialed to**.
+An agent who is offline, away, or not seen for 2 minutes is skipped (the call goes to the
+next available agent, else the busy message / queue / voicemail).
+
 ---
 
 ## 5. Security & compliance notes

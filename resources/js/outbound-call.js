@@ -29,6 +29,25 @@
 import { startStatsCollection, postQuality } from './call-stats-collector';
 import { createCallStateMixin } from './call-state-mixin';
 import { iceServers } from './ice-servers';
+import { ensureMic, describeMicError } from './mic-preflight';
+import { describeCallFailure } from './call-failure';
+import { startTabPresence } from './tab-presence';
+import './voice-check'; // registers window.voiceCheck for the Blade view
+
+// The call buttons that live in Blade views (conversation page, Quick Dial, the
+// call-back button) are inline Alpine, not part of this bundle, so they reach the
+// microphone pre-flight through these two globals. See mic-preflight.js for why it
+// exists: the SDK only asks for the microphone while AT's call timer is already
+// running, and fails silently when it is blocked.
+window.bqEnsureMic = ensureMic;
+window.bqMicMessage = describeMicError;
+
+// Voice check ("Check my voice setup"): registers the Alpine component and lets this tab
+// answer the check's "who else is open?" ping. Every open tab registers the same softphone
+// identity and AT delivers a call to only one of them, so a forgotten tab can silently take
+// calls; the check needs each tab to say it is there.
+window.__bqTabId ??= Math.random().toString(36).slice(2);
+startTabPresence({ BroadcastChannel: window.BroadcastChannel, tabId: window.__bqTabId });
 
 // Reuse the already-loaded self-hosted SDK's URL for reloads (never an external
 // CDN — same-origin CSP + pinned/audited artifact). The layout's <script> tag
@@ -551,7 +570,13 @@ window.outgoingCall = (data) => ({
         if (window.userId && window.Echo) {
             this._echoChannel = window.Echo.private(`user.${window.userId}`);
             this._echoChannel.listen('.call.terminated', (e) => {
-                if (e.call_id === this.callId) this.teardown('remote');
+                if (e.call_id !== this.callId) return;
+                // If the call died before it connected and AT told us why (e.g. it
+                // could not reach this browser), SHOW that instead of letting the
+                // banner vanish and leaving the agent guessing.
+                const why = this.state === 'connected' ? '' : describeCallFailure(e.failure_reason);
+                this.teardown(why ? 'error' : 'remote');
+                if (why) this.errorMessage = why;
             });
         }
 
@@ -730,7 +755,15 @@ window.incomingAtCall = (data) => ({
                 }
             });
             this._echoChannel.listen('.call.terminated', (event) => {
-                if (event.call_id === this.callId) this.teardown('remote');
+                if (event.call_id !== this.callId) return;
+                // The agent accepted but the voice leg never connected and AT says why:
+                // show it rather than closing the banner on them.
+                const why = this.state === 'connecting' ? describeCallFailure(event.failure_reason) : '';
+                this.teardown('remote');
+                if (why) {
+                    this.state = 'connect_failed';
+                    this.errorMessage = why;
+                }
             });
         }
     },
@@ -803,8 +836,16 @@ window.incomingAtCall = (data) => ({
     async acceptCall() {
         window.bqStopRingtone?.();
         this.errorMessage = '';
-        let phase = 'claim';
+        let phase = 'mic';
         try {
+            // Ask for the microphone NOW, on the Accept click, before claiming. The SDK
+            // would otherwise ask inside answer() while AT's call timer is running, and
+            // if the prompt is open, dismissed or the site is blocked it declines the
+            // call without any error. A blocked microphone is reported here instead,
+            // before the call is claimed, so the agent can fix it and retry.
+            await ensureMic();
+
+            phase = 'claim';
             const claimRes = await this.post(`/calls/${this.callId}/claim`, { session_id: this.sessionId });
             if (claimRes.status === 409) { this.state = 'claimed_elsewhere'; return; }
             if (!claimRes.ok) {
@@ -848,7 +889,9 @@ window.incomingAtCall = (data) => ({
                 this.errorMessage = '';
             } else {
                 this.state = 'connect_failed';
-                this.errorMessage = `[${phase}] ${msg}`;
+                // A microphone problem already reads as a sentence (no device, busy,
+                // insecure page); the [phase] tag is only for the internal errors.
+                this.errorMessage = phase === 'mic' ? msg : `[${phase}] ${msg}`;
             }
         }
     },
