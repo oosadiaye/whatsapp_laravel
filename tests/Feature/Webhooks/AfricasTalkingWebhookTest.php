@@ -671,6 +671,115 @@ class AfricasTalkingWebhookTest extends TestCase
         $this->assertNull($call->fresh()->failure_reason);
     }
 
+    // ── An assigned agent who is offline must not be dialed ──────────────────
+    //
+    // The conversation is a firstOrCreate per contact, so once a contact has ever been
+    // assigned (e.g. over WhatsApp), every later call from them was dialed to that same
+    // agent. Availability (online, not away, seen in the last 2 minutes) was only checked
+    // for a conversation with NO assignee, so an offline assignee got a <Dial> to a
+    // browser that is not registered: the caller heard ringing, then nothing, and the
+    // queue / voicemail / busy fallbacks were never reached.
+
+    private function inboundCallControl(string $callerPhone, string $session): \Illuminate\Testing\TestResponse
+    {
+        return $this->postWebhook([
+            'isActive' => '1',
+            'sessionId' => $session,
+            'direction' => 'Inbound',
+            'callerNumber' => '+'.$callerPhone,
+            'destinationNumber' => '+2348100000000',
+        ]);
+    }
+
+    /**
+     * @return array{0: Conversation, 1: string} a conversation assigned to $assignee + the caller phone
+     */
+    private function assignedConversationFor(User $assignee, string $phone = '2348044445555'): array
+    {
+        $owner = User::factory()->create(['role' => User::ROLE_ADMIN, 'is_active' => true]);
+        $owner->assignRole(User::ROLE_ADMIN);
+        $instance = WhatsAppInstance::factory()->create(['user_id' => $owner->id]);
+        $contact = Contact::factory()->create(['user_id' => $owner->id, 'phone' => $phone]);
+
+        $conversation = Conversation::create([
+            'user_id' => $owner->id,
+            'contact_id' => $contact->id,
+            'whatsapp_instance_id' => $instance->id,
+            'assigned_to_user_id' => $assignee->id,
+            'unread_count' => 0,
+        ]);
+
+        return [$conversation, $phone];
+    }
+
+    private function callStaffUser(?\Illuminate\Support\Carbon $lastSeen, string $presence = User::PRESENCE_AVAILABLE): User
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_AGENT,
+            'is_active' => true,
+            'last_seen_at' => $lastSeen,
+            'presence_status' => $presence,
+        ]);
+        $user->assignRole(User::ROLE_AGENT);
+
+        return $user;
+    }
+
+    public function test_a_call_for_an_offline_assignee_is_rerouted_to_an_available_agent(): void
+    {
+        $offline = $this->callStaffUser(now()->subMinutes(10));
+        $online = $this->callStaffUser(now());
+        [$conversation, $phone] = $this->assignedConversationFor($offline);
+
+        $response = $this->inboundCallControl($phone, 'sess_reroute');
+
+        $response->assertOk();
+        $response->assertSee('phoneNumbers="sandbox.agent_'.$online->id.'"', false);
+        $response->assertDontSee('agent_'.$offline->id.'"', false);
+        // The banner and claim rules key off the conversation assignee, so it follows the call.
+        $this->assertSame($online->id, $conversation->fresh()->assigned_to_user_id);
+    }
+
+    public function test_a_call_for_an_away_assignee_is_rerouted_even_if_recently_seen(): void
+    {
+        $away = $this->callStaffUser(now(), User::PRESENCE_AWAY);
+        $online = $this->callStaffUser(now());
+        [, $phone] = $this->assignedConversationFor($away);
+
+        $this->inboundCallControl($phone, 'sess_away')
+            ->assertSee('phoneNumbers="sandbox.agent_'.$online->id.'"', false);
+    }
+
+    public function test_a_call_for_an_offline_assignee_with_nobody_else_online_is_not_dialed(): void
+    {
+        Event::fake([CallRinging::class]);
+        $offline = $this->callStaffUser(now()->subMinutes(10));
+        [, $phone] = $this->assignedConversationFor($offline);
+
+        $response = $this->inboundCallControl($phone, 'sess_nobody');
+
+        // No <Dial> into a browser that is not registered; fall to the busy message
+        // (queue / voicemail when those are enabled) so the caller gets a clear answer.
+        $response->assertOk();
+        $response->assertDontSee('<Dial', false);
+        $response->assertSee('All our agents are currently busy', false);
+        // A banner for a call nobody is dialed for would be a phantom.
+        Event::assertNotDispatched(CallRinging::class);
+    }
+
+    public function test_an_available_assignee_keeps_their_own_contacts_call(): void
+    {
+        $assignee = $this->callStaffUser(now());
+        $other = $this->callStaffUser(now());
+        [$conversation, $phone] = $this->assignedConversationFor($assignee);
+
+        $this->inboundCallControl($phone, 'sess_keep')
+            ->assertSee('phoneNumbers="sandbox.agent_'.$assignee->id.'"', false);
+
+        $this->assertSame($assignee->id, $conversation->fresh()->assigned_to_user_id);
+        $this->assertNotSame($other->id, $conversation->fresh()->assigned_to_user_id);
+    }
+
     private function postWebhook(array $payload)
     {
         // AT posts form-encoded callbacks to the URL carrying the secret path

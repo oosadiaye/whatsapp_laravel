@@ -39,7 +39,7 @@ class CallFlowRouterTest extends TestCase
      */
     private function inboundCall(bool $withAgent = true): array
     {
-        $agentId = $withAgent ? User::factory()->create()->id : null;
+        $agentId = $withAgent ? $this->makeAgent()->id : null;
         $conversation = Conversation::factory()->create(['assigned_to_user_id' => $agentId]);
 
         $call = CallLog::factory()->create([
@@ -49,6 +49,20 @@ class CallFlowRouterTest extends TestCase
         ]);
 
         return [$call, $agentId];
+    }
+
+    /**
+     * An agent who can take a call right now: active call staff, not away, seen within
+     * RoundRobinAssigner::AVAILABILITY_WINDOW_MINUTES. The router only dials such agents.
+     */
+    private function makeAgent(?\Illuminate\Support\Carbon $lastSeen = null, string $presence = User::PRESENCE_AVAILABLE): User
+    {
+        return User::factory()->create([
+            'role' => User::ROLE_AGENT,
+            'is_active' => true,
+            'last_seen_at' => $lastSeen ?? now(),
+            'presence_status' => $presence,
+        ]);
     }
 
     private function router(): CallFlowRouter
@@ -91,6 +105,52 @@ class CallFlowRouterTest extends TestCase
         $xml = $this->router()->entryXml($call)->render();
 
         $this->assertStringNotContainsString('This call may be recorded.', $xml);
+    }
+
+    public function test_an_offline_assignee_is_not_dialed_and_falls_to_busy(): void
+    {
+        // A conversation keeps its assignee for life, so dialing whoever is assigned rang
+        // browsers that were closed or long unseen. Availability must be checked.
+        $offline = $this->makeAgent(now()->subMinutes(10));
+        $conversation = Conversation::factory()->create(['assigned_to_user_id' => $offline->id]);
+        $call = CallLog::factory()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => CallLog::DIRECTION_INBOUND,
+            'from_phone' => '+2348011112222',
+        ]);
+
+        $xml = $this->router()->entryXml($call)->render();
+
+        $this->assertStringNotContainsString('<Dial', $xml);
+        $this->assertStringContainsString('All our agents are currently busy', $xml);
+    }
+
+    public function test_an_away_assignee_is_not_dialed_even_if_recently_seen(): void
+    {
+        $away = $this->makeAgent(now(), User::PRESENCE_AWAY);
+        $conversation = Conversation::factory()->create(['assigned_to_user_id' => $away->id]);
+        $call = CallLog::factory()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => CallLog::DIRECTION_INBOUND,
+        ]);
+
+        $this->assertStringNotContainsString('<Dial', $this->router()->entryXml($call)->render());
+    }
+
+    public function test_an_offline_assignee_falls_through_to_the_queue_when_enabled(): void
+    {
+        config(['voice.queue_enabled' => true]);
+        $offline = $this->makeAgent(now()->subMinutes(10));
+        $conversation = Conversation::factory()->create(['assigned_to_user_id' => $offline->id]);
+        $call = CallLog::factory()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => CallLog::DIRECTION_INBOUND,
+        ]);
+
+        $xml = $this->router()->entryXml($call)->render();
+
+        $this->assertStringContainsString('<Enqueue', $xml);
+        $this->assertStringNotContainsString('<Dial', $xml);
     }
 
     public function test_no_assigned_agent_and_no_features_says_busy(): void

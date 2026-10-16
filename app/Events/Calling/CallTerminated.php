@@ -40,6 +40,10 @@ class CallTerminated implements ShouldBroadcast
         return [
             'call_id' => $this->call->id,
             'reason' => $this->reason,
+            // Why the call died, when the provider told us (e.g. 'AT bridge:
+            // NO_USER_RESPONSE'). Without it the agent's banner just vanished and they
+            // were left guessing; the browser shows it.
+            'failure_reason' => $this->call->failure_reason,
         ];
     }
 }

@@ -49,6 +49,27 @@ class RoundRobinAssigner
     public const ACTIVE_WINDOW_HOURS = 24;
 
     /**
+     * Whether $user can take a call RIGHT NOW: an active call-staff user who is not
+     * away and was seen within AVAILABILITY_WINDOW_MINUTES (their open BlastIQ tab
+     * keeps last_seen_at fresh).
+     *
+     * The same predicate next() applies, minus the capacity cap: someone's own
+     * contact should still ring them when they are busy, but not when they are
+     * offline. next() is only consulted for an UNassigned conversation, so without
+     * this a contact that was ever assigned kept dialing a browser that wasn't
+     * registered, and the queue / voicemail / busy fallbacks were never reached.
+     */
+    public function isAvailable(?User $user): bool
+    {
+        return $user !== null
+            && $user->is_active
+            && in_array($user->role, User::CALL_STAFF_ROLES, true)
+            && $user->presence_status !== User::PRESENCE_AWAY
+            && $user->last_seen_at !== null
+            && $user->last_seen_at->gte(now()->subMinutes(self::AVAILABILITY_WINDOW_MINUTES));
+    }
+
+    /**
      * Atomically pick the next available agent and stamp them as the
      * most-recently-assigned. Returns null if no agent is online.
      */

@@ -462,7 +462,7 @@ class CallController extends Controller
      */
     public function claim(Request $request, CallLog $call): JsonResponse
     {
-        $this->authorizeCallAccess($call);
+        $this->authorizeCallControl($call);
 
         $sessionId = $request->input('session_id');
         if (! is_string($sessionId) || $sessionId === '' || strlen($sessionId) > 64) {
@@ -574,7 +574,7 @@ class CallController extends Controller
      */
     public function decline(CallLog $call): JsonResponse
     {
-        $this->authorizeCallAccess($call);
+        $this->authorizeCallControl($call);
         $this->terminate($call, CallLog::STATUS_DECLINED, 'declined');
 
         return response()->json(['declined' => true]);
@@ -605,6 +605,32 @@ class CallController extends Controller
      * the customer's audio. The four call-mutation endpoints were the only
      * ones missing this check.
      */
+    /**
+     * Authorization for TAKING CONTROL of a ringing call (claim / decline).
+     *
+     * An Africa's Talking call is a single voice leg dialed to one agent's browser, so
+     * only that agent (or whoever placed an outbound call) can meaningfully claim or
+     * decline it. conversations.view_all lets supervisors SEE calls, but it must not let
+     * them act on someone else's: their Accept claims a call with no voice leg behind it
+     * (the real agent is then told it was claimed elsewhere), and their Decline flips the
+     * record to declined while the agent's phone is still ringing. WhatsApp (Meta) calls
+     * are a shared pool answered by whoever claims them, so they keep the broader rule.
+     */
+    private function authorizeCallControl(CallLog $call): void
+    {
+        if ($call->provider !== CallLog::PROVIDER_AFRICAS_TALKING) {
+            $this->authorizeCallAccess($call);
+
+            return;
+        }
+
+        $user = auth()->user();
+        $owns = $call->placed_by_user_id === $user->id
+            || $call->conversation?->assigned_to_user_id === $user->id;
+
+        abort_unless($owns, 403, 'This call was dialed to another agent.');
+    }
+
     private function authorizeCallAccess(CallLog $call): void
     {
         $user = auth()->user();

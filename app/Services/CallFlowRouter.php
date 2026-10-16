@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\CallLog;
+use App\Models\User;
 use App\Support\VoiceConfig;
 use App\Support\VoiceXml;
 
@@ -20,7 +21,10 @@ use App\Support\VoiceXml;
  */
 class CallFlowRouter
 {
-    public function __construct(private readonly BusinessHours $hours) {}
+    public function __construct(
+        private readonly BusinessHours $hours,
+        private readonly RoundRobinAssigner $assigner,
+    ) {}
 
     /**
      * First response when AT asks what to do with a fresh inbound call.
@@ -90,7 +94,13 @@ class CallFlowRouter
         // action". With no configured username there is no dialable target, so
         // fall through to queue/voicemail/busy rather than emit a <Dial> AT
         // would refuse.
-        $dialTarget = $agentId !== null
+        //
+        // The assignee must also be AVAILABLE right now. A conversation keeps its
+        // assignee for life, so dialing whoever is assigned rang browsers that were
+        // closed, away or long unseen; the caller heard nothing and the queue /
+        // voicemail / busy fallbacks below were never reached.
+        $assignee = $agentId !== null ? User::find((int) $agentId) : null;
+        $dialTarget = $this->assigner->isAvailable($assignee)
             ? AfricasTalkingVoiceService::dialTargetForUser((int) $agentId)
             : null;
 

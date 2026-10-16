@@ -78,12 +78,29 @@ class RealtimePulse extends Component
         //                   sees a ringing unclaimed call — see
         //                   realtime-ux-bundle-design.md section
         //                   "Permission scoping")
-        if (! $user->can('conversations.view_all')) {
-            $callQuery->whereHas('conversation', fn ($q) => $q->where(fn ($qq) => $qq->where('assigned_to_user_id', $user->id)
-                ->orWhereNull('assigned_to_user_id')
-            )
-            );
-        }
+        //
+        // Africa's Talking calls are the exception: an AT call is ONE voice leg dialed
+        // to ONE agent's browser (quo_call.agent_N), and only that browser can answer it.
+        // Showing it to the rest of the company gave a colleague an Accept button that
+        // claims the call with no voice leg behind it (the real agent is then told it was
+        // "claimed elsewhere" and the call dies unanswered), and an unassigned AT call
+        // means nobody was dialed at all, so it is never a banner. WhatsApp (Meta) calls
+        // are answered by whichever agent claims them, so they keep the pool rules.
+        $callQuery->where(function ($q) use ($user) {
+            $q->where(function ($meta) use ($user) {
+                $meta->where(fn ($p) => $p->whereNull('provider')
+                    ->orWhere('provider', '!=', CallLog::PROVIDER_AFRICAS_TALKING));
+
+                if (! $user->can('conversations.view_all')) {
+                    $meta->whereHas('conversation', fn ($c) => $c->where(fn ($cc) => $cc->where('assigned_to_user_id', $user->id)
+                        ->orWhereNull('assigned_to_user_id')
+                    ));
+                }
+            })->orWhere(function ($at) use ($user) {
+                $at->where('provider', CallLog::PROVIDER_AFRICAS_TALKING)
+                    ->whereHas('conversation', fn ($c) => $c->where('assigned_to_user_id', $user->id));
+            });
+        });
 
         $inflightCallModels = $callQuery
             ->latest()

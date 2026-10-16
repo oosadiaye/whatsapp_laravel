@@ -11,6 +11,7 @@ use App\Models\CallQueueEntry;
 use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Setting;
+use App\Models\User;
 use App\Models\Voicemail;
 use App\Models\WhatsAppInstance;
 use App\Services\AfricasTalkingVoiceService;
@@ -215,12 +216,27 @@ class AfricasTalkingWebhookController extends Controller
             ['user_id' => $instance->user_id, 'unread_count' => 0],
         );
 
-        if ($conversation->assigned_to_user_id === null) {
-            $agent = $this->assigner->next();
-            if ($agent !== null) {
-                $conversation->update(['assigned_to_user_id' => $agent->id]);
+        // An existing assignee only counts if they can take the call RIGHT NOW. The
+        // conversation is a firstOrCreate per contact, so once a contact has ever been
+        // assigned (e.g. over WhatsApp) every later call used to be dialed to that same
+        // agent, online or not: the caller heard ringing into a browser that wasn't
+        // registered, and the queue / voicemail / busy fallbacks were never reached.
+        // Fall back to the round-robin pick instead; with nobody available the call is
+        // not dialed at all (CallFlowRouter applies the same rule).
+        $assignee = $conversation->assigned_to_user_id !== null
+            ? User::find($conversation->assigned_to_user_id)
+            : null;
+        $dialAgent = null;
+
+        if ($this->assigner->isAvailable($assignee)) {
+            $dialAgent = $assignee;
+        } else {
+            $dialAgent = $this->assigner->next();
+            if ($dialAgent !== null) {
+                $conversation->update(['assigned_to_user_id' => $dialAgent->id]);
             }
         }
+        $routable = $dialAgent !== null;
 
         // Safe create: handleInboundFirstEvent is reachable from BOTH the
         // status branch and the call-control branch, so two concurrent inbound
@@ -267,11 +283,11 @@ class AfricasTalkingWebhookController extends Controller
         $call->save();
 
         // Only enqueue when the call will ACTUALLY fall through to <Enqueue> — i.e.
-        // no agent was assigned above. If an agent was found, CallFlowRouter dials
+        // no agent could be dialed above. If an agent was found, CallFlowRouter dials
         // that agent directly and the call never enters AT's queue; creating a
         // WAITING CallQueueEntry for it would show a phantom "waiting" caller on the
         // queue dashboard and inflate every genuinely-queued caller's position.
-        if ($created && config('voice.queue_enabled') && $conversation->assigned_to_user_id === null) {
+        if ($created && config('voice.queue_enabled') && ! $routable) {
             // Serialise the read-then-write position calc so two inbound calls
             // webhooked concurrently don't both read N and both claim position N+1
             // (M5). The lock holds the WAITING set for the duration of the insert.
@@ -292,7 +308,9 @@ class AfricasTalkingWebhookController extends Controller
         }
 
         $conversation->refresh();
-        if ($created && $conversation->assigned_to_user_id !== null) {
+        // Only ring a banner when someone is actually being dialed: a banner for a call
+        // no browser will receive is a phantom the agent can Accept to no effect.
+        if ($created && $routable) {
             CallRinging::dispatch($call);
         }
 
