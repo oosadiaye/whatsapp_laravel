@@ -4,7 +4,7 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "test:js": "node --test \"tests/js/*.test.mjs\"",
+        "test:js": "node --import ./tests/js/helpers/register.mjs --test \"tests/js/*.test.mjs\"",
         "dev": "vite"
     },
     "devDependencies": {

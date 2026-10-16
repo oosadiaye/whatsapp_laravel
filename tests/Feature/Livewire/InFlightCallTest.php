@@ -43,6 +43,23 @@ class InFlightCallTest extends TestCase
             ->assertViewHas('call', fn ($c) => $c !== null && $c->id === $call->id);
     }
 
+    public function test_the_outgoing_banner_can_say_what_is_wrong_with_the_microphone(): void
+    {
+        // The blocked-microphone screen used to hard-code "Microphone blocked". It now
+        // shows the specific message (no microphone found, in use by another app, ...)
+        // when there is one, so an agent whose headset is unplugged is not told to go
+        // fiddle with browser permissions. The behaviour itself is covered in
+        // tests/js/banner-mic.test.mjs; this guards that the template renders it.
+        $agent = $this->agent();
+        $this->outboundCall($agent, CallLog::STATUS_INITIATED);
+
+        $html = Livewire::actingAs($agent)->test(InFlightCall::class)->html();
+
+        $this->assertStringContainsString('Microphone problem', $html);
+        $this->assertStringContainsString('Microphone blocked', $html);
+        $this->assertStringContainsString('retryAccept()', $html, 'the screen must offer Try again');
+    }
+
     public function test_the_calls_refresh_event_re_renders_and_finds_the_call(): void
     {
         // Quick Dial fires calls:refresh right after placing the call so the banner

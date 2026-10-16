@@ -629,7 +629,38 @@ window.outgoingCall = (data) => ({
         // duplicate/stale incomingcall routed to it.
         if (this.state === 'connected' || this.state === 'connecting') return;
         this.state = 'connecting';
+        this._answerIfMicOk();
+    },
+
+    /**
+     * Answer the bridged leg, but only if the microphone is usable RIGHT NOW.
+     *
+     * The click that started the call already checked it, but this answer fires on its
+     * own (AT bridges the answered customer to us with no click), so permission may have
+     * been revoked, or the device taken by another app, since. And the SDK does not
+     * report a failed microphone: it just declines the call, so an agent saw "Connecting…"
+     * and then a dead call. Re-check here (no prompt while still allowed) and show the
+     * blocked-microphone screen instead of answering into nothing.
+     */
+    async _answerIfMicOk() {
+        try {
+            await ensureMic();
+        } catch (error) {
+            this._micFailed(error);
+            return;
+        }
+        // The call may have been hung up or terminated while the check ran.
+        if (this.state !== 'connecting') return;
         window.bqVoiceClient.answer();
+    },
+
+    _micFailed(error) {
+        // The bridge timeout is left running on purpose: if the agent never fixes the
+        // microphone it ends the customer's leg instead of leaving them on the line.
+        this.state = 'mic_denied';
+        // Plain "blocked" uses the screen's default wording; anything else (no device,
+        // in use by another app, insecure page) says what is actually wrong.
+        this.errorMessage = error?.kind === 'denied' ? '' : describeMicError(error);
     },
     onAccepted() {
         // Re-entry guard: a duplicate callaccepted must not double-start the
@@ -660,12 +691,12 @@ window.outgoingCall = (data) => ({
         if (this.state !== 'connected') this.state = 'failed';
     },
 
-    /** Retry answer after the mic prompt was denied (re-prompts unless the
-     *  origin is permanently blocked in browser settings). */
+    /** Retry answer after the microphone was blocked (re-prompts unless the origin is
+     *  permanently blocked in browser settings). Re-checks the microphone first. */
     retryAccept() {
         this.errorMessage = '';
         this.state = 'connecting';
-        window.bqVoiceClient?.answer();
+        this._answerIfMicOk();
     },
 
     _tryStats() {

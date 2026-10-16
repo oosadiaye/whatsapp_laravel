@@ -70,8 +70,11 @@
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M3 3l18 18M9.75 9.348A3 3 0 019 7.5V4.5a3 3 0 015.856-.917"/></svg>
                     </span>
                     <div class="flex-1 text-sm">
-                        <p class="font-semibold text-gray-900">{{ __('Microphone blocked') }}</p>
-                        <p class="text-xs text-gray-500 mt-0.5">{{ __('Allow mic access in the browser prompt (or the camera/mic icon in the address bar), then try again.') }}</p>
+                        {{-- A plain block uses the default wording; any other microphone problem (none
+                             found, in use by another app, insecure page) puts its own message in
+                             errorMessage and says "problem" rather than "blocked". --}}
+                        <p class="font-semibold text-gray-900" x-text="errorMessage ? @js(__('Microphone problem')) : @js(__('Microphone blocked'))"></p>
+                        <p class="text-xs text-gray-500 mt-0.5" x-text="errorMessage || @js(__('Allow mic access in the browser prompt (or the camera/mic icon in the address bar), then try again.'))"></p>
                     </div>
                 </div>
                 <div class="mt-4 grid grid-cols-2 gap-3">
