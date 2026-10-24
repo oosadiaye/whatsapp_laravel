@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Models\Setting;
+use App\Services\Ai\AiClient;
+use App\Services\Ai\AiProviderFactory;
 use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Queue\Events\QueueBusy;
@@ -19,7 +21,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->singleton(AiClient::class, fn () => app(AiProviderFactory::class)->make());
     }
 
     public function boot(): void
