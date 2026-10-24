@@ -369,12 +369,14 @@ class SettingsController extends Controller
      * Returns the provider's actual error (e.g., invalid key) as a flash message.
      * Uses the persisted settings, so save the AI card first, then test.
      */
-    public function testAiConnection(Request $request): RedirectResponse
+    public function testAiConnection(): RedirectResponse
     {
-        $provider = $request->input('ai_provider') ?? 'gemini';
-        $key = $request->input($provider === 'openrouter' ? 'openrouter_api_key' : 'gemini_api_key');
+        // Provider and key come from the saved config only — never from the request —
+        // so the secret never travels through the browser and the test reflects what
+        // the AI features will actually use.
+        $provider = AiConfig::provider();
 
-        if (blank($key)) {
+        if (! AiConfig::isConfigured()) {
             return redirect()->back()->with('warning',
                 'AI provider ('.$provider.') has no API key saved. Add a key and save before testing.');
         }

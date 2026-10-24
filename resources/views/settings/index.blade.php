@@ -357,8 +357,6 @@
                             <div class="px-6 pb-6 border-t border-gray-100 pt-4">
                                 <form action="{{ route('settings.test-ai') }}" method="POST" id="settings-test-ai">
                                     @csrf
-                                    <input type="hidden" name="ai_provider" value="{{ $aiProvider }}">
-                                    <input type="hidden" name="{{ $aiProvider === 'openrouter' ? 'openrouter_api_key' : 'gemini_api_key' }}" value="{{ $settings[$aiProvider === 'openrouter' ? 'openrouter_api_key' : 'gemini_api_key'] ?? '' }}">
                                     <div class="flex flex-wrap items-center justify-between gap-3">
                                         <p class="text-xs text-gray-500 max-w-md">{{ __('Verify the AI provider credentials work before enabling features — sends a minimal test prompt and shows the exact error if it fails. Save any changes above first.') }}</p>
                                         <button type="submit"
