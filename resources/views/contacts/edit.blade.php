@@ -19,7 +19,7 @@
                                id="name"
                                name="name"
                                value="{{ old('name', $contact->name) }}"
-                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm"
+                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
                                placeholder="Contact name">
                         @error('name')
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -35,7 +35,7 @@
                                value="{{ old('phone', $contact->phone) }}"
                                readonly
                                class="w-full rounded-md border-gray-300 bg-gray-50 shadow-sm sm:text-sm text-gray-500 font-data cursor-not-allowed">
-                        <p class="mt-1 text-xs text-gray-400">{{ __('Phone number cannot be changed.') }}</p>
+                        <p class="mt-1 text-xs text-gray-500">{{ __('Phone number cannot be changed.') }}</p>
                         @error('phone')
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                         @enderror
@@ -48,9 +48,9 @@
                                id="email"
                                name="email"
                                value="{{ old('email', $contact->email) }}"
-                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm"
+                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
                                placeholder="name@example.com">
-                        <p class="mt-1 text-xs text-gray-400">{{ __('Used for email campaigns. Leave blank for WhatsApp-only contacts.') }}</p>
+                        <p class="mt-1 text-xs text-gray-500">{{ __('Used for email campaigns. Leave blank for WhatsApp-only contacts.') }}</p>
                         @error('email')
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                         @enderror
@@ -63,7 +63,7 @@
                                id="custom_field_1"
                                name="custom_field_1"
                                value="{{ old('custom_field_1', $contact->custom_field_1) }}"
-                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm"
+                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
                                placeholder="Optional custom data">
                         @error('custom_field_1')
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -77,7 +77,7 @@
                                id="custom_field_2"
                                name="custom_field_2"
                                value="{{ old('custom_field_2', $contact->custom_field_2) }}"
-                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm"
+                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
                                placeholder="Optional custom data">
                         @error('custom_field_2')
                             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -96,18 +96,18 @@
                                 @endforeach
                             </div>
                         @else
-                            <p class="text-sm text-gray-400">{{ __('Not assigned to any group.') }}</p>
+                            <p class="text-sm text-gray-500">{{ __('Not assigned to any group.') }}</p>
                         @endif
                     </div>
 
                     {{-- Actions --}}
                     <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                         <a href="{{ route('contacts.index') }}"
-                           class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-50 transition ease-in-out duration-150">
+                           class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg font-semibold text-sm text-gray-700 hover:bg-gray-50 transition ease-in-out duration-150">
                             {{ __('Cancel') }}
                         </a>
                         <button type="submit"
-                                class="inline-flex items-center px-4 py-2 bg-[#25D366] border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-[#1da851] focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 transition ease-in-out duration-150">
+                                class="inline-flex items-center px-4 py-2 bg-brand border border-transparent rounded-lg font-semibold text-sm text-white hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 transition ease-in-out duration-150">
                             {{ __('Save Changes') }}
                         </button>
                     </div>

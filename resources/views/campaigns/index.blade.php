@@ -29,7 +29,7 @@
                         </form>
                     @endif
                 @endcan
-                <a href="{{ route('campaigns.create') }}" class="inline-flex items-center rounded-lg bg-[#25D366] px-4 py-2 text-sm font-medium text-white hover:bg-[#1da851]">
+                <a href="{{ route('campaigns.create') }}" class="inline-flex items-center rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover">
                     <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     New Campaign
                 </a>
@@ -98,7 +98,7 @@
                                            :checked="allSelected"
                                            :disabled="selectableIds.length === 0"
                                            @change="toggleAll($event.target.checked)"
-                                           class="rounded border-gray-300 text-[#25D366] focus:ring-[#25D366]"
+                                           class="rounded border-gray-300 text-brand-text focus:ring-brand"
                                            title="Select all deletable campaigns on this page">
                                 </th>
                             @endcan
@@ -125,12 +125,12 @@
                                            value="{{ $campaign->id }}"
                                            x-model="selected"
                                            @if(! $isDeletable) disabled @endif
-                                           class="rounded border-gray-300 text-[#25D366] focus:ring-[#25D366] disabled:opacity-40 disabled:cursor-not-allowed"
+                                           class="rounded border-gray-300 text-brand-text focus:ring-brand disabled:opacity-40 disabled:cursor-not-allowed"
                                            title="{{ $isDeletable ? 'Select for bulk action' : 'Pause or cancel a running campaign before deleting' }}">
                                 </td>
                             @endcan
                             <td class="whitespace-nowrap px-6 py-4">
-                                <a href="{{ route('campaigns.show', $campaign) }}" class="font-medium text-gray-900 hover:text-[#25D366]">{{ $campaign->name }}</a>
+                                <a href="{{ route('campaigns.show', $campaign) }}" class="font-medium text-gray-900 hover:text-brand-text">{{ $campaign->name }}</a>
                             </td>
                             <td class="whitespace-nowrap px-6 py-4">
                                 @php
@@ -153,7 +153,7 @@
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{{ $campaign->failed_count }}</td>
                             <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{{ $campaign->scheduled_at?->format('M d, Y H:i') ?? '-' }}</td>
                             <td class="whitespace-nowrap px-6 py-4 text-right text-sm">
-                                <a href="{{ route('campaigns.show', $campaign) }}" class="text-[#25D366] hover:underline">View</a>
+                                <a href="{{ route('campaigns.show', $campaign) }}" class="text-brand-text hover:underline">View</a>
                                 @can('campaigns.edit')
                                     @if(in_array($campaign->status, ['DRAFT', 'QUEUED', 'PAUSED'], true))
                                         <a href="{{ route('campaigns.edit', $campaign) }}" class="ml-3 text-blue-600 hover:underline">Edit</a>

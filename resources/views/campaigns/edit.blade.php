@@ -21,7 +21,7 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Campaign Name *</label>
                         <input type="text" name="name" value="{{ old('name', $campaign->name) }}" required
-                               class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                               class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                     </div>
                     {{-- Single-instance app: sending number is fixed (see Settings).
                          Shown read-only; the controller keeps instance_id on the primary. --}}
@@ -31,7 +31,7 @@
                             <div class="mt-1 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
                                 <span class="w-2 h-2 rounded-full {{ $instance->isReady() ? 'bg-emerald-500' : 'bg-amber-500' }}"></span>
                                 {{ $instance->display_name ?? $instance->instance_name }}
-                                @if($instance->business_phone_number)<span class="text-gray-400">·</span><span class="font-data">{{ $instance->business_phone_number }}</span>@endif
+                                @if($instance->business_phone_number)<span class="text-gray-500">·</span><span class="font-data">{{ $instance->business_phone_number }}</span>@endif
                             </div>
                         @else
                             <p class="mt-1 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -46,7 +46,7 @@
                         <label class="mt-2 flex items-center">
                             <input type="checkbox" name="groups[]" value="{{ $group->id }}"
                                    {{ in_array($group->id, $selectedGroups) ? 'checked' : '' }}
-                                   class="rounded border-gray-300 text-[#25D366]">
+                                   class="rounded border-gray-300 text-brand-text">
                             <span class="ml-2 text-sm">{{ $group->name }} ({{ $group->contacts_count ?? $group->contact_count }})</span>
                         </label>
                         @endforeach
@@ -109,7 +109,7 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Message *</label>
                                 <textarea name="message" x-ref="messageArea" x-model="message" rows="6" required
-                                          class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]"></textarea>
+                                          class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand"></textarea>
                                 @error('message') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
 
@@ -151,7 +151,7 @@
                                            reader.onload = e => { headerMediaUrl = e.target.result; headerImageBroken = false; };
                                            reader.readAsDataURL(f);
                                        "
-                                       class="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-[#25D366] file:px-4 file:py-2 file:text-sm file:text-white">
+                                       class="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-brand file:px-4 file:py-2 file:text-sm file:text-white">
                                 <p class="mt-1 text-xs text-gray-500">
                                     <template x-if="headerMediaFormat">
                                         <span x-text="'Upload a new ' + headerMediaFormat.toLowerCase() + ' to replace the current header. Leave empty to keep it. Max 16MB.'"></span>
@@ -171,8 +171,8 @@
                             <label class="block text-sm font-medium text-gray-700">{{ __('Preview') }}</label>
                             <p class="text-xs text-gray-500 mb-2">{{ __('Updates live as you type. Personalization tokens shown as sample values.') }}</p>
 
-                            <div class="rounded-xl bg-[#e5ddd5] p-3 sm:p-4 lg:sticky lg:top-20" style="min-height: 280px;">
-                                <div class="ml-auto max-w-[280px] rounded-lg bg-[#dcf8c6] shadow overflow-hidden">
+                            <div class="rounded-xl bg-gray-100 p-3 sm:p-4 lg:sticky lg:top-20" style="min-height: 280px;">
+                                <div class="ml-auto max-w-[280px] rounded-lg bg-brand-soft shadow overflow-hidden">
 
                                     <template x-if="headerMediaFormat === 'IMAGE' && headerMediaUrl && !headerImageBroken">
                                         <img :src="headerMediaUrl"
@@ -182,10 +182,10 @@
                                     </template>
 
                                     <template x-if="headerMediaFormat === 'IMAGE' && headerMediaUrl && headerImageBroken">
-                                        <div class="w-full h-40 bg-gray-200 flex flex-col items-center justify-center text-gray-400 text-xs gap-1">
+                                        <div class="w-full h-40 bg-gray-200 flex flex-col items-center justify-center text-gray-500 text-xs gap-1">
                                             <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                                             <span>{{ __('Image cannot be loaded') }}</span>
-                                            <span class="text-[10px] text-gray-400">{{ __('check the URL is publicly reachable') }}</span>
+                                            <span class="text-[10px] text-gray-500">{{ __('check the URL is publicly reachable') }}</span>
                                         </div>
                                     </template>
 
@@ -258,7 +258,7 @@
 
                 <div class="flex justify-end gap-3">
                     <a href="{{ route('campaigns.show', $campaign) }}" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</a>
-                    <button type="submit" class="rounded-lg bg-[#25D366] px-4 py-2 text-sm font-medium text-white hover:bg-[#1da851]">Update Campaign</button>
+                    <button type="submit" class="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover">Update Campaign</button>
                 </div>
             </form>
         </div>

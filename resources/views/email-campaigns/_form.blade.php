@@ -73,7 +73,7 @@
                                         <span class="block h-1.5" style="background: {{ $tpl['accent'] }}"></span>
                                         <span class="block px-3 py-2">
                                             <span class="block text-sm font-semibold text-gray-800">{{ $tpl['name'] }}</span>
-                                            <span class="block text-[11px] text-gray-400 mt-0.5 leading-snug">{{ $tpl['description'] }}</span>
+                                            <span class="block text-[11px] text-gray-500 mt-0.5 leading-snug">{{ $tpl['description'] }}</span>
                                         </span>
                                     </button>
                                 @endforeach
@@ -91,7 +91,7 @@
                     <label class="block text-sm font-medium text-gray-700">{{ __('Email body (HTML)') }} *</label>
                     <textarea name="body_html" id="body_html" rows="12" required
                               class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm font-data text-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('body_html', $campaign?->body_html ?? ($preselectHtml ?? '')) }}</textarea>
-                    <p class="mt-1 text-xs text-gray-400">{{ __('Personalize with') }} <code>@{{name}}</code> {{ __('and') }} <code>@{{email}}</code>. {{ __('An unsubscribe link is added automatically.') }}</p>
+                    <p class="mt-1 text-xs text-gray-500">{{ __('Personalize with') }} <code>@{{name}}</code> {{ __('and') }} <code>@{{email}}</code>. {{ __('An unsubscribe link is added automatically.') }}</p>
                     @error('body_html')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
                 </div>
             </div>
@@ -107,13 +107,13 @@
                             <input type="checkbox" name="groups[]" value="{{ $group->id }}"
                                    {{ in_array($group->id, $selectedGroups) ? 'checked' : '' }}
                                    class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                            <span class="text-gray-700">{{ $group->name }} <span class="text-gray-400">({{ $group->contacts_count ?? $group->contact_count }})</span></span>
+                            <span class="text-gray-700">{{ $group->name }} <span class="text-gray-500">({{ $group->contacts_count ?? $group->contact_count }})</span></span>
                         </label>
                     @empty
-                        <p class="text-xs text-gray-400">{{ __('No contact groups yet.') }}</p>
+                        <p class="text-xs text-gray-500">{{ __('No contact groups yet.') }}</p>
                     @endforelse
                 </div>
-                <p class="mt-2 text-[11px] text-gray-400">{{ __('Only contacts with an email (and not unsubscribed) are sent to.') }}</p>
+                <p class="mt-2 text-[11px] text-gray-500">{{ __('Only contacts with an email (and not unsubscribed) are sent to.') }}</p>
                 @error('groups')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
 
@@ -156,12 +156,12 @@
 
             <div class="flex flex-col gap-2">
                 <button type="submit" name="action" value="send" x-show="!schedule" :disabled="busy"
-                        class="w-full px-4 py-2.5 rounded-lg bg-[#4f46e5] text-white font-semibold text-sm hover:bg-[#4338ca] transition disabled:opacity-60 disabled:cursor-not-allowed">
+                        class="w-full px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed">
                     <span x-show="!busy">{{ __('Send now') }}</span>
                     <span x-show="busy" x-cloak>{{ __('Sending…') }}</span>
                 </button>
                 <button type="submit" name="action" value="schedule" x-show="schedule" x-cloak :disabled="busy"
-                        class="w-full px-4 py-2.5 rounded-lg bg-[#4f46e5] text-white font-semibold text-sm hover:bg-[#4338ca] transition disabled:opacity-60 disabled:cursor-not-allowed">
+                        class="w-full px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed">
                     <span x-show="!busy">{{ __('Schedule') }}</span>
                     <span x-show="busy" x-cloak>{{ __('Scheduling…') }}</span>
                 </button>

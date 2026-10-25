@@ -331,13 +331,13 @@
             <div class="lg:col-span-3 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                 <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                     <h3 class="text-sm font-bold text-gray-700">{{ __('Recent calls') }}</h3>
-                    <span class="text-xs text-gray-400">{{ $calls->count() }}</span>
+                    <span class="text-xs text-gray-500">{{ $calls->count() }}</span>
                 </div>
 
                 {{-- Search + filter --}}
                 <form method="GET" action="{{ route('calls.workspace') }}" class="px-5 py-3 border-b border-gray-50 flex flex-col sm:flex-row gap-2">
                     <div class="relative flex-1">
-                        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+                        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
                         <input type="search" name="q" value="{{ request('q') }}" placeholder="{{ __('Search calls…') }}"
                                class="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-blue-400 focus:ring focus:ring-blue-200">
                     </div>
@@ -357,7 +357,7 @@
                 <div class="divide-y divide-gray-50 max-h-[70vh] overflow-y-auto">
                     @forelse($calls as $call)
                         <a href="{{ route('calls.workspace', ['call' => $call->id]) }}" wire:navigate
-                           class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition {{ $call->id === $selectedCallId ? 'bg-[#25D366]/5 border-l-2 border-[#25D366]' : 'border-l-2 border-transparent' }}">
+                           class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition {{ $call->id === $selectedCallId ? 'bg-brand/5 border-l-2 border-brand' : 'border-l-2 border-transparent' }}">
                             <span class="grid place-items-center w-9 h-9 rounded-full shrink-0 {{ $call->direction === 'inbound' ? 'bg-sky-50 text-sky-600' : 'bg-violet-50 text-violet-600' }}">
                                 <span class="sr-only">{{ $call->direction === 'inbound' ? __('Inbound call') : __('Outbound call') }}</span>
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="{{ $dirIcon($call->direction) }}"/></svg>
@@ -369,11 +369,11 @@
                                         <span class="text-[10px] font-semibold text-red-600 uppercase">{{ __('missed') }}</span>
                                     @endif
                                 </div>
-                                <p class="text-xs text-gray-400">{{ $call->created_at?->diffForHumans() }}</p>
+                                <p class="text-xs text-gray-500">{{ $call->created_at?->diffForHumans() }}</p>
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
                                 @if($call->notes_count > 0)
-                                    <span class="inline-flex items-center gap-1 text-[11px] text-gray-400">
+                                    <span class="inline-flex items-center gap-1 text-[11px] text-gray-500">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h6m-6 8l-4-4V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2H7z"/></svg>
                                         {{ $call->notes_count }}
                                     </span>
@@ -385,7 +385,7 @@
                             </div>
                         </a>
                     @empty
-                        <div class="px-5 py-16 text-center text-sm text-gray-400">
+                        <div class="px-5 py-16 text-center text-sm text-gray-500">
                             {{ __('No calls yet. When a call comes in or you dial out, it lands here.') }}
                         </div>
                     @endforelse

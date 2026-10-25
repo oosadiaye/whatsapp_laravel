@@ -25,7 +25,7 @@
                         </div>
                         <div class="mt-3">
                             <x-input-label for="imap_encryption" :value="__('Encryption')" />
-                            <select id="imap_encryption" name="imap_encryption" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                            <select id="imap_encryption" name="imap_encryption" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                 @foreach(['ssl', 'tls', 'starttls', 'none'] as $enc)
                                     <option value="{{ $enc }}" @selected((old('imap_encryption', $account->credentials['imap_encryption'] ?? 'ssl')) === $enc)>{{ strtoupper($enc) }}</option>
                                 @endforeach
@@ -48,7 +48,7 @@
                         </div>
                         <div class="mt-3">
                             <x-input-label for="smtp_encryption" :value="__('Encryption')" />
-                            <select id="smtp_encryption" name="smtp_encryption" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                            <select id="smtp_encryption" name="smtp_encryption" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                 @foreach(['ssl', 'tls', 'starttls', 'none'] as $enc)
                                     <option value="{{ $enc }}" @selected((old('smtp_encryption', $account->credentials['smtp_encryption'] ?? 'tls')) === $enc)>{{ strtoupper($enc) }}</option>
                                 @endforeach
@@ -69,7 +69,7 @@
 
                     <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
                         <a href="{{ route('mailbox.accounts.index') }}" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">{{ __('Cancel') }}</a>
-                        <button type="submit" class="px-5 py-2 bg-[#25D366] text-white text-sm font-semibold rounded-md hover:bg-[#1da851]">{{ __('Save & Test') }}</button>
+                        <button type="submit" class="px-5 py-2 bg-brand text-white text-sm font-semibold rounded-md hover:bg-brand-hover">{{ __('Save & Test') }}</button>
                     </div>
                 </form>
             </div>

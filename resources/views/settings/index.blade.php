@@ -58,7 +58,7 @@
                     {{-- WhatsApp (Cloud API) — the single instance --}}
                     <div x-data="{ showToken: false }" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                         <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
-                            <span class="grid place-items-center w-9 h-9 rounded-lg bg-[#25D366]/10 text-[#128C7E]">
+                            <span class="grid place-items-center w-9 h-9 rounded-lg bg-brand/10 text-brand-text">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
                             </span>
                             <div>
@@ -73,32 +73,32 @@
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Display Name') }}</label>
                                 <input type="text" name="wa_display_name" value="{{ old('wa_display_name', $instance->display_name ?? '') }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Phone Number ID') }}</label>
                                 <input type="text" name="wa_phone_number_id" value="{{ old('wa_phone_number_id', $instance->phone_number_id ?? '') }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-brand focus:ring-brand">
                                 @error('wa_phone_number_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('WABA ID') }}</label>
                                 <input type="text" name="wa_waba_id" value="{{ old('wa_waba_id', $instance->waba_id ?? '') }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-brand focus:ring-brand">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Webhook Verify Token') }}</label>
                                 <input type="text" name="wa_webhook_verify_token" value="{{ old('wa_webhook_verify_token', $instance->webhook_verify_token ?? '') }}"
                                        placeholder="{{ __('auto-generated if blank') }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-brand focus:ring-brand">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Access Token') }}</label>
                                 <div class="relative">
                                     <input :type="showToken ? 'text' : 'password'" name="wa_access_token"
                                            placeholder="{{ $waTokenSet ? '••••••••••••••••' : __('Meta system-user token') }}"
-                                           class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 focus:border-[#25D366] focus:ring-[#25D366]">
-                                    <button type="button" @click="showToken = !showToken" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600">
+                                           class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 focus:border-brand focus:ring-brand">
+                                    <button type="button" @click="showToken = !showToken" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-600">
                                         <svg x-show="!showToken" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                                         <svg x-show="showToken" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
                                     </button>
@@ -109,7 +109,7 @@
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('App Secret') }}</label>
                                 <input type="password" name="wa_app_secret"
                                        placeholder="{{ $waSecretSet ? '••••••••••••••••' : __('Meta app secret') }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                 <p class="mt-1 text-xs text-gray-500">{{ __('Verifies inbound webhook signatures. Leave blank to keep.') }}</p>
                             </div>
                         </div>
@@ -149,7 +149,7 @@
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Username') }}</label>
                                 <input type="text" name="africastalking_username"
                                        value="{{ old('africastalking_username', $atUsername) }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                 @error('africastalking_username')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                             </div>
                             <div>
@@ -157,9 +157,9 @@
                                 <div class="relative">
                                     <input :type="showKey ? 'text' : 'password'" name="africastalking_api_key"
                                            placeholder="{{ $atKeySet ? '••••••••••••••••' : __('Enter key') }}"
-                                           class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 focus:border-[#25D366] focus:ring-[#25D366]">
+                                           class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 focus:border-brand focus:ring-brand">
                                     <button type="button" @click="showKey = !showKey"
-                                            class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
+                                            class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-600"
                                             :title="showKey ? '{{ __('Hide') }}' : '{{ __('Show') }}'">
                                         <svg x-show="!showKey" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                                         <svg x-show="showKey" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
@@ -171,14 +171,14 @@
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Virtual Number (E.164)') }}</label>
                                 <input type="text" name="africastalking_virtual_number"
                                        value="{{ old('africastalking_virtual_number', $atNumber) }}" placeholder="+234..."
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm font-data focus:border-brand focus:ring-brand">
                                 @error('africastalking_virtual_number')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Rate / Minute (kobo)') }}</label>
                                 <input type="number" name="africastalking_rate_per_minute_kobo" min="0" max="100000"
                                        value="{{ old('africastalking_rate_per_minute_kobo', $settings['africastalking_rate_per_minute_kobo'] ?? 600) }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                 <p class="mt-1 text-xs text-gray-500">{{ __('Per-minute cost estimate (₦6 = 600 kobo). Used for /calls cost tracking.') }}</p>
                             </div>
                         </div>
@@ -213,7 +213,7 @@
                             <label class="flex items-center gap-3 cursor-pointer">
                                 <input type="checkbox" name="voice_recording_enabled" value="1"
                                        {{ old('voice_recording_enabled', $recordingEnabled) ? 'checked' : '' }}
-                                       class="rounded border-gray-300 text-[#25D366] focus:ring-[#25D366]">
+                                       class="rounded border-gray-300 text-brand-text focus:ring-brand">
                                 <span class="text-sm font-medium text-gray-700">{{ __('Enable call recording') }}</span>
                             </label>
 
@@ -221,24 +221,24 @@
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Consent notice') }}</label>
                                 <textarea name="voice_recording_consent_notice" rows="2"
                                           placeholder="{{ __('This call may be recorded for quality and training purposes.') }}"
-                                          class="block w-full rounded-lg border-gray-300 shadow-sm text-sm focus:border-[#25D366] focus:ring-[#25D366]">{{ old('voice_recording_consent_notice', $recordingConsent) }}</textarea>
+                                          class="block w-full rounded-lg border-gray-300 shadow-sm text-sm focus:border-brand focus:ring-brand">{{ old('voice_recording_consent_notice', $recordingConsent) }}</textarea>
                                 @error('voice_recording_consent_notice')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                                <p class="mt-1 text-xs text-gray-400">{{ __('Required to enable recording — state how callers are told the call is recorded.') }}</p>
+                                <p class="mt-1 text-xs text-gray-500">{{ __('Required to enable recording — state how callers are told the call is recorded.') }}</p>
                             </div>
 
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Retention (days)') }}</label>
                                 <input type="number" name="voice_recording_retention_days" min="0" max="3650"
                                        value="{{ old('voice_recording_retention_days', $recordingRetentionDays) }}"
-                                       class="block w-full sm:w-1/3 rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full sm:w-1/3 rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                 @error('voice_recording_retention_days')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                                <p class="mt-1 text-xs text-gray-400">{{ __('Recording audio is deleted after this many days (the transcript is kept). 0 = keep forever.') }}</p>
+                                <p class="mt-1 text-xs text-gray-500">{{ __('Recording audio is deleted after this many days (the transcript is kept). 0 = keep forever.') }}</p>
                             </div>
 </div>
                     </div>
 
                     {{-- AI Provider (OpenRouter + Gemini) — powers all AI draft/suggest features --}}
-                    <div x-data="{ showOpenRouter: false, provider: '{{ $aiProvider }}' }" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                    <div x-data="{ showGemini: false, showOpenRouter: false, provider: '{{ $aiProvider }}' }" class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                         <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
                             <span class="grid place-items-center w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 .25M5 10c0 .938.605 1.812 1.5 2.25A6.062 6.062 0 0015 18a6.062 6.062 0 008.5-5.75c0-.89-.56-1.748-1.5-2.25m0 0A4.5 4.5 0 1010.5 8.5M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -251,7 +251,7 @@
                         <div class="p-6 space-y-4">
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Provider') }}</label>
-                                <select name="ai_provider" x-model="provider" class="block w-full sm:w-1/2 rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                <select name="ai_provider" x-model="provider" class="block w-full sm:w-1/2 rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                     <option value="gemini" @selected($aiProvider === 'gemini')>{{ __('Google Gemini') }}</option>
                                     <option value="openrouter" @selected($aiProvider === 'openrouter')>{{ __('OpenRouter') }}</option>
                                 </select>
@@ -262,12 +262,12 @@
                                 <div class="relative sm:w-2/3">
                                     <input :type="showGemini ? 'text' : 'password'" name="gemini_api_key"
                                            placeholder="{{ $geminiKeySet ? '••••••••••••••••' : __('Enter key') }}"
-                                           class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-data focus:border-[#25D366] focus:ring-[#25D366]">
+                                           class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-data focus:border-brand focus:ring-brand">
                                     <button type="button" @click="showGemini = !showGemini"
-                                            class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
+                                            class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-600"
                                             :title="showGemini ? '{{ __('Hide') }}' : '{{ __('Show') }}'">
-                                        <svg x-show="!showGemini" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                        <svg x-show="showGemini" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
+                                        <svg x-show="!showGemini" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                        <svg x-show="showGemini" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
                                     </button>
                                 </div>
                                 @error('gemini_api_key')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
@@ -279,12 +279,12 @@
                                 <div class="relative sm:w-2/3">
                                     <input :type="showOpenRouter ? 'text' : 'password'" name="openrouter_api_key"
                                            placeholder="{{ $openRouterKeySet ? '••••••••••••••••' : __('Enter key') }}"
-                                           class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-data focus:border-[#25D366] focus:ring-[#25D366]">
+                                           class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-data focus:border-brand focus:ring-brand">
                                     <button type="button" @click="showOpenRouter = !showOpenRouter"
-                                            class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
+                                            class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-600"
                                             :title="showOpenRouter ? '{{ __('Hide') }}' : '{{ __('Show') }}'">
-                                        <svg x-show="!showOpenRouter" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                        <svg x-show="showOpenRouter" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
+                                        <svg x-show="!showOpenRouter" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                        <svg x-show="showOpenRouter" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
                                     </button>
                                 </div>
                                 @error('openrouter_api_key')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
@@ -296,7 +296,7 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div>
                                         <label class="block text-xs font-medium text-gray-700 mb-1">{{ __('Drafting') }}</label>
-                                        <select name="ai_model_draft" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                        <select name="ai_model_draft" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                             @foreach($aiCuratedModels as $id => $label)
                                                 <option value="{{ $id }}" @selected($aiModels['draft'] === $id)>{{ $label }}</option>
                                             @endforeach
@@ -304,7 +304,7 @@
                                     </div>
                                     <div>
                                         <label class="block text-xs font-medium text-gray-700 mb-1">{{ __('Classification') }}</label>
-                                        <select name="ai_model_classify" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                        <select name="ai_model_classify" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                             @foreach($aiCuratedModels as $id => $label)
                                                 <option value="{{ $id }}" @selected($aiModels['classify'] === $id)>{{ $label }}</option>
                                             @endforeach
@@ -312,7 +312,7 @@
                                     </div>
                                     <div>
                                         <label class="block text-xs font-medium text-gray-700 mb-1">{{ __('Summarisation') }}</label>
-                                        <select name="ai_model_summarise" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                        <select name="ai_model_summarise" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                             @foreach($aiCuratedModels as $id => $label)
                                                 <option value="{{ $id }}" @selected($aiModels['summarise'] === $id)>{{ $label }}</option>
                                             @endforeach
@@ -355,14 +355,13 @@
 
                             {{-- Test AI connection --}}
                             <div class="px-6 pb-6 border-t border-gray-100 pt-4">
-                                <form action="{{ route('settings.test-ai') }}" method="POST" id="settings-test-ai">
-                                    @csrf
-                                    <div class="flex flex-wrap items-center justify-between gap-3">
-                                        <p class="text-xs text-gray-500 max-w-md">{{ __('Verify the AI provider credentials work before enabling features — sends a minimal test prompt and shows the exact error if it fails. Save any changes above first.') }}</p>
-                                        <button type="submit"
-                                                class="shrink-0 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500">{{ __('Test AI connection') }}</button>
-                                    </div>
-                                </form>
+                                {{-- The form itself lives at the end of the page (a <form> cannot nest inside the
+                                     settings form); this button targets it via the HTML5 form= attribute. --}}
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <p class="text-xs text-gray-500 max-w-md">{{ __('Verify the AI provider credentials work before enabling features — sends a minimal test prompt and shows the exact error if it fails. Save any changes above first.') }}</p>
+                                    <button type="submit" form="settings-test-ai"
+                                            class="shrink-0 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500">{{ __('Test AI connection') }}</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -389,7 +388,7 @@
 
                             <div class="sm:w-2/3">
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Transport') }}</label>
-                                <select name="mail_mailer" x-model="mailer" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                <select name="mail_mailer" x-model="mailer" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                     <option value="">{{ __('Use .env default (MAIL_MAILER)') }}</option>
                                     <option value="smtp">{{ __('SMTP server') }}</option>
                                     <option value="log">{{ __('Log only (do not deliver)') }}</option>
@@ -401,20 +400,20 @@
                                     <div class="sm:col-span-2">
                                         <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('SMTP host') }}</label>
                                         <input type="text" name="mail_host" value="{{ $settings['mail_host'] ?? '' }}" placeholder="smtp.example.com"
-                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                         @error('mail_host')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                                     </div>
                                     <div>
                                         <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Port') }}</label>
                                         <input type="number" name="mail_port" min="1" max="65535" value="{{ $settings['mail_port'] ?? 587 }}"
-                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                         @error('mail_port')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div>
                                         <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Encryption') }}</label>
-                                        <select name="mail_encryption" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                        <select name="mail_encryption" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                             @foreach(['tls' => 'TLS (STARTTLS · 587)', 'ssl' => 'SSL (implicit · 465)', 'starttls' => 'STARTTLS', 'none' => __('None')] as $val => $label)
                                                 <option value="{{ $val }}" @selected($mailEncryption === $val)>{{ $label }}</option>
                                             @endforeach
@@ -423,7 +422,7 @@
                                     <div>
                                         <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Username') }}</label>
                                         <input type="text" name="mail_username" value="{{ $settings['mail_username'] ?? '' }}" autocomplete="off"
-                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                         @error('mail_username')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                                     </div>
                                     <div>
@@ -431,9 +430,9 @@
                                         <div class="relative">
                                             <input :type="showMailPass ? 'text' : 'password'" name="mail_password"
                                                    placeholder="{{ $mailPasswordSet ? '••••••••••••' : __('SMTP password') }}" autocomplete="new-password"
-                                                   class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-data focus:border-[#25D366] focus:ring-[#25D366]">
+                                                   class="block w-full rounded-lg border-gray-300 shadow-sm pr-10 font-data focus:border-brand focus:ring-brand">
                                             <button type="button" @click="showMailPass = !showMailPass"
-                                                    class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-600"
+                                                    class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-600"
                                                     :title="showMailPass ? '{{ __('Hide') }}' : '{{ __('Show') }}'">
                                                 <svg x-show="!showMailPass" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                                                 <svg x-show="showMailPass" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88"/></svg>
@@ -446,13 +445,13 @@
                                     <div>
                                         <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('From address') }}</label>
                                         <input type="email" name="mail_from_address" value="{{ $settings['mail_from_address'] ?? '' }}" placeholder="hello@yourdomain.com"
-                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                         @error('mail_from_address')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                                     </div>
                                     <div>
                                         <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('From name') }}</label>
                                         <input type="text" name="mail_from_name" value="{{ $settings['mail_from_name'] ?? '' }}" placeholder="{{ config('app.name') }}"
-                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                         @error('mail_from_name')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                                     </div>
                                 </div>
@@ -465,11 +464,11 @@
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Send a test email to') }}</label>
                                 <div class="flex flex-wrap items-center gap-3">
                                     <input type="email" name="test_email" form="settings-test-email" value="{{ auth()->user()->email }}"
-                                           class="flex-1 min-w-[220px] rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                           class="flex-1 min-w-[220px] rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                     <button type="submit" form="settings-test-email"
                                             class="px-4 py-2 rounded-lg bg-gray-800 text-white text-sm font-semibold hover:bg-gray-700">{{ __('Send test email') }}</button>
                                 </div>
-                                <p class="mt-1 text-xs text-gray-400">{{ __('Uses your saved settings — save this page first, then send the test.') }}</p>
+                                <p class="mt-1 text-xs text-gray-500">{{ __('Uses your saved settings — save this page first, then send the test.') }}</p>
                             </div>
                         </div>
                     </div>
@@ -490,25 +489,25 @@
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Rate (messages/min)') }}</label>
                                 <input type="number" name="default_rate_per_minute" min="1" max="60"
                                        value="{{ $settings['default_rate_per_minute'] ?? 10 }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Default Country Code') }}</label>
                                 <input type="text" name="default_country_code" maxlength="4"
                                        value="{{ $settings['default_country_code'] ?? '234' }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Min Delay (seconds)') }}</label>
                                 <input type="number" name="default_delay_min" min="1"
                                        value="{{ $settings['default_delay_min'] ?? 2 }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Max Delay (seconds)') }}</label>
                                 <input type="number" name="default_delay_max" min="1"
                                        value="{{ $settings['default_delay_max'] ?? 8 }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                             </div>
                         </div>
                     </div>
@@ -528,7 +527,7 @@
                             <label for="round_robin_cap_per_agent" class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Round-robin cap per agent') }}</label>
                             <input type="number" name="round_robin_cap_per_agent" id="round_robin_cap_per_agent" min="0" max="1000"
                                    value="{{ old('round_robin_cap_per_agent', $settings['round_robin_cap_per_agent'] ?? 5) }}"
-                                   class="block w-full sm:w-1/2 rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                   class="block w-full sm:w-1/2 rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                             <p class="mt-1 text-xs text-gray-500">{{ __('Max active conversations auto-assigned per agent (inbound within 24h). 0 disables auto-assignment. Default 5.') }}</p>
                             @error('round_robin_cap_per_agent')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
                         </div>
@@ -549,12 +548,12 @@
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('App Name') }}</label>
                                 <input type="text" name="app_name" value="{{ $settings['app_name'] ?? 'BlastIQ' }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Timezone') }}</label>
                                 <input type="text" name="timezone" value="{{ $settings['timezone'] ?? 'Africa/Lagos' }}"
-                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                             </div>
                         </div>
                     </div>
@@ -593,7 +592,7 @@
                     {{-- WhatsApp connection status --}}
                     <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                         <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
-                            <span class="grid place-items-center w-9 h-9 rounded-lg bg-[#25D366]/10 text-[#128C7E]">
+                            <span class="grid place-items-center w-9 h-9 rounded-lg bg-brand/10 text-brand-text">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
                             </span>
                             <h3 class="text-base font-bold text-gray-900">{{ __('WhatsApp connection') }}</h3>
@@ -626,7 +625,7 @@
                     </div>
 
                     <div class="hidden lg:block">
-                        <button type="submit" class="w-full rounded-lg bg-[#25D366] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[#1da851] transition shadow-sm">
+                        <button type="submit" class="w-full rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover transition shadow-sm">
                             {{ __('Save Settings') }}
                         </button>
                     </div>
@@ -635,10 +634,16 @@
 
             {{-- Mobile save --}}
             <div class="mt-6 flex justify-end lg:hidden">
-                <button type="submit" class="rounded-lg bg-[#25D366] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[#1da851] transition shadow-sm">
+                <button type="submit" class="rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover transition shadow-sm">
                     {{ __('Save Settings') }}
                 </button>
             </div>
+        </form>
+
+        {{-- Standalone form for the "Test AI connection" button (AI card). The provider and key are
+             read server-side from saved settings, so this form carries nothing but the CSRF token. --}}
+        <form id="settings-test-ai" action="{{ route('settings.test-ai') }}" method="POST" class="hidden">
+            @csrf
         </form>
 
         {{-- Standalone form for the "Send test email" button (SMTP card). Kept

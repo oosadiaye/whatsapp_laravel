@@ -30,7 +30,7 @@
                         <p class="text-sm text-gray-900 mt-1">
                             @if($atHealth['recent_success']) <span class="text-green-600">{{ __('Success') }}</span> @endif
                             @if($atHealth['recent_failure']) <span class="text-red-600 ml-2">{{ __('Failures') }}</span> @endif
-                            @if(!$atHealth['recent_success'] && !$atHealth['recent_failure']) <span class="text-gray-400">{{ __('No calls') }}</span> @endif
+                            @if(!$atHealth['recent_success'] && !$atHealth['recent_failure']) <span class="text-gray-500">{{ __('No calls') }}</span> @endif
                         </p>
                     </div>
                 </div>
@@ -108,7 +108,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-sm font-bold text-gray-700 mb-4">{{ __('Recent Activity') }}</h3>
                 @if($recentAudits->isEmpty())
-                    <p class="text-sm text-gray-400">{{ __('No recent activity logged.') }}</p>
+                    <p class="text-sm text-gray-500">{{ __('No recent activity logged.') }}</p>
                 @else
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">

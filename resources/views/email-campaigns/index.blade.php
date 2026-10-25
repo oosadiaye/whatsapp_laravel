@@ -6,7 +6,7 @@
             <a href="{{ route('email-suppressions.index') }}" class="text-sm font-medium text-gray-500 hover:text-gray-700">{{ __('Suppression list') }}</a>
             @can('email.create')
                 <a href="{{ route('email-campaigns.create') }}"
-                   class="inline-flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg text-sm font-semibold hover:bg-[#4338ca] transition">
+                   class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                     {{ __('New Email Campaign') }}
                 </a>
@@ -22,7 +22,7 @@
             @if(! empty($templates ?? []))
                 <div class="mb-8">
                     <h3 class="text-sm font-semibold text-gray-700 mb-1">{{ __('Start from a beautiful template') }}</h3>
-                    <p class="text-xs text-gray-400 mb-3">{{ __('Pick a design to open the composer pre-filled — then make it yours.') }}</p>
+                    <p class="text-xs text-gray-500 mb-3">{{ __('Pick a design to open the composer pre-filled — then make it yours.') }}</p>
                     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         @foreach($templates as $tpl)
                             <a href="{{ route('email-campaigns.create', ['template' => $tpl['key']]) }}"
@@ -32,7 +32,7 @@
                                 </span>
                                 <span class="block px-3 py-2.5">
                                     <span class="block text-sm font-semibold text-gray-800">{{ $tpl['name'] }}</span>
-                                    <span class="block text-[11px] text-gray-400 mt-0.5 leading-snug">{{ $tpl['description'] }}</span>
+                                    <span class="block text-[11px] text-gray-500 mt-0.5 leading-snug">{{ $tpl['description'] }}</span>
                                 </span>
                             </a>
                         @endforeach
@@ -64,17 +64,17 @@
                         </span>
                         <div class="min-w-0 flex-1">
                             <div class="font-semibold text-sm text-gray-900 truncate">{{ $campaign->name }}</div>
-                            <div class="text-xs text-gray-400 truncate">{{ $campaign->subject }}</div>
+                            <div class="text-xs text-gray-500 truncate">{{ $campaign->subject }}</div>
                         </div>
                         @if($campaign->status === 'scheduled' && $campaign->scheduled_at)
                             <span class="text-xs text-indigo-500 whitespace-nowrap">{{ $campaign->scheduled_at->format('M j, g:i A') }}{{ $campaign->isRecurring() ? ' · '.$campaign->recurrence : '' }}</span>
                         @elseif(in_array($campaign->status, ['sent','sending']))
-                            <span class="text-xs text-gray-400 whitespace-nowrap">{{ $campaign->sent_count }}/{{ $campaign->total_recipients }} sent</span>
+                            <span class="text-xs text-gray-500 whitespace-nowrap">{{ $campaign->sent_count }}/{{ $campaign->total_recipients }} sent</span>
                         @endif
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold {{ $meta[0] }}">{{ $meta[1] }}</span>
                     </a>
                 @empty
-                    <div class="px-5 py-16 text-center text-sm text-gray-400">
+                    <div class="px-5 py-16 text-center text-sm text-gray-500">
                         {{ __('No email campaigns yet.') }}
                         @can('email.create')<a href="{{ route('email-campaigns.create') }}" class="text-indigo-600 font-semibold hover:underline">{{ __('Create one') }}</a>.@endcan
                     </div>

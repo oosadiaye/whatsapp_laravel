@@ -4,7 +4,7 @@
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Users') }}</h2>
             @can('users.create')
                 <a href="{{ route('users.create') }}"
-                   class="inline-flex items-center px-4 py-2 bg-[#25D366] text-white text-xs font-semibold uppercase tracking-widest rounded-md hover:bg-[#1da851] transition">
+                   class="inline-flex items-center px-4 py-2 bg-brand text-white text-xs font-semibold uppercase tracking-widest rounded-md hover:bg-brand-hover transition">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                     </svg>
@@ -33,7 +33,7 @@
                                 <td class="px-6 py-4 text-sm text-gray-900">
                                     {{ $user->name }}
                                     @if($user->id === auth()->id())
-                                        <span class="ml-1 text-xs text-gray-400">(you)</span>
+                                        <span class="ml-1 text-xs text-gray-500">(you)</span>
                                     @endif
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-700">{{ $user->email }}</td>
@@ -66,7 +66,7 @@
                                 <td class="px-6 py-4 text-right text-sm space-x-2">
                                     @can('users.edit')
                                         <a href="{{ route('users.edit', $user) }}"
-                                           class="text-[#25D366] hover:text-[#1da851] font-medium">{{ __('Edit') }}</a>
+                                           class="text-brand-text hover:text-brand-hover font-medium">{{ __('Edit') }}</a>
 
                                         @if($user->id !== auth()->id())
                                             <form action="{{ route('users.toggleActive', $user) }}" method="POST" class="inline">

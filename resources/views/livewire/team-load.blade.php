@@ -35,13 +35,13 @@
                         @elseif($agent->last_seen_at)
                             <span class="text-gray-600">{{ $agent->last_seen_at->diffForHumans() }}</span>
                         @else
-                            <span class="text-gray-400 italic">never</span>
+                            <span class="text-gray-500 italic">never</span>
                         @endif
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="4" class="px-6 py-12 text-center text-gray-400">
+                    <td colspan="4" class="px-6 py-12 text-center text-gray-500">
                         {{ __('No agents on this team') }}
                     </td>
                 </tr>

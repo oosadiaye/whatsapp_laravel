@@ -12,7 +12,7 @@
                         @csrf
                         <input type="hidden" name="whatsapp_instance_id" value="{{ $instance->id }}">
                         <button type="submit"
-                                class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 transition ease-in-out duration-150">
+                                class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg font-semibold text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 transition ease-in-out duration-150">
                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                             </svg>
@@ -21,7 +21,7 @@
                     </form>
                 @else
                     <button type="button" disabled title="{{ __('Configure your WhatsApp number in Settings first') }}"
-                            class="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md font-semibold text-xs text-gray-400 uppercase tracking-widest cursor-not-allowed">
+                            class="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg font-semibold text-sm text-gray-500 cursor-not-allowed">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
@@ -30,7 +30,7 @@
                 @endif
 
                 <a href="{{ route('templates.create') }}"
-                   class="inline-flex items-center px-4 py-2 bg-[#25D366] border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-[#1da851] focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 transition ease-in-out duration-150">
+                   class="inline-flex items-center px-4 py-2 bg-brand border border-transparent rounded-lg font-semibold text-sm text-white hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 transition ease-in-out duration-150">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                     </svg>
@@ -63,7 +63,7 @@
                                         {{ $template->name }}
                                     </h3>
                                     @if($template->media_path)
-                                        <span class="flex-shrink-0 text-gray-400" title="{{ __('Has media') }}">
+                                        <span class="flex-shrink-0 text-gray-500" title="{{ __('Has media') }}">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
                                             </svg>
@@ -90,7 +90,7 @@
                                             {{ $template->language }}
                                         </span>
                                         @if($template->whatsappInstance)
-                                            <span class="text-[10px] text-gray-400">{{ $template->whatsappInstance->instance_name }}</span>
+                                            <span class="text-[10px] text-gray-500">{{ $template->whatsappInstance->instance_name }}</span>
                                         @endif
                                     @else
                                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">
@@ -150,7 +150,7 @@
 
                                 @unless($template->isRemote())
                                     <a href="{{ route('templates.edit', $template) }}"
-                                       class="text-sm font-medium text-[#25D366] hover:text-[#1da851] transition-colors duration-150">
+                                       class="text-sm font-medium text-brand-text hover:text-brand-hover transition-colors duration-150">
                                         {{ __('Edit') }}
                                     </a>
                                 @endunless
@@ -197,7 +197,7 @@
 
                     <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                         <h3 class="text-lg font-semibold text-gray-900" x-text="previewTemplate?.name"></h3>
-                        <button @click="previewOpen = false" class="text-gray-400 hover:text-gray-600 transition-colors">
+                        <button @click="previewOpen = false" class="text-gray-500 hover:text-gray-600 transition-colors">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
@@ -206,7 +206,7 @@
 
                     <div class="p-6">
                         {{-- WhatsApp-style message bubble --}}
-                        <div class="bg-[#dcf8c6] rounded-lg p-4 shadow-sm max-w-sm">
+                        <div class="bg-brand-soft rounded-lg p-4 shadow-sm max-w-sm">
                             <p class="text-sm text-gray-800 whitespace-pre-wrap" x-text="previewTemplate?.content"></p>
                             <div class="flex items-center justify-end mt-2 gap-1">
                                 <span class="text-xs text-gray-500">12:00</span>

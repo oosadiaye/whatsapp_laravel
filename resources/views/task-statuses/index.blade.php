@@ -47,7 +47,7 @@
                         <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Cards</th>
                         <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                             WIP limit
-                            <span class="block normal-case tracking-normal text-gray-400">advisory</span>
+                            <span class="block normal-case tracking-normal text-gray-500">advisory</span>
                         </th>
                         <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Flags</th>
                         <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
@@ -71,7 +71,7 @@
                                        @disabled($locked)
                                        class="w-full rounded-md border-gray-300 font-mono text-xs shadow-sm disabled:bg-gray-100 disabled:text-gray-400">
                                 @if($locked)
-                                    <p class="mt-1 text-[11px] text-gray-400">Locked while cards use it</p>
+                                    <p class="mt-1 text-[11px] text-gray-500">Locked while cards use it</p>
                                 @endif
                             </td>
 
@@ -143,7 +143,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-400">
+                            <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">
                                 No statuses defined yet.
                             </td>
                         </tr>
@@ -168,7 +168,7 @@
 
                 <div>
                     <label for="new-slug" class="mb-1 block text-xs font-medium text-gray-600">
-                        Key <span class="text-gray-400">(optional)</span>
+                        Key <span class="text-gray-500">(optional)</span>
                     </label>
                     <input id="new-slug" type="text" name="slug" value="{{ old('slug') }}" maxlength="100"
                            placeholder="auto from name"
@@ -193,7 +193,7 @@
 
                 <div>
                     <label for="new-wip" class="mb-1 block text-xs font-medium text-gray-600">
-                        WIP limit <span class="text-gray-400">(optional)</span>
+                        WIP limit <span class="text-gray-500">(optional)</span>
                     </label>
                     <input id="new-wip" type="number" name="wip_limit" value="{{ old('wip_limit') }}"
                            min="1" max="999" placeholder="none"

@@ -45,7 +45,7 @@
                         <x-input-label for="role" :value="__('Role')" />
                         <select name="role" id="role" required
                                 {{ $user->id === auth()->id() ? 'disabled' : '' }}
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] disabled:bg-gray-100 disabled:text-gray-500">
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand disabled:bg-gray-100 disabled:text-gray-500">
                             @foreach($roles as $role)
                                 <option value="{{ $role->name }}" {{ old('role', $currentRole) === $role->name ? 'selected' : '' }}>
                                     {{ $role->name }}
@@ -62,7 +62,7 @@
 
                     <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
                         <a href="{{ route('users.index') }}" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">{{ __('Cancel') }}</a>
-                        <button type="submit" class="px-5 py-2 bg-[#25D366] text-white text-sm font-semibold rounded-md hover:bg-[#1da851]">{{ __('Save Changes') }}</button>
+                        <button type="submit" class="px-5 py-2 bg-brand text-white text-sm font-semibold rounded-md hover:bg-brand-hover">{{ __('Save Changes') }}</button>
                     </div>
                 </form>
             </div>

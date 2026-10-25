@@ -7,7 +7,7 @@
     </div>
 
     @if($queueEntries->isEmpty())
-        <div class="px-5 py-8 text-center text-sm text-gray-400">
+        <div class="px-5 py-8 text-center text-sm text-gray-500">
             {{ __('No callers in queue.') }}
         </div>
     @else
@@ -21,7 +21,7 @@
                         <span class="text-sm font-medium text-gray-800">
                             {{ $entry->caller_number ?? __('Unknown') }}
                         </span>
-                        <div class="text-xs text-gray-400">
+                        <div class="text-xs text-gray-500">
                             {{ $entry->entered_at->diffForHumans() }}
                         </div>
                     </div>

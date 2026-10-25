@@ -47,7 +47,7 @@
                 <h3 class="text-sm font-bold text-gray-700 mb-4">{{ __('Steps') }}</h3>
 
                 @if($sequence->steps->isEmpty())
-                    <p class="text-sm text-gray-400 mb-4">{{ __('No steps yet. Add your first email step below.') }}</p>
+                    <p class="text-sm text-gray-500 mb-4">{{ __('No steps yet. Add your first email step below.') }}</p>
                 @else
                     <div class="space-y-3 mb-6">
                         @foreach($sequence->steps as $index => $step)
@@ -120,7 +120,7 @@
                                        class="mt-1 block w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
                             </div>
                         </div>
-                        <p class="text-xs text-gray-400">{{ __('Delay = time to wait before this step sends after the previous one. Step 1 sends immediately when the sequence runs.') }}</p>
+                        <p class="text-xs text-gray-500">{{ __('Delay = time to wait before this step sends after the previous one. Step 1 sends immediately when the sequence runs.') }}</p>
                         <div class="flex justify-end">
                             <button type="submit" class="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">{{ __('Add Step') }}</button>
                         </div>
@@ -134,7 +134,7 @@
                     <h3 class="text-sm font-bold text-gray-700">{{ __('Recipients') }}</h3>
                     <span class="text-xs font-semibold text-gray-500">{{ number_format($sequence->recipients_count) }} {{ __('enrolled') }}</span>
                 </div>
-                <p class="text-xs text-gray-400 mb-4">{{ __('Enrol contacts who have an email address. They start at step 1 and progress through the delays once the sequence is active. Enrolling again only adds new contacts — no duplicates.') }}</p>
+                <p class="text-xs text-gray-500 mb-4">{{ __('Enrol contacts who have an email address. They start at step 1 and progress through the delays once the sequence is active. Enrolling again only adds new contacts — no duplicates.') }}</p>
                 <form method="POST" action="{{ route('email-sequences.enroll', $sequence) }}" class="flex flex-wrap items-end gap-3">
                     @csrf
                     <div class="flex-1 min-w-[200px]">

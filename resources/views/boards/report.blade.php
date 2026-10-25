@@ -83,7 +83,7 @@
                                 <span @class([
                                     'text-sm font-medium tabular-nums',
                                     'text-amber-700' => $column['over'],
-                                    'text-gray-400' => ! $column['over'],
+                                    'text-gray-500' => ! $column['over'],
                                 ])>/{{ $column['limit'] }}</span>
                             @endif
                         </p>
@@ -105,7 +105,7 @@
             {{-- Throughput --}}
             <section>
                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Finished per week</h3>
-                <p class="mt-1 text-xs text-gray-400">
+                <p class="mt-1 text-xs text-gray-500">
                     Cards that reached a completed column. Counted once per week even if finished twice.
                     @if ($from && $to)
                         Bounded to {{ $from }}–{{ $to }}; time-in-column and coverage use the same window.
@@ -142,12 +142,12 @@
             {{-- Time in column --}}
             <section>
                 <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Average time in column</h3>
-                <p class="mt-1 text-xs text-gray-400">
+                <p class="mt-1 text-xs text-gray-500">
                     Includes cards still in the column, measured up to now.
                 </p>
                 <table class="mt-3 w-full text-sm">
                     <thead>
-                        <tr class="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-400">
+                        <tr class="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
                             <th class="py-1.5 pr-3 font-medium">Column</th>
                             <th class="py-1.5 pr-3 text-right font-medium">Average</th>
                             <th class="py-1.5 pr-3 text-right font-medium">Cards</th>
@@ -181,13 +181,13 @@
         {{-- Assignee load --}}
         <section>
             <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">Load by assignee</h3>
-            <p class="mt-1 text-xs text-gray-400">
+            <p class="mt-1 text-xs text-gray-500">
                 A card with several assignees counts for each of them, so these rows sum to more than
                 the board's card count.
             </p>
             <table class="mt-3 w-full text-sm">
                 <thead>
-                    <tr class="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-400">
+                    <tr class="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
                         <th class="py-1.5 pr-3 font-medium">Person</th>
                         <th class="py-1.5 pr-3 text-right font-medium">Open</th>
                         <th class="py-1.5 pr-3 text-right font-medium">Overdue</th>

@@ -55,13 +55,13 @@
             <div class="flex flex-col items-center">
                 <span class="text-[40px] font-bold font-data tabular-nums text-gray-900 leading-none"
                       x-text="String(Math.floor(durationSeconds / 60)).padStart(2, '0')"></span>
-                <span class="text-[10px] uppercase font-bold tracking-widest text-gray-400 mt-2">{{ __('Minutes') }}</span>
+                <span class="text-[10px] uppercase font-bold tracking-widest text-gray-500 mt-2">{{ __('Minutes') }}</span>
             </div>
             <span class="text-[40px] font-bold font-data text-gray-300 leading-none">:</span>
             <div class="flex flex-col items-center">
                 <span class="text-[40px] font-bold font-data tabular-nums text-gray-900 leading-none"
                       x-text="String(durationSeconds % 60).padStart(2, '0')"></span>
-                <span class="text-[10px] uppercase font-bold tracking-widest text-gray-400 mt-2">{{ __('Seconds') }}</span>
+                <span class="text-[10px] uppercase font-bold tracking-widest text-gray-500 mt-2">{{ __('Seconds') }}</span>
             </div>
         </div>
 
@@ -89,7 +89,7 @@
                     <svg x-show="muted" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M3 3l18 18M9.75 9.348A3 3 0 019 7.5V4.5a3 3 0 015.856-.917"/></svg>
                 </span>
                 <span class="text-sm font-bold text-gray-900">{{ __('Mute') }}</span>
-                <span class="text-[11px]" :class="muted ? 'text-red-500 font-semibold' : 'text-gray-400'"
+                <span class="text-[11px]" :class="muted ? 'text-red-500 font-semibold' : 'text-gray-500'"
                       x-text="muted ? '{{ __('Mic off') }}' : '{{ __('Mic active') }}'"></span>
             </button>
 
@@ -103,7 +103,7 @@
                     <svg x-show="held" x-cloak class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"/></svg>
                 </span>
                 <span class="text-sm font-bold text-gray-900" x-text="held ? '{{ __('Resume') }}' : '{{ __('Hold') }}'"></span>
-                <span class="text-[11px]" :class="held ? 'text-amber-600 font-semibold' : 'text-gray-400'"
+                <span class="text-[11px]" :class="held ? 'text-amber-600 font-semibold' : 'text-gray-500'"
                       x-text="held ? '{{ __('On hold') }}' : '{{ __('Call active') }}'"></span>
             </button>
 
@@ -116,7 +116,7 @@
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6 12a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM4.5 19.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM13.5 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM12 13.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM13.5 18a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM19.5 7.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM21 12a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM19.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>
                 </span>
                 <span class="text-sm font-bold text-gray-900">{{ __('Keypad') }}</span>
-                <span class="text-[11px] text-gray-400">{{ __('DTMF tones') }}</span>
+                <span class="text-[11px] text-gray-500">{{ __('DTMF tones') }}</span>
             </button>
 
             {{-- Record --}}
@@ -129,7 +129,7 @@
                     <svg class="w-5 h-5" :class="recording && 'animate-pulse'" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg>
                 </span>
                 <span class="text-sm font-bold text-gray-900">{{ __('Record') }}</span>
-                <span class="text-[11px]" :class="recording ? 'text-red-500 font-semibold' : 'text-gray-400'"
+                <span class="text-[11px]" :class="recording ? 'text-red-500 font-semibold' : 'text-gray-500'"
                       x-text="recording ? '{{ __('Recording') }}' : '{{ __('Off') }}'"></span>
             </button>
         </div>
@@ -141,7 +141,7 @@
         <div class="px-6 pb-1">
             <button type="button" @click="toggleTransfer()"
                     class="w-full flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 py-2.5 text-sm font-semibold text-gray-700 transition active:scale-[.99]"
-                    :class="transferOpen && 'ring-2 ring-[#25D366]/40'">
+                    :class="transferOpen && 'ring-2 ring-brand/40'">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
                 {{ __('Transfer') }}
             </button>
@@ -149,14 +149,14 @@
                 <label class="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">{{ __('Transfer to number') }}</label>
                 <div class="flex gap-2">
                     <input type="tel" x-model="transferNumber" placeholder="+2348000000000"
-                           class="flex-1 rounded-lg border-gray-300 text-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                           class="flex-1 rounded-lg border-gray-300 text-sm focus:border-brand focus:ring-brand">
                     <button type="button" @click="transferToNumber()" :disabled="transferBusy"
-                            class="px-4 rounded-lg bg-[#25D366] text-white text-sm font-semibold hover:bg-[#1da851] disabled:opacity-50">
+                            class="px-4 rounded-lg bg-brand text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50">
                         <span x-show="!transferBusy">{{ __('Send') }}</span>
                         <span x-show="transferBusy" x-cloak>…</span>
                     </button>
                 </div>
-                <p class="mt-1.5 text-[11px] text-gray-400">{{ __('The call moves to this number and your line drops.') }}</p>
+                <p class="mt-1.5 text-[11px] text-gray-500">{{ __('The call moves to this number and your line drops.') }}</p>
             </div>
         </div>
     @endif

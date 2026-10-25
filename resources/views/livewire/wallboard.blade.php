@@ -21,7 +21,7 @@
         ] as $tile)
             <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
                 <div class="text-2xl font-bold {{ $tile['accent'] }}">{{ $tile['value'] }}</div>
-                <div class="text-[11px] uppercase tracking-wide text-gray-400 mt-0.5">{{ $tile['label'] }}</div>
+                <div class="text-[11px] uppercase tracking-wide text-gray-500 mt-0.5">{{ $tile['label'] }}</div>
             </div>
         @endforeach
     </div>
@@ -32,7 +32,7 @@
             <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full {{ $stats['live'] > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300' }}"></span>
                 <h3 class="text-sm font-bold text-gray-700">{{ __('Live calls') }}</h3>
-                <span class="ml-auto text-xs text-gray-400">{{ $stats['avg_mos'] !== null ? __('avg MOS').' '.$stats['avg_mos'] : '' }}</span>
+                <span class="ml-auto text-xs text-gray-500">{{ $stats['avg_mos'] !== null ? __('avg MOS').' '.$stats['avg_mos'] : '' }}</span>
             </div>
             <div class="divide-y divide-gray-50">
                 @forelse ($liveCalls as $call)
@@ -42,7 +42,7 @@
                         </span>
                         <div class="min-w-0 flex-1">
                             <div class="font-semibold text-sm text-gray-900 truncate">{{ $call->contact?->name ?? $call->to_phone ?? __('Unknown') }}</div>
-                            <div class="text-xs text-gray-400">
+                            <div class="text-xs text-gray-500">
                                 {{ ucfirst($call->direction) }}
                                 @if($call->placedBy) · {{ $call->placedBy->name }} @endif
                             </div>
@@ -54,7 +54,7 @@
                         </span>
                     </div>
                 @empty
-                    <div class="px-5 py-12 text-center text-sm text-gray-400">{{ __('No calls in progress right now.') }}</div>
+                    <div class="px-5 py-12 text-center text-sm text-gray-500">{{ __('No calls in progress right now.') }}</div>
                 @endforelse
             </div>
         </div>
@@ -71,12 +71,12 @@
                     <div class="flex items-center gap-3 px-5 py-2.5">
                         <span class="w-2.5 h-2.5 rounded-full shrink-0 {{ $onCall ? 'bg-violet-500' : ($offline ? 'bg-gray-300' : ($presenceDot[$agent->presence_status] ?? 'bg-gray-300')) }}"></span>
                         <span class="text-sm text-gray-800 truncate flex-1">{{ $agent->name }}</span>
-                        <span class="text-[11px] font-medium {{ $onCall ? 'text-violet-600' : ($offline ? 'text-gray-400' : 'text-gray-500') }}">
+                        <span class="text-[11px] font-medium {{ $onCall ? 'text-violet-600' : ($offline ? 'text-gray-500' : 'text-gray-500') }}">
                             {{ $onCall ? __('On call') : ($offline ? __('Offline') : ucfirst($agent->presence_status ?? __('offline'))) }}
                         </span>
                     </div>
                 @empty
-                    <div class="px-5 py-8 text-center text-sm text-gray-400">{{ __('No active agents.') }}</div>
+                    <div class="px-5 py-8 text-center text-sm text-gray-500">{{ __('No active agents.') }}</div>
                 @endforelse
             </div>
         </div>

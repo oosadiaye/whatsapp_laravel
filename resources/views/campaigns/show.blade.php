@@ -9,7 +9,7 @@
                 @if($campaign->status === 'DRAFT')
                     <form action="{{ route('campaigns.launch', $campaign) }}" method="POST" class="inline">
                         @csrf
-                        <button type="submit" class="rounded-lg bg-[#25D366] px-4 py-2 text-sm font-medium text-white hover:bg-[#1da851]">Launch Campaign</button>
+                        <button type="submit" class="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover">Launch Campaign</button>
                     </form>
                 @endif
 
@@ -167,13 +167,13 @@
                             <span class="text-gray-500">{{ __('Estimated reach') }}:</span>
                             <span class="font-medium">{{ $estimatedReach }} {{ __('contacts') }}</span>
                             @if($campaign->contactGroups->count() > 1)
-                                <span class="ml-1 text-xs text-gray-400" title="{{ __('Sum across groups; de-duplicated at launch') }}">·</span>
+                                <span class="ml-1 text-xs text-gray-500" title="{{ __('Sum across groups; de-duplicated at launch') }}">·</span>
                             @endif
                         </div>
                         @if($campaign->total_contacts > 0)
                             <div><span class="text-gray-500">{{ __('Actual (de-duped)') }}:</span> <span class="font-medium">{{ $campaign->total_contacts }}</span></div>
                         @else
-                            <div><span class="text-gray-500">{{ __('Actual reach') }}:</span> <span class="text-gray-400 italic">{{ __('determined at launch') }}</span></div>
+                            <div><span class="text-gray-500">{{ __('Actual reach') }}:</span> <span class="text-gray-500 italic">{{ __('determined at launch') }}</span></div>
                         @endif
                     </div>
 
@@ -181,7 +181,7 @@
                         @foreach($campaign->contactGroups as $group)
                             <li class="flex items-center justify-between px-4 py-3 text-sm">
                                 <div class="flex items-center gap-3">
-                                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
                                     </svg>
                                     <span class="font-medium text-gray-900">{{ $group->name }}</span>
@@ -191,7 +191,7 @@
                                         {{ $group->active_contacts_count }} {{ __('active') }}
                                     </span>
                                     @if($group->total_contacts_count > $group->active_contacts_count)
-                                        <span class="text-gray-400" title="{{ $group->total_contacts_count - $group->active_contacts_count }} {{ __('inactive contacts excluded from sends') }}">
+                                        <span class="text-gray-500" title="{{ $group->total_contacts_count - $group->active_contacts_count }} {{ __('inactive contacts excluded from sends') }}">
                                             ({{ $group->total_contacts_count }} {{ __('total') }})
                                         </span>
                                     @endif

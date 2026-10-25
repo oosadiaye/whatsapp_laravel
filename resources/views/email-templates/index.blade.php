@@ -4,7 +4,7 @@
             <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ __('Email Templates') }}</h2>
             @can('email.create')
                 <a href="{{ route('email-templates.create') }}"
-                   class="inline-flex items-center gap-2 px-4 py-2 bg-[#4f46e5] text-white rounded-lg text-sm font-semibold hover:bg-[#4338ca] transition">
+                   class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                     {{ __('New template') }}
                 </a>
@@ -25,7 +25,7 @@
                 <div class="rounded-xl border border-dashed border-gray-300 bg-white px-5 py-12 text-center">
                     <p class="text-sm text-gray-500">{{ __('No saved templates yet.') }}</p>
                     @can('email.create')
-                        <p class="text-xs text-gray-400 mt-1">{{ __('Create one below from a starter design, or from scratch.') }}</p>
+                        <p class="text-xs text-gray-500 mt-1">{{ __('Create one below from a starter design, or from scratch.') }}</p>
                     @endcan
                 </div>
             @else
@@ -36,11 +36,11 @@
                                     class="w-full h-40 bg-white border-b border-gray-100 pointer-events-none" scrolling="no"></iframe>
                             <div class="p-4 flex-1 flex flex-col">
                                 <div class="font-semibold text-sm text-gray-900 truncate">{{ $tpl->name }}</div>
-                                <div class="text-xs text-gray-400 truncate">{{ $tpl->subject ?: __('No default subject') }}</div>
-                                <div class="text-[11px] text-gray-400 mt-1">{{ __('by') }} {{ $tpl->creator?->name ?? __('—') }} · {{ $tpl->updated_at?->diffForHumans() }}</div>
+                                <div class="text-xs text-gray-500 truncate">{{ $tpl->subject ?: __('No default subject') }}</div>
+                                <div class="text-[11px] text-gray-500 mt-1">{{ __('by') }} {{ $tpl->creator?->name ?? __('—') }} · {{ $tpl->updated_at?->diffForHumans() }}</div>
                                 <div class="mt-3 flex items-center gap-3 text-xs">
                                     @can('email.create')
-                                        <a href="{{ route('email-campaigns.create', ['email_template' => $tpl->id]) }}" class="font-semibold text-[#4f46e5] hover:underline">{{ __('Use in campaign') }}</a>
+                                        <a href="{{ route('email-campaigns.create', ['email_template' => $tpl->id]) }}" class="font-semibold text-indigo-600 hover:underline">{{ __('Use in campaign') }}</a>
                                     @endcan
                                     @can('email.edit')
                                         <a href="{{ route('email-templates.edit', $tpl) }}" class="text-gray-500 hover:text-gray-800">{{ __('Edit') }}</a>
@@ -65,7 +65,7 @@
             @if(! empty($starters ?? []))
                 <div>
                     <h3 class="text-sm font-semibold text-gray-700 mb-1">{{ __('Start from a beautiful design') }}</h3>
-                    <p class="text-xs text-gray-400 mb-3">{{ __('Open the editor pre-filled, then save it as your own template.') }}</p>
+                    <p class="text-xs text-gray-500 mb-3">{{ __('Open the editor pre-filled, then save it as your own template.') }}</p>
                     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         @foreach($starters as $s)
                             <a href="{{ route('email-templates.create', ['starter' => $s['key']]) }}"
@@ -75,7 +75,7 @@
                                 </span>
                                 <span class="block px-3 py-2.5">
                                     <span class="block text-sm font-semibold text-gray-800">{{ $s['name'] }}</span>
-                                    <span class="block text-[11px] text-gray-400 mt-0.5 leading-snug">{{ $s['description'] }}</span>
+                                    <span class="block text-[11px] text-gray-500 mt-0.5 leading-snug">{{ $s['description'] }}</span>
                                 </span>
                             </a>
                         @endforeach

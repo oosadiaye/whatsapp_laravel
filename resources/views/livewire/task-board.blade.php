@@ -257,11 +257,11 @@
                                 @endforeach
 
                                 @if($task->comments_count > 0)
-                                    <span class="text-xs text-gray-400">{{ $task->comments_count }} comment{{ $task->comments_count === 1 ? '' : 's' }}</span>
+                                    <span class="text-xs text-gray-500">{{ $task->comments_count }} comment{{ $task->comments_count === 1 ? '' : 's' }}</span>
                                 @endif
                             </div>
 
-                            <div class="mt-2 flex items-center justify-between text-xs text-gray-400">
+                            <div class="mt-2 flex items-center justify-between text-xs text-gray-500">
                                 <span>{{ $task->user?->name ?? '—' }}</span>
                                 <span>{{ $task->updated_at?->diffForHumans() }}</span>
                             </div>
@@ -302,7 +302,7 @@
                             @endcan
                         </article>
                     @empty
-                        <p class="py-6 text-center text-xs text-gray-400">Drop tasks here</p>
+                        <p class="py-6 text-center text-xs text-gray-500">Drop tasks here</p>
                     @endforelse
                 </div>
             </section>
@@ -415,7 +415,7 @@
                                     {{ $person->name }}
                                 </button>
                             @empty
-                                <p class="text-xs text-gray-400">No active users to assign.</p>
+                                <p class="text-xs text-gray-500">No active users to assign.</p>
                             @endforelse
                         </div>
                     </section>
@@ -429,7 +429,7 @@
                             Notify me about updates to this card
                         </label>
                         @if ($openTask->watchers->isNotEmpty())
-                            <p class="mt-1 text-xs text-gray-400">
+                            <p class="mt-1 text-xs text-gray-500">
                                 Watching: {{ $openTask->watchers->pluck('name')->join(', ') }}
                             </p>
                         @endif
@@ -462,7 +462,7 @@
                                 <p class="whitespace-pre-line text-sm text-gray-800">{{ $comment->message }}</p>
                             </li>
                         @empty
-                            <li class="text-xs text-gray-400">No comments yet.</li>
+                            <li class="text-xs text-gray-500">No comments yet.</li>
                         @endforelse
                     </ul>
 
@@ -480,7 +480,7 @@
                 <section>
                     <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
                         History
-                        <span class="font-normal normal-case text-gray-400">
+                        <span class="font-normal normal-case text-gray-500">
                             (last {{ $openTaskActivity->count() }})
                         </span>
                     </h3>
@@ -500,10 +500,10 @@
                                     <span class="font-medium">{{ $entry->user?->name ?? 'Someone' }}</span>
                                     {{ $entry->summary($entry->user?->name) }}
                                 </span>
-                                <span class="shrink-0 text-gray-400">{{ $entry->created_at?->diffForHumans() }}</span>
+                                <span class="shrink-0 text-gray-500">{{ $entry->created_at?->diffForHumans() }}</span>
                             </li>
                         @empty
-                            <li class="text-xs text-gray-400">Nothing recorded yet.</li>
+                            <li class="text-xs text-gray-500">Nothing recorded yet.</li>
                         @endforelse
                     </ul>
                 </section>

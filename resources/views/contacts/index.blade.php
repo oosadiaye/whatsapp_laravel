@@ -5,7 +5,7 @@
                 {{ __('Contacts') }}
             </h2>
             <a href="{{ route('contacts.import') }}"
-               class="inline-flex items-center px-4 py-2 bg-[#25D366] border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-[#1da851] focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 transition ease-in-out duration-150">
+               class="inline-flex items-center px-4 py-2 bg-brand border border-transparent rounded-lg font-semibold text-sm text-white hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 transition ease-in-out duration-150">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                 </svg>
@@ -24,14 +24,14 @@
                            name="search"
                            value="{{ request('search') }}"
                            placeholder="Search by name or phone..."
-                           class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
+                           class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm">
                     <button type="submit"
-                            class="inline-flex items-center px-4 py-2 bg-[#25D366] border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-[#1da851] transition ease-in-out duration-150">
+                            class="inline-flex items-center px-4 py-2 bg-brand border border-transparent rounded-lg font-semibold text-sm text-white hover:bg-brand-hover transition ease-in-out duration-150">
                         {{ __('Search') }}
                     </button>
                     @if(request('search'))
                         <a href="{{ route('contacts.index') }}"
-                           class="inline-flex items-center px-4 py-2 bg-gray-200 border border-transparent rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-300 transition ease-in-out duration-150">
+                           class="inline-flex items-center px-4 py-2 bg-gray-200 border border-transparent rounded-lg font-semibold text-sm text-gray-700 hover:bg-gray-300 transition ease-in-out duration-150">
                             {{ __('Clear') }}
                         </a>
                     @endif
@@ -80,7 +80,7 @@
                                                 @endforeach
                                             </div>
                                         @else
-                                            <span class="text-gray-400">{{ __('None') }}</span>
+                                            <span class="text-gray-500">{{ __('None') }}</span>
                                         @endif
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
@@ -138,7 +138,7 @@
                                                 </button>
                                             @endcan
 
-                                            <a href="{{ route('contacts.edit', $contact) }}" class="text-[#25D366] hover:text-[#1da851] font-medium">{{ __('Edit') }}</a>
+                                            <a href="{{ route('contacts.edit', $contact) }}" class="text-brand-text hover:text-brand-hover font-medium">{{ __('Edit') }}</a>
                                             <form method="POST" action="{{ route('contacts.destroy', $contact) }}" data-confirm="{{ __('Are you sure you want to delete this contact?') }}" class="inline">
                                                 @csrf
                                                 @method('DELETE')

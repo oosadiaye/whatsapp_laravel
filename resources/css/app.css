@@ -2,22 +2,220 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Enterprise-Modern typography (call surfaces) ──────────────────────────
-   Scoped utilities so the call workspace / history / softphone get the
-   design's signature type without changing the rest of the app (Figtree). */
-.font-display {
-    font-family: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
-    letter-spacing: -0.01em;
+/* ── Signal Desk design tokens ───────────────────────────────────────────────
+   Colours are space-separated RGB triplets so Tailwind can apply opacity
+   (`bg-gray-900/50`). tailwind.config.js maps gray-* and brand onto these, which
+   makes dark mode a variable swap: <html class="dark"> redefines them below.
+   Chosen so every text/background pair used in the app clears WCAG AA (4.5:1);
+   see the design canvas "BlastIQ UI Redesign" for the measured ratios. */
+:root {
+    color-scheme: light;
+
+    /* Neutrals — cool, slightly green-tinted. 50 = ground, 900 = ink. */
+    --gray-50: 246 248 247;
+    --gray-100: 237 241 239;
+    --gray-200: 218 226 222;
+    --gray-300: 194 206 201;
+    --gray-400: 138 155 149;
+    --gray-500: 90 108 102;
+    --gray-600: 70 86 79;
+    --gray-700: 51 67 61;
+    --gray-800: 30 45 40;
+    --gray-900: 13 24 21;
+
+    --surface: 255 255 255;      /* cards, panels, inputs (replaces bg-white) */
+    --ground: 237 241 239;       /* page background */
+
+    --brand: 10 127 80;
+    --brand-hover: 8 107 67;
+    --brand-soft: 221 243 232;
+    --brand-text: 6 100 63;
+    --brand-ink: 255 255 255;
+    --voice: 52 82 201;
+    --voice-soft: 227 232 251;
+    --danger: 179 50 47;
+
+    --shadow-sm: 0 1px 2px rgb(13 24 21 / 0.05), 0 8px 22px rgb(13 24 21 / 0.05);
+    --shadow-md: 0 2px 6px rgb(13 24 21 / 0.07), 0 14px 32px rgb(13 24 21 / 0.08);
+    --shadow-lg: 0 18px 44px rgb(13 24 21 / 0.22);
 }
+
+.dark {
+    color-scheme: dark;
+
+    /* The scale flips: low numbers are the dark surfaces, 900 is the light ink. */
+    --gray-50: 15 26 23;
+    --gray-100: 20 35 32;
+    --gray-200: 31 50 45;
+    --gray-300: 46 71 66;
+    --gray-400: 108 130 122;
+    --gray-500: 155 176 168;
+    --gray-600: 178 196 189;
+    --gray-700: 201 216 210;
+    --gray-800: 220 232 227;
+    --gray-900: 233 242 238;
+
+    --surface: 15 26 23;
+    --ground: 8 16 14;
+
+    --brand: 61 220 138;
+    --brand-hover: 107 232 168;
+    --brand-soft: 18 58 41;
+    --brand-text: 88 227 157;
+    --brand-ink: 4 21 13;
+    --voice: 157 176 255;
+    --voice-soft: 26 35 80;
+    --danger: 255 138 133;
+
+    --shadow-sm: 0 0 0 1px rgb(255 255 255 / 0.02), 0 10px 26px rgb(0 0 0 / 0.38);
+    --shadow-md: 0 0 0 1px rgb(255 255 255 / 0.03), 0 14px 34px rgb(0 0 0 / 0.45);
+    --shadow-lg: 0 20px 50px rgb(0 0 0 / 0.6);
+}
+
+@layer base {
+    *,
+    ::before,
+    ::after {
+        --tw-ring-offset-color: rgb(var(--surface));
+    }
+
+    html {
+        background-color: rgb(var(--ground));
+    }
+
+    body {
+        background-color: rgb(var(--ground));
+        color: rgb(var(--gray-900));
+    }
+
+    /* Keyboard focus is always visible and always the brand colour. */
+    :focus-visible {
+        outline: 2px solid rgb(var(--brand));
+        outline-offset: 2px;
+    }
+
+    /* @tailwindcss/forms paints inputs white with a blue focus ring. Re-point them at
+       the surface/brand tokens. :is() gives class-level specificity: it beats the plugin's
+       element selectors but still loses to an explicit utility class on an input. */
+    :is([type='text'], [type='email'], [type='url'], [type='password'], [type='number'],
+        [type='date'], [type='datetime-local'], [type='month'], [type='search'], [type='tel'],
+        [type='time'], [type='week'], [multiple], textarea, select) {
+        background-color: rgb(var(--surface));
+        color: rgb(var(--gray-900));
+        border-color: rgb(var(--gray-300));
+    }
+
+    :is([type='text'], [type='email'], [type='url'], [type='password'], [type='number'],
+        [type='date'], [type='datetime-local'], [type='month'], [type='search'], [type='tel'],
+        [type='time'], [type='week'], [multiple], textarea, select):focus {
+        --tw-ring-color: rgb(var(--brand));
+        --tw-ring-offset-color: rgb(var(--surface));
+        border-color: rgb(var(--brand));
+    }
+
+    :is([type='checkbox'], [type='radio']) {
+        color: rgb(var(--brand));
+        border-color: rgb(var(--gray-300));
+        background-color: rgb(var(--surface));
+    }
+
+    :is([type='checkbox'], [type='radio']):checked {
+        background-color: rgb(var(--brand));
+        border-color: rgb(var(--brand));
+    }
+
+    :is([type='checkbox'], [type='radio']):focus {
+        --tw-ring-color: rgb(var(--brand));
+    }
+
+    ::placeholder {
+        color: rgb(var(--gray-400));
+        opacity: 1;
+    }
+}
+
+/* `bg-white` is used on ~200 cards/panels. Keep the class (so no markup churn) and
+   make it the theme surface; in light mode this is still #fff. */
+.bg-white {
+    background-color: rgb(var(--surface));
+}
+
+.bg-white\/95 {
+    background-color: rgb(var(--surface) / 0.95);
+}
+
+/* Solid brand surfaces carry their own legible ink (dark ink on the light dark-mode
+   green), whatever text colour utility the markup also set. */
+.bg-brand {
+    color: rgb(var(--brand-ink));
+}
+
+.dark .bg-brand,
+.dark .bg-brand:hover,
+.dark .hover\:bg-brand-hover:hover {
+    color: rgb(var(--brand-ink));
+}
+
+/* Solid green controls (the old green/emerald/teal fills) become the bright brand
+   green in dark mode, with dark ink, so they read like every other primary action. */
+.dark :is(.bg-green-500, .bg-green-600, .bg-emerald-500, .bg-emerald-600, .bg-teal-500, .bg-teal-600, .bg-lime-600) {
+    background-color: rgb(var(--brand));
+    color: rgb(var(--brand-ink));
+}
+
+.dark :is(.hover\:bg-green-600, .hover\:bg-green-700, .hover\:bg-emerald-600, .hover\:bg-emerald-700, .hover\:bg-teal-700):hover {
+    background-color: rgb(var(--brand-hover));
+    color: rgb(var(--brand-ink));
+}
+
+/* Dark buttons (`bg-gray-900 text-white`) flip to a LIGHT fill in dark mode because the
+   scale is inverted; give them dark ink so the label stays readable. */
+.dark :is(.bg-gray-700, .bg-gray-800, .bg-gray-900).text-white,
+.dark :is(.hover\:bg-gray-700, .hover\:bg-gray-800):hover.text-white {
+    color: rgb(var(--gray-50));
+}
+
+/* Scrims over the page must stay dark in dark mode (gray-900 is the light ink there). */
+.dark [class*='bg-gray-900/'] {
+    background-color: rgb(0 0 0 / 0.6);
+}
+
+/* Charts and canvases should not glare in dark mode. */
+.dark canvas {
+    filter: none;
+}
+
+/* ── Typography ──────────────────────────────────────────────────────────────
+   Instrument Sans is the body face (tailwind `font-sans`). Bricolage Grotesque is
+   the display face for headings and big numbers; JetBrains Mono carries numerals,
+   timers and phone numbers with tabular figures so they never jitter. */
+.font-display {
+    font-family: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.015em;
+}
+
 .font-data {
     font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum' 1;
 }
+
 /* Every page's topbar title (the <x-slot name="header"> h1/h2) uses the display
-   face, so headings read consistently across the app, matching the call surfaces. */
+   face, so headings read consistently across the app. */
 .bq-page-title h1,
 .bq-page-title h2 {
-    font-family: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
-    letter-spacing: -0.01em;
+    font-family: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.02em;
+}
+
+/* Respect the OS motion setting everywhere (pulses, transitions, spinners). */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }

@@ -8,7 +8,7 @@
             <div class="bg-white shadow-sm rounded-lg p-6">
                 <div class="flex items-center justify-between mb-4">
                     <p class="text-sm text-gray-600">{{ __('Connect your email account to read and reply from here.') }}</p>
-                    <a href="{{ route('mailbox.accounts.create') }}" class="px-4 py-2 bg-[#25D366] text-white text-sm font-semibold rounded-md hover:bg-[#1da851]">{{ __('Connect account') }}</a>
+                    <a href="{{ route('mailbox.accounts.create') }}" class="px-4 py-2 bg-brand text-white text-sm font-semibold rounded-md hover:bg-brand-hover">{{ __('Connect account') }}</a>
                 </div>
 
                 @if($accounts->isEmpty())
@@ -30,7 +30,7 @@
                                         <td class="py-2 pr-4">
                                             <div class="font-medium text-gray-800">{{ $account->email }}</div>
                                             @can('mailbox.view_all')
-                                                <div class="text-xs text-gray-400">{{ $account->user?->name }}</div>
+                                                <div class="text-xs text-gray-500">{{ $account->user?->name }}</div>
                                             @endcan
                                         </td>
                                         <td class="py-2 pr-4">

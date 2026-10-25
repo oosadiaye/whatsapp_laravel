@@ -5,11 +5,11 @@
             @can('conversations.view_all')
                 <div class="flex gap-2 text-xs">
                     <a href="{{ route('conversations.index') }}"
-                       class="px-3 py-1.5 rounded-full {{ ! $currentFilter ? 'bg-[#25D366] text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' }}">
+                       class="px-3 py-1.5 rounded-full {{ ! $currentFilter ? 'bg-brand text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' }}">
                         {{ __('All') }}
                     </a>
                     <a href="{{ route('conversations.index', ['filter' => 'unassigned']) }}"
-                       class="px-3 py-1.5 rounded-full {{ $currentFilter === 'unassigned' ? 'bg-[#25D366] text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' }}">
+                       class="px-3 py-1.5 rounded-full {{ $currentFilter === 'unassigned' ? 'bg-brand text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' }}">
                         {{ __('Unassigned') }}
                     </a>
                 </div>
@@ -34,7 +34,7 @@
                                 <h3 class="text-sm font-semibold text-gray-900 truncate">
                                     {{ $conversation->contact->display_name }}
                                 </h3>
-                                <span class="text-xs text-gray-400 flex-shrink-0 font-data">
+                                <span class="text-xs text-gray-500 flex-shrink-0 font-data">
                                     {{ $conversation->last_message_at?->diffForHumans(short: true) ?? '—' }}
                                 </span>
                             </div>
@@ -48,7 +48,7 @@
                                     @endif
                                 </p>
                                 @if($conversation->unread_count > 0)
-                                    <span class="flex-shrink-0 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-[#25D366] text-white text-xs font-semibold">
+                                    <span class="flex-shrink-0 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-brand text-white text-xs font-semibold">
                                         {{ $conversation->unread_count }}
                                     </span>
                                 @endif
@@ -56,7 +56,7 @@
                         </div>
                     </a>
                 @empty
-                    <div class="p-12 text-center text-gray-400">
+                    <div class="p-12 text-center text-gray-500">
                         <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.068.157 2.148.279 3.238.364.466.037.893.281 1.153.671L12 21l2.652-3.978c.26-.39.687-.634 1.153-.67 1.09-.086 2.17-.208 3.238-.365 1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/>
                         </svg>

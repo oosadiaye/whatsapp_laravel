@@ -4,6 +4,17 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
+        {{-- Theme bootstrap. Runs before first paint: applies the saved choice, else
+             the OS preference, to <html>. Toggle lives in the topbar (resources/js/theme.js). --}}
+        <script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
+            (function () {
+                try {
+                    var saved = localStorage.getItem('bq-theme');
+                    var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    document.documentElement.classList.toggle('dark', dark);
+                } catch (e) {}
+            })();
+        </script>
         {{-- Per-page <meta> tags (e.g. the task board's Echo channel id). --}}
         @stack('head')
         @auth
@@ -58,12 +69,10 @@
         <title>{{ config('app.name', 'BlastIQ') }} - WhatsApp Bulk Messenger</title>
 
         <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
-        {{-- Enterprise-Modern typography for the call surfaces: Hanken Grotesk
-             (display headers) + JetBrains Mono (numbers/timestamps). Applied via
-             the .font-display / .font-data utilities so the rest of the app keeps
-             Figtree. Same already-allowed host — no new CDN. --}}
-        <link href="https://fonts.bunny.net/css?family=hanken-grotesk:500,600,700,800|jetbrains-mono:400,500&display=swap" rel="stylesheet" />
+        {{-- Signal Desk type: Instrument Sans (body), Bricolage Grotesque (headings and
+             big numbers, .font-display), JetBrains Mono (numerals/timers, .font-data).
+             Same already-allowed host — no new CDN. --}}
+        <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700|bricolage-grotesque:600,700,800|jetbrains-mono:400,500&display=swap" rel="stylesheet" />
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         {{-- Self-hosted (audit M8): no third-party CDN, so no supply-chain risk
@@ -82,7 +91,7 @@
         @endauth
         @livewireStyles
     </head>
-    <body class="font-sans antialiased bg-gray-50">
+    <body class="font-sans antialiased">
         {{--
             Layout structure:
               <body>
@@ -139,7 +148,7 @@
                                     <p class="text-xs text-gray-500" x-text="t.label"></p>
                                 </div>
                                 <button type="button" @click="dismiss(t.id)"
-                                        class="shrink-0 text-gray-400 hover:text-gray-600 transition">
+                                        class="shrink-0 text-gray-500 hover:text-gray-600 transition">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                                 </button>
                             </div>
@@ -149,7 +158,7 @@
             @endauth
 
             {{-- Topbar — sticky, holds mobile hamburger + page heading slot --}}
-            <header class="sticky top-0 z-20 bg-white border-b border-gray-200 h-16 flex items-center px-4 sm:px-6 lg:px-8 gap-3">
+            <header class="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-gray-200 h-16 flex items-center px-4 sm:px-6 lg:px-8 gap-3">
                 {{-- Mobile hamburger — fires the sidebar's open event --}}
                 <button x-data
                         @click="$dispatch('open-sidebar')"
@@ -161,7 +170,7 @@
                 </button>
 
                 {{-- Page heading slot. bq-page-title applies the Enterprise-Modern
-                     display face (Hanken Grotesk) to every page's title, app-wide. --}}
+                     display face (Bricolage Grotesque) to every page's title, app-wide. --}}
                 <div class="flex-1 min-w-0 bq-page-title">
                     @isset($header)
                         {{ $header }}
@@ -169,6 +178,18 @@
                         <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ config('app.name') }}</h2>
                     @endisset
                 </div>
+
+                {{-- Light/dark toggle. State is just the <html class="dark"> flag, persisted in
+                     localStorage by bqTheme (resources/js/theme.js). --}}
+                <button type="button"
+                        x-data="{ dark: document.documentElement.classList.contains('dark') }"
+                        @click="dark = window.bqTheme.toggle()"
+                        class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                        :aria-label="dark ? 'Switch to light mode' : 'Switch to dark mode'"
+                        :title="dark ? 'Switch to light mode' : 'Switch to dark mode'">
+                    <svg x-show="!dark" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/></svg>
+                    <svg x-show="dark" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16a4 4 0 100-8 4 4 0 000 8zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/></svg>
+                </button>
 
                 {{-- Sound-status pill. Visible only while the AudioContext is
                      suspended (no user gesture yet OR explicit OS/browser
@@ -206,18 +227,18 @@
                                   }
                               }"
                               x-init="refresh(); setInterval(() => refresh(), 2000)"
-                              x-show="!registered" x-cloak
-                              :class="configured
-                                  ? 'bg-amber-100 border-amber-300 text-amber-900'
-                                  : 'bg-red-100 border-red-300 text-red-900'"
-                              class="hidden md:inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium"
-                              :title="configured
-                                  ? 'Softphone not registered with Africa\'s Talking yet — reconnecting. You will not receive calls until it is online; reload the page if this persists.'
-                                  : 'Africa\'s Talking voice is not configured — add the username, API key, and virtual number under Settings → Voice Provider.'">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/>
-                            </svg>
-                            <span x-text="configured ? 'Voice reconnecting…' : 'Voice offline'"></span>
+                              :class="registered
+                                  ? 'bg-brand-100 border-brand-200 text-brand-800'
+                                  : (configured ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-red-100 border-red-300 text-red-900')"
+                              class="hidden md:inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
+                              :title="registered
+                                  ? 'Softphone is registered with Africa\'s Talking — you can place and receive calls.'
+                                  : (configured
+                                      ? 'Softphone not registered with Africa\'s Talking yet — reconnecting. You will not receive calls until it is online; reload the page if this persists.'
+                                      : 'Africa\'s Talking voice is not configured — add the username, API key, and virtual number under Settings → Voice Provider.')">
+                            <span class="w-2 h-2 rounded-full"
+                                  :class="registered ? 'bg-brand shadow-[0_0_0_3px_rgb(var(--brand)/0.22)]' : (configured ? 'bg-amber-500 animate-pulse' : 'bg-red-500')"></span>
+                            <span x-text="registered ? 'Voice ready' : (configured ? 'Voice reconnecting…' : 'Voice offline')"></span>
                         </span>
                     @endif
                 @endauth

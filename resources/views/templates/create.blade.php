@@ -25,7 +25,7 @@
                                        name="name"
                                        value="{{ old('name') }}"
                                        x-model="name"
-                                       class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm"
+                                       class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm"
                                        placeholder="e.g. Welcome Message">
                                 @error('name')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -38,7 +38,7 @@
                                 <select id="category"
                                         name="category"
                                         x-model="category"
-                                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
+                                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm">
                                     <option value="">{{ __('-- Select category --') }}</option>
                                     <option value="promotional" {{ old('category') === 'promotional' ? 'selected' : '' }}>{{ __('Promotional') }}</option>
                                     <option value="transactional" {{ old('category') === 'transactional' ? 'selected' : '' }}>{{ __('Transactional') }}</option>
@@ -68,7 +68,7 @@
                                 <div class="flex items-center justify-between mb-1">
                                     <label for="content" class="block text-sm font-medium text-gray-700">{{ __('Message Content') }}</label>
                                     <span class="text-xs"
-                                          :class="content.length > 4096 ? 'text-red-500 font-semibold' : 'text-gray-400'">
+                                          :class="content.length > 4096 ? 'text-red-500 font-semibold' : 'text-gray-500'">
                                         <span x-text="content.length"></span> / 4096
                                     </span>
                                 </div>
@@ -77,7 +77,7 @@
                                           x-ref="content"
                                           x-model="content"
                                           rows="10"
-                                          class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm font-data"
+                                          class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm font-data"
                                           placeholder="Type your message here. Use tokens like @{{name}} to personalize.">{{ old('content') }}</textarea>
                                 @error('content')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -90,8 +90,8 @@
                                 <input type="file"
                                        name="media"
                                        accept="image/*,application/pdf,audio/*"
-                                       class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-[#25D366] hover:file:bg-green-100 file:transition file:duration-150 file:cursor-pointer">
-                                <p class="mt-1 text-xs text-gray-400">{{ __('Supported: Images, PDF, Audio') }}</p>
+                                       class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-brand-ink hover:file:bg-green-100 file:transition file:duration-150 file:cursor-pointer">
+                                <p class="mt-1 text-xs text-gray-500">{{ __('Supported: Images, PDF, Audio') }}</p>
                                 @error('media')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
@@ -100,11 +100,11 @@
                             {{-- Actions --}}
                             <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                                 <a href="{{ route('templates.index') }}"
-                                   class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-50 transition ease-in-out duration-150">
+                                   class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg font-semibold text-sm text-gray-700 hover:bg-gray-50 transition ease-in-out duration-150">
                                     {{ __('Cancel') }}
                                 </a>
                                 <button type="submit"
-                                        class="inline-flex items-center px-6 py-2 bg-[#25D366] border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-[#1da851] focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 transition ease-in-out duration-150">
+                                        class="inline-flex items-center px-6 py-2 bg-brand border border-transparent rounded-lg font-semibold text-sm text-white hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 transition ease-in-out duration-150">
                                     {{ __('Create Template') }}
                                 </button>
                             </div>
@@ -119,10 +119,10 @@
                             </div>
                             <div class="p-5">
                                 {{-- Phone frame --}}
-                                <div class="bg-[#e5ddd5] rounded-lg p-4 min-h-[200px]"
+                                <div class="bg-gray-100 rounded-lg p-4 min-h-[200px]"
                                      style="background-image: url('data:image/svg+xml,%3Csvg width=&quot;60&quot; height=&quot;60&quot; viewBox=&quot;0 0 60 60&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;%3E%3Cg fill=&quot;none&quot; fill-rule=&quot;evenodd&quot;%3E%3Cg fill=&quot;%23ccc4b7&quot; fill-opacity=&quot;0.15&quot;%3E%3Cpath d=&quot;M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z&quot;/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');">
                                     <template x-if="content.trim().length > 0">
-                                        <div class="bg-[#dcf8c6] rounded-lg p-3 shadow-sm max-w-xs ml-auto">
+                                        <div class="bg-brand-soft rounded-lg p-3 shadow-sm max-w-xs ml-auto">
                                             <p class="text-sm text-gray-800 whitespace-pre-wrap break-words" x-text="renderedPreview()"></p>
                                             <div class="flex items-center justify-end mt-1.5 gap-1">
                                                 <span class="text-xs text-gray-500">{{ now()->format('H:i') }}</span>
@@ -133,14 +133,14 @@
                                         </div>
                                     </template>
                                     <template x-if="content.trim().length === 0">
-                                        <div class="flex items-center justify-center h-32 text-sm text-gray-400">
+                                        <div class="flex items-center justify-center h-32 text-sm text-gray-500">
                                             {{ __('Start typing to see preview...') }}
                                         </div>
                                     </template>
                                 </div>
 
                                 {{-- Sample data info --}}
-                                <div class="mt-4 text-xs text-gray-400">
+                                <div class="mt-4 text-xs text-gray-500">
                                     <p class="font-medium text-gray-500 mb-1">{{ __('Sample tokens:') }}</p>
                                     <ul class="space-y-0.5">
                                         <li><span class="font-data">@{{name}}</span> &rarr; John Doe</li>

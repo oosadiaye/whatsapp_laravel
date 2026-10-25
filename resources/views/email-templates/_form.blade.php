@@ -57,7 +57,7 @@
             <label for="tpl-html" class="block text-sm font-medium text-gray-700">{{ __('HTML') }} *</label>
             <textarea id="tpl-html" name="body_html" x-model="body" rows="18" required
                       class="mt-1 block w-full h-[640px] rounded-lg border-gray-300 shadow-sm font-data text-xs focus:border-indigo-500 focus:ring-indigo-500"></textarea>
-            <p class="mt-1 text-xs text-gray-400">{{ __('Personalize with') }} <code>@{{name}}</code> {{ __('and') }} <code>@{{email}}</code>.</p>
+            <p class="mt-1 text-xs text-gray-500">{{ __('Personalize with') }} <code>@{{name}}</code> {{ __('and') }} <code>@{{email}}</code>.</p>
             @error('body_html')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
         </div>
         <div>
@@ -89,7 +89,7 @@
 
     <div class="flex items-center gap-2">
         <button type="submit"
-                class="inline-flex items-center px-4 py-2 bg-[#4f46e5] text-white rounded-lg text-sm font-semibold hover:bg-[#4338ca] transition">
+                class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">
             {{ $template ? __('Update template') : __('Save template') }}
         </button>
         <a href="{{ route('email-templates.index') }}" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">{{ __('Cancel') }}</a>

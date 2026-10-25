@@ -29,7 +29,7 @@
                         <option value="unsubscribe">{{ __('Unsubscribe') }}</option>
                     </select>
                 </div>
-                <button type="submit" class="px-4 py-2 rounded-lg bg-[#4f46e5] text-white text-sm font-semibold hover:bg-[#4338ca]">{{ __('Suppress') }}</button>
+                <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">{{ __('Suppress') }}</button>
             </form>
         @endcan
 
@@ -44,7 +44,7 @@
                     <div class="flex items-center gap-3 px-5 py-3">
                         <div class="min-w-0 flex-1">
                             <div class="text-sm font-medium text-gray-900 truncate">{{ $s->email }}</div>
-                            <div class="text-xs text-gray-400">{{ ucfirst($s->reason) }} · {{ $s->created_at?->diffForHumans() }}</div>
+                            <div class="text-xs text-gray-500">{{ ucfirst($s->reason) }} · {{ $s->created_at?->diffForHumans() }}</div>
                         </div>
                         @can('email.edit')
                             <form method="POST" action="{{ route('email-suppressions.destroy', $s) }}" data-confirm="Remove {{ $s->email }} from the suppression list? They may be emailed again.">
@@ -54,7 +54,7 @@
                         @endcan
                     </div>
                 @empty
-                    <div class="px-5 py-12 text-center text-sm text-gray-400">{{ __('No suppressed addresses.') }}</div>
+                    <div class="px-5 py-12 text-center text-sm text-gray-500">{{ __('No suppressed addresses.') }}</div>
                 @endforelse
             </div>
             @if($suppressions->hasPages())

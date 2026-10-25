@@ -26,21 +26,21 @@
          (isDesktop) it is always active. --}}
     <div :class="mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
          x-bind:inert="!isDesktop && !mobileOpen"
-         class="fixed top-0 left-0 z-40 h-screen w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 ease-in-out lg:translate-x-0 flex flex-col">
+         class="fixed top-0 left-0 z-40 h-screen w-64 bg-white border-r border-gray-200 shadow-sm transform transition-transform duration-200 ease-in-out lg:translate-x-0 flex flex-col">
 
         {{-- Brand / Logo --}}
         <div class="flex items-center gap-2 h-16 px-6 border-b border-gray-200 flex-shrink-0">
-            <a href="{{ route('dashboard') }}" class="flex items-center gap-2">
-                <svg class="h-8 w-8 text-[#25D366]" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                    <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.96 7.96 0 01-4.106-1.138l-.294-.176-2.866.852.852-2.866-.176-.294A7.96 7.96 0 014 12c0-4.411 3.589-8 8-8s8 3.589 8 8-3.589 8-8 8z"/>
-                </svg>
-                <span class="font-bold text-lg text-gray-900">BlastIQ</span>
+            <a href="{{ route('dashboard') }}" class="flex items-center gap-3" aria-label="BlastIQ — dashboard">
+                {{-- Brand tile: a signal pulse, in the brand colour with its own legible ink. --}}
+                <span class="grid place-items-center w-9 h-9 rounded-xl bg-brand text-brand-ink">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>
+                </span>
+                <span class="font-display font-bold text-xl text-gray-900">BlastIQ</span>
             </a>
 
             {{-- Mobile close button --}}
             <button @click="mobileOpen = false" type="button" aria-label="{{ __('Close menu') }}"
-                    class="ml-auto lg:hidden text-gray-400 hover:text-gray-600 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+                    class="ml-auto lg:hidden -m-2 p-2 text-gray-500 hover:text-gray-700 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </div>
@@ -50,7 +50,7 @@
 
             {{-- Section: Overview --}}
             <div>
-                <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('Overview') }}</h3>
+                <h3 class="px-3 mb-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">{{ __('Overview') }}</h3>
                 <div class="space-y-1">
                     <x-sidebar-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -111,7 +111,7 @@
             {{-- Section: WhatsApp --}}
             @canany(['campaigns.view', 'templates.view'])
                 <div>
-                    <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('WhatsApp') }}</h3>
+                    <h3 class="px-3 mb-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">{{ __('WhatsApp') }}</h3>
                     <div class="space-y-1">
                         @can('campaigns.view')
                             <x-sidebar-link :href="route('campaigns.index')" :active="request()->routeIs('campaigns.*')">
@@ -137,7 +137,7 @@
             {{-- Section: Email --}}
             @if(auth()->user()?->can('email.view') || (config('mail_client.enabled') && auth()->user()?->can('mailbox.view')))
                 <div>
-                    <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('Email') }}</h3>
+                    <h3 class="px-3 mb-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">{{ __('Email') }}</h3>
                     <div class="space-y-1">
                         @can('email.view')
                             <x-sidebar-link :href="route('email-campaigns.index')" :active="request()->routeIs('email-campaigns.*')">
@@ -179,7 +179,7 @@
             {{-- Section: Audience --}}
             @canany(['contacts.view', 'groups.view'])
                 <div>
-                    <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('Audience') }}</h3>
+                    <h3 class="px-3 mb-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">{{ __('Audience') }}</h3>
                     <div class="space-y-1">
                         @can('contacts.view')
                             <x-sidebar-link :href="route('contacts.index')" :active="request()->routeIs('contacts.*')">
@@ -205,7 +205,7 @@
             {{-- Section: Tasks (Trello-style board) --}}
             @can('tasks.view')
                 <div>
-                    <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('Tasks') }}</h3>
+                    <h3 class="px-3 mb-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">{{ __('Tasks') }}</h3>
                     <div class="space-y-1">
                         <x-sidebar-link :href="route('tasks.index')" :active="request()->routeIs('tasks.*') || request()->routeIs('boards.*')">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -239,7 +239,7 @@
                  is configured on the Settings page, so there's no Instances link. --}}
             @can('settings.view')
                 <div>
-                    <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('Configuration') }}</h3>
+                    <h3 class="px-3 mb-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">{{ __('Configuration') }}</h3>
                     <div class="space-y-1">
                         <x-sidebar-link :href="route('settings.index')" :active="request()->routeIs('settings.*')">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -270,7 +270,7 @@
                  only Team while admins see both. --}}
             @canany(['users.view', 'team.view'])
                 <div>
-                    <h3 class="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('Administration') }}</h3>
+                    <h3 class="px-3 mb-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">{{ __('Administration') }}</h3>
                     <div class="space-y-1">
                         @can('team.view')
                             <x-sidebar-link :href="route('team.index')" :active="request()->routeIs('team.*')">
@@ -331,7 +331,7 @@
                         {{ $role }}
                     </p>
                 </div>
-                <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                <svg class="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                      :class="menuOpen ? 'rotate-180' : ''">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
                 </svg>
@@ -340,7 +340,7 @@
             <div x-show="menuOpen" x-cloak x-transition class="mt-2 space-y-1">
                 <a href="{{ route('profile.edit') }}"
                    class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
-                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                     {{ __('Profile') }}
                 </a>
                 <form method="POST" action="{{ route('logout') }}">

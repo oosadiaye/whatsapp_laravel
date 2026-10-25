@@ -7,14 +7,14 @@
     <div class="flex flex-wrap items-center gap-3">
         <div class="bg-white border border-gray-200 rounded-xl shadow-sm px-4 py-3">
             <div class="text-2xl font-bold {{ $onlineCount > 0 ? 'text-emerald-600' : 'text-gray-900' }}">{{ $onlineCount }}</div>
-            <div class="text-[11px] uppercase tracking-wide text-gray-400">{{ __('Online now') }}</div>
+            <div class="text-[11px] uppercase tracking-wide text-gray-500">{{ __('Online now') }}</div>
         </div>
         <div class="bg-white border border-gray-200 rounded-xl shadow-sm px-4 py-3">
             <div class="text-2xl font-bold text-gray-900">{{ $people->count() }}</div>
-            <div class="text-[11px] uppercase tracking-wide text-gray-400">{{ __('Signed-in users') }}</div>
+            <div class="text-[11px] uppercase tracking-wide text-gray-500">{{ __('Signed-in users') }}</div>
         </div>
 
-        @if ($canManage && $people->isNotEmpty())
+        @if ($canManage && ($people->count() > 1 || ($people->first() && $people->first()['sessions']->count() > 1)))
             <button type="button"
                     wire:click="logoutEveryoneElse"
                     wire:confirm="{{ __('Sign out every other signed-in user? Your own session stays signed in.') }}"
@@ -31,7 +31,7 @@
     <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
         <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
             <h3 class="text-sm font-bold text-gray-700">{{ __('Signed-in users') }}</h3>
-            <span class="ml-auto text-xs text-gray-400">{{ __('Updates every 10 seconds') }}</span>
+            <span class="ml-auto text-xs text-gray-500">{{ __('Updates every 10 seconds') }}</span>
         </div>
 
         <div class="divide-y divide-gray-100">
@@ -48,9 +48,9 @@
                         <div class="min-w-0">
                             <div class="font-semibold text-sm text-gray-900 truncate">
                                 {{ $u->name }}
-                                @if ($isMe)<span class="ml-1 text-[11px] font-medium text-gray-400">({{ __('you') }})</span>@endif
+                                @if ($isMe)<span class="ml-1 text-[11px] font-medium text-gray-500">({{ __('you') }})</span>@endif
                             </div>
-                            <div class="text-xs text-gray-400">{{ $u->email }} · {{ str_replace('_', ' ', $u->role) }}</div>
+                            <div class="text-xs text-gray-500">{{ $u->email }} · {{ str_replace('_', ' ', $u->role) }}</div>
                         </div>
                         <span class="text-xs text-gray-500">
                             {{ $person['state'] === 'online' ? __('Online') : __('Idle') }}
@@ -79,7 +79,7 @@
                             <li class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600" wire:key="session-{{ $session->id }}">
                                 <span class="font-medium text-gray-800">{{ UserSessionMonitor::describeAgent($session->user_agent) }}</span>
                                 <span class="font-mono text-gray-500">{{ $session->ip_address ?? '—' }}</span>
-                                <span class="text-gray-400">{{ __('active') }} {{ $session->last_active_at?->diffForHumans() }}</span>
+                                <span class="text-gray-500">{{ __('active') }} {{ $session->last_active_at?->diffForHumans() }}</span>
                                 @if ($mine)
                                     <span class="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">{{ __('this device') }}</span>
                                 @elseif ($manageable)
@@ -93,14 +93,14 @@
                     </ul>
                 </div>
             @empty
-                <div class="px-5 py-12 text-center text-sm text-gray-400">
+                <div class="px-5 py-12 text-center text-sm text-gray-500">
                     {{ __('Nobody is signed in right now.') }}
                 </div>
             @endforelse
         </div>
     </div>
 
-    <p class="text-xs text-gray-400">
+    <p class="text-xs text-gray-500">
         {{ __('A signed-out person is returned to the login screen on their next click or within about 15 seconds. Sessions appear here once the person next uses the app after this feature was switched on.') }}
     </p>
 </div>

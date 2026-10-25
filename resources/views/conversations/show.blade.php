@@ -2,7 +2,7 @@
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <a href="{{ route('conversations.index') }}" class="text-gray-400 hover:text-gray-600">
+                <a href="{{ route('conversations.index') }}" class="text-gray-500 hover:text-gray-600">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                 </a>
                 <div>
@@ -26,14 +26,14 @@
 
                                 <div x-show="open" x-cloak x-transition
                                      class="absolute mt-6 right-0 z-30 bg-white border border-gray-200 rounded-lg shadow-lg p-2 w-64 max-h-80 overflow-y-auto">
-                                    <p class="text-[10px] uppercase tracking-wide text-gray-400 px-2 mb-1">{{ __('Assign to') }}</p>
+                                    <p class="text-[10px] uppercase tracking-wide text-gray-500 px-2 mb-1">{{ __('Assign to') }}</p>
 
                                     {{-- Self-assign quick action --}}
                                     @if($conversation->assigned_to_user_id !== auth()->id())
                                         <form method="POST" action="{{ route('conversations.assign', $conversation) }}">
                                             @csrf
                                             <input type="hidden" name="user_id" value="{{ auth()->id() }}">
-                                            <button type="submit" class="w-full text-left px-2 py-1.5 rounded hover:bg-gray-50 text-sm font-medium text-[#25D366]">
+                                            <button type="submit" class="w-full text-left px-2 py-1.5 rounded hover:bg-gray-50 text-sm font-medium text-brand-text">
                                                 {{ __('Take this conversation (assign to me)') }}
                                             </button>
                                         </form>
@@ -47,7 +47,7 @@
                                                 @csrf
                                                 <input type="hidden" name="user_id" value="{{ $staff->id }}">
                                                 <button type="submit" class="w-full text-left px-2 py-1.5 rounded hover:bg-gray-50 text-sm text-gray-800">
-                                                    {{ $staff->name }} <span class="text-xs text-gray-400">· {{ $staff->email }}</span>
+                                                    {{ $staff->name }} <span class="text-xs text-gray-500">· {{ $staff->email }}</span>
                                                 </button>
                                             </form>
                                         @endif
@@ -225,7 +225,7 @@
                             @csrf
                             <textarea name="body" rows="3"
                                       placeholder="{{ __('Type your reply, or attach a file…') }}"
-                                      class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]"></textarea>
+                                      class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand"></textarea>
                             <div class="flex items-center justify-between gap-3">
                                 <label class="inline-flex items-center gap-2 text-sm text-gray-600 cursor-pointer hover:text-gray-900">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
@@ -235,7 +235,7 @@
                                            x-on:change="fileName = $event.target.files[0]?.name || ''">
                                 </label>
                                 <button type="submit"
-                                        class="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366] text-white text-sm font-semibold rounded-lg hover:bg-[#1da851]">
+                                        class="inline-flex items-center gap-2 px-4 py-2 bg-brand text-white text-sm font-semibold rounded-lg hover:bg-brand-hover">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                                     {{ __('Send') }}
                                 </button>
@@ -256,7 +256,7 @@
                                 <form method="POST" action="{{ route('conversations.reply', $conversation) }}" class="space-y-3">
                                     @csrf
                                     <select name="message_template_id" required
-                                            class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                            class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                         <option value="">{{ __('Pick a template...') }}</option>
                                         @foreach($templates as $template)
                                             <option value="{{ $template->id }}">{{ $template->name }} · {{ $template->language }}</option>
@@ -264,7 +264,7 @@
                                     </select>
                                     <div class="flex justify-end">
                                         <button type="submit"
-                                                class="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366] text-white text-sm font-semibold rounded-lg hover:bg-[#1da851]">
+                                                class="inline-flex items-center gap-2 px-4 py-2 bg-brand text-white text-sm font-semibold rounded-lg hover:bg-brand-hover">
                                             {{ __('Send Template') }}
                                         </button>
                                     </div>

@@ -9,7 +9,7 @@
         <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-5 space-y-4">
             <div class="flex items-center justify-between gap-3">
                 <h1 class="font-display text-2xl font-bold text-gray-900 tracking-tight">{{ __('Call History') }}</h1>
-                <span class="text-xs text-gray-400">{{ $calls->total() }} {{ __('total') }}</span>
+                <span class="text-xs text-gray-500">{{ $calls->total() }} {{ __('total') }}</span>
             </div>
 
             {{-- Functional filter chips (direction + status via query string) --}}
@@ -76,7 +76,7 @@
                                 {{-- Date / time --}}
                                 <td class="px-5 py-3 whitespace-nowrap">
                                     <div class="text-sm font-data text-gray-800">{{ $call->created_at->format('M d, Y') }}</div>
-                                    <div class="text-[11px] text-gray-400 font-data">{{ $call->created_at->format('H:i:s') }}</div>
+                                    <div class="text-[11px] text-gray-500 font-data">{{ $call->created_at->format('H:i:s') }}</div>
                                 </td>
                                 {{-- Direction --}}
                                 <td class="px-5 py-3 whitespace-nowrap">
@@ -100,7 +100,7 @@
                                 {{-- Participant --}}
                                 <td class="px-5 py-3 whitespace-nowrap">
                                     <div class="font-semibold text-gray-900">{{ $call->contact ? $call->contact->display_name : ($call->isInbound() ? $call->from_phone : $call->to_phone) }}</div>
-                                    <div class="text-xs text-gray-400 font-data">{{ $call->isInbound() ? $call->from_phone : $call->to_phone }}</div>
+                                    <div class="text-xs text-gray-500 font-data">{{ $call->isInbound() ? $call->from_phone : $call->to_phone }}</div>
                                 </td>
                                 {{-- Trunk / instance --}}
                                 <td class="px-5 py-3 whitespace-nowrap">
@@ -108,7 +108,7 @@
                                                  {{ $isAt ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-600 border-gray-200' }}">
                                         {{ $isAt ? "Africa's Talking" : 'Meta' }}
                                     </span>
-                                    <div class="text-[11px] text-gray-400 mt-0.5">{{ $call->whatsappInstance->display_name ?? $call->whatsappInstance->instance_name ?? '—' }}</div>
+                                    <div class="text-[11px] text-gray-500 mt-0.5">{{ $call->whatsappInstance->display_name ?? $call->whatsappInstance->instance_name ?? '—' }}</div>
                                 </td>
                                 {{-- Duration --}}
                                 <td class="px-5 py-3 whitespace-nowrap text-right font-data text-sm text-gray-700">
@@ -164,7 +164,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="text-center py-16 text-gray-400">
+                                <td colspan="8" class="text-center py-16 text-gray-500">
                                     <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
                                     <p>{{ __('No calls match this filter.') }}</p>
                                 </td>
@@ -220,7 +220,7 @@
                         @endforeach
                     </div>
                 @else
-                    <p class="text-sm text-gray-400">{{ __('No calls yet.') }}</p>
+                    <p class="text-sm text-gray-500">{{ __('No calls yet.') }}</p>
                 @endif
             </div>
         </div>
@@ -230,7 +230,7 @@
             <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
                 <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Answer rate') }}</span>
                 <div class="mt-3 font-display text-3xl font-bold text-gray-900 tabular-nums">{{ $stats['answerRate'] === null ? '—' : $stats['answerRate'].'%' }}</div>
-                <div class="text-xs text-gray-400 mt-1">{{ $stats['answered'] }} {{ __('answered') }} · {{ $stats['missed'] }} {{ __('missed') }}</div>
+                <div class="text-xs text-gray-500 mt-1">{{ $stats['answered'] }} {{ __('answered') }} · {{ $stats['missed'] }} {{ __('missed') }}</div>
             </div>
             <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
                 <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Avg. time to answer') }}</span>
@@ -239,7 +239,7 @@
             <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
                 <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Avg. MOS') }}</span>
                 <div class="mt-3 font-display text-3xl font-bold tabular-nums {{ $stats['avgMos'] === null ? 'text-gray-900' : ($stats['avgMos'] >= 4 ? 'text-emerald-600' : ($stats['avgMos'] >= 3 ? 'text-amber-600' : 'text-red-600')) }}">{{ $stats['avgMos'] ?? '—' }}</div>
-                <div class="text-xs text-gray-400 mt-1">{{ __('call quality (1–5)') }}</div>
+                <div class="text-xs text-gray-500 mt-1">{{ __('call quality (1–5)') }}</div>
             </div>
             <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
                 <span class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __("Today's outcomes") }}</span>
@@ -251,7 +251,7 @@
                         @endif
                     @endforeach
                     @if($stats['statusBreakdown']->sum() === 0)
-                        <span class="text-gray-400">—</span>
+                        <span class="text-gray-500">—</span>
                     @endif
                 </div>
             </div>

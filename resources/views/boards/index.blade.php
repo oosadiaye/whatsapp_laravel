@@ -57,7 +57,7 @@
                         @endif
                     </a>
 
-                    <p class="mt-3 text-xs text-gray-400">
+                    <p class="mt-3 text-xs text-gray-500">
                         {{ $board->tasks_count }} {{ Str::plural('task', $board->tasks_count) }}
                         · created by {{ $board->owner?->name ?? '—' }}
                         @if($board->archived_at)

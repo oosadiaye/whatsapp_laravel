@@ -1,13 +1,13 @@
 {{-- Live chat thread (WhatsApp-style bubbles). Polls so inbound replies
      appear without a manual refresh. --}}
-<div class="bg-[#e5ddd5] rounded-xl p-4 space-y-3" style="min-height: 60vh;" wire:poll.5s>
+<div class="bg-gray-100 rounded-2xl p-4 space-y-3" style="min-height: 60vh;" wire:poll.5s>
     @forelse($timeline as $item)
         @if($item instanceof \App\Models\CallLog)
             @include('conversations._call_card', ['call' => $item])
         @else
             @php /** @var \App\Models\ConversationMessage $message */ $message = $item; @endphp
             <div class="flex {{ $message->isInbound() ? 'justify-start' : 'justify-end' }}">
-                <div class="max-w-md rounded-lg p-3 shadow {{ $message->isInbound() ? 'bg-white' : 'bg-[#dcf8c6]' }}">
+                <div class="max-w-md rounded-2xl p-3 shadow-sm border {{ $message->isInbound() ? 'bg-white border-gray-200 rounded-bl-md' : 'bg-brand-soft border-brand/25 rounded-br-md' }}">
 
                     {{-- Media --}}
                     @if($message->hasMedia())
@@ -41,7 +41,7 @@
                     {{-- Footer (timestamp + sender + delivery ticks for outbound) --}}
                     <div class="flex items-center justify-end gap-1 mt-1 text-xs text-gray-500">
                         @if(! $message->isInbound() && $message->sentBy)
-                            <span class="text-gray-400">{{ $message->sentBy->name }} ·</span>
+                            <span class="text-gray-500">{{ $message->sentBy->name }} ·</span>
                         @endif
                         <span>{{ $message->created_at->format('H:i') }}</span>
                         @if(! $message->isInbound())
@@ -51,9 +51,9 @@
                             @elseif($st === 'READ')
                                 <span class="text-sky-500 font-semibold" title="{{ __('Read') }}">✓✓</span>
                             @elseif($st === 'DELIVERED')
-                                <span class="text-gray-400 font-semibold" title="{{ __('Delivered') }}">✓✓</span>
+                                <span class="text-gray-500 font-semibold" title="{{ __('Delivered') }}">✓✓</span>
                             @else
-                                <span class="text-gray-400 font-semibold" title="{{ __('Sent') }}">✓</span>
+                                <span class="text-gray-500 font-semibold" title="{{ __('Sent') }}">✓</span>
                             @endif
                         @endif
                     </div>

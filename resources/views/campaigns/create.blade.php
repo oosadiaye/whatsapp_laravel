@@ -87,7 +87,7 @@
                             }
                         @endphp
                         <button type="button" @click="tab = '{{ $key }}'"
-                                :class="tab === '{{ $key }}' ? 'border-[#25D366] text-[#25D366]' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                                :class="tab === '{{ $key }}' ? 'border-brand text-brand-text' : 'border-transparent text-gray-500 hover:text-gray-700'"
                                 class="whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium inline-flex items-center gap-1.5">
                             {{ $label }}
                             @if($tabHasError)
@@ -104,7 +104,7 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Campaign Name *</label>
                             <input type="text" name="name" x-ref="nameField" value="{{ old('name') }}" required
-                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                             @error('name') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                         </div>
                         {{-- Single-instance app: the sending number is fixed (configured in
@@ -116,7 +116,7 @@
                                 <div class="mt-1 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
                                     <span class="w-2 h-2 rounded-full {{ $instance->isReady() ? 'bg-emerald-500' : 'bg-amber-500' }}"></span>
                                     {{ $instance->display_name ?? $instance->instance_name }}
-                                    @if($instance->business_phone_number)<span class="text-gray-400">·</span><span class="font-data">{{ $instance->business_phone_number }}</span>@endif
+                                    @if($instance->business_phone_number)<span class="text-gray-500">·</span><span class="font-data">{{ $instance->business_phone_number }}</span>@endif
                                 </div>
                             @else
                                 <p class="mt-1 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -135,7 +135,7 @@
                         <label class="flex items-center rounded-lg border p-4 hover:bg-gray-50">
                             <input type="checkbox" name="groups[]" value="{{ $group->id }}"
                                    {{ in_array($group->id, old('groups', [])) ? 'checked' : '' }}
-                                   class="rounded border-gray-300 text-[#25D366] focus:ring-[#25D366]">
+                                   class="rounded border-gray-300 text-brand-text focus:ring-brand">
                             <span class="ml-3">
                                 <span class="font-medium text-gray-900">{{ $group->name }}</span>
                                 <span class="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{{ $group->contacts_count ?? $group->contact_count }} contacts</span>
@@ -234,7 +234,7 @@
                                     @endforeach
                                 </div>
                                 <textarea name="message" x-ref="messageArea" x-model="message" rows="8" required
-                                          class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]"
+                                          class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand"
                                           placeholder="Type your message here...">{{ old('message') }}</textarea>
                                 @error('message') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                             </div>
@@ -263,7 +263,7 @@
                                            reader.onload = e => { headerMediaUrl = e.target.result; headerImageBroken = false; };
                                            reader.readAsDataURL(f);
                                        "
-                                       class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-[#25D366] file:px-4 file:py-2 file:text-sm file:text-white hover:file:bg-[#1da851]">
+                                       class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-brand file:px-4 file:py-2 file:text-sm file:text-white hover:file:bg-brand-hover">
                                 <p class="mt-1 text-xs text-gray-500">
                                     <template x-if="headerMediaFormat">
                                         <span x-text="'This template requires a ' + headerMediaFormat.toLowerCase() + ' for its header. Max 16MB.'"></span>
@@ -284,8 +284,8 @@
                             {{-- WhatsApp-faithful preview: tan chat backdrop, light-green outgoing bubble,
                                  header media at top, body below, time + double-tick at bottom right.
                                  Matches the styling in conversations/show.blade.php for visual consistency. --}}
-                            <div class="mt-1 rounded-xl bg-[#e5ddd5] p-3 sm:p-4" style="min-height: 280px;">
-                                <div class="ml-auto max-w-[280px] rounded-lg bg-[#dcf8c6] shadow overflow-hidden">
+                            <div class="mt-1 rounded-xl bg-gray-100 p-3 sm:p-4" style="min-height: 280px;">
+                                <div class="ml-auto max-w-[280px] rounded-lg bg-brand-soft shadow overflow-hidden">
 
                                     {{-- Header media preview (only when a media-header template is selected) --}}
                                     <template x-if="headerMediaFormat === 'IMAGE' && headerMediaUrl && !headerImageBroken">
@@ -296,10 +296,10 @@
                                     </template>
 
                                     <template x-if="headerMediaFormat === 'IMAGE' && headerMediaUrl && headerImageBroken">
-                                        <div class="w-full h-40 bg-gray-200 flex flex-col items-center justify-center text-gray-400 text-xs gap-1">
+                                        <div class="w-full h-40 bg-gray-200 flex flex-col items-center justify-center text-gray-500 text-xs gap-1">
                                             <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                                             <span>{{ __('Image cannot be loaded') }}</span>
-                                            <span class="text-[10px] text-gray-400">{{ __('check the URL is publicly reachable') }}</span>
+                                            <span class="text-[10px] text-gray-500">{{ __('check the URL is publicly reachable') }}</span>
                                         </div>
                                     </template>
 
@@ -357,11 +357,11 @@
                             <label class="block text-sm font-medium text-gray-700">Send Mode</label>
                             <div class="mt-2 flex gap-4">
                                 <label class="flex items-center">
-                                    <input type="radio" x-model="sendMode" value="immediate" class="text-[#25D366] focus:ring-[#25D366]">
+                                    <input type="radio" x-model="sendMode" value="immediate" class="text-brand-text focus:ring-brand">
                                     <span class="ml-2 text-sm text-gray-700">Send Immediately</span>
                                 </label>
                                 <label class="flex items-center">
-                                    <input type="radio" x-model="sendMode" value="scheduled" class="text-[#25D366] focus:ring-[#25D366]">
+                                    <input type="radio" x-model="sendMode" value="scheduled" class="text-brand-text focus:ring-brand">
                                     <span class="ml-2 text-sm text-gray-700">Schedule for Later</span>
                                 </label>
                             </div>
@@ -369,24 +369,24 @@
                         <div x-show="sendMode === 'scheduled'">
                             <label class="block text-sm font-medium text-gray-700">Send Date & Time</label>
                             <input type="datetime-local" name="scheduled_at" value="{{ old('scheduled_at') }}"
-                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                   class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                         </div>
                         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Messages per Minute</label>
                                 <input type="number" name="rate_per_minute" value="{{ old('rate_per_minute', 10) }}" min="1" max="60"
-                                       class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                 <p class="mt-1 text-xs text-gray-500">Recommended: 10-20 to avoid bans</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Min Delay (seconds)</label>
                                 <input type="number" name="delay_min" value="{{ old('delay_min', 2) }}" min="1" max="30"
-                                       class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Max Delay (seconds)</label>
                                 <input type="number" name="delay_max" value="{{ old('delay_max', 8) }}" min="1" max="60"
-                                       class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366]">
+                                       class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                             </div>
                         </div>
                     </div>
@@ -414,12 +414,12 @@
                         </button>
                         {{-- Next: advances to next tab; client-side validates the current tab first. --}}
                         <button type="button" x-show="!isLast()" @click="next()"
-                                class="rounded-lg bg-[#25D366] px-5 py-2 text-sm font-medium text-white hover:bg-[#1da851]">
+                                class="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:bg-brand-hover">
                             Next →
                         </button>
                         {{-- Save & Launch: only on the last tab; this is the "I'm done, send it" submit. --}}
                         <button type="submit" name="status" value="QUEUED" x-show="isLast()" x-cloak
-                                class="rounded-lg bg-[#25D366] px-5 py-2 text-sm font-medium text-white hover:bg-[#1da851]">
+                                class="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white hover:bg-brand-hover">
                             Save & Launch
                         </button>
                     </div>

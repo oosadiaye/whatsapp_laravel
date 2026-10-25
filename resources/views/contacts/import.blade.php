@@ -18,7 +18,7 @@
                             <div class="flex items-center">
                                 <div class="flex items-center gap-2">
                                     <span class="flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold transition-colors duration-200"
-                                          :class="step > index + 1 ? 'bg-[#25D366] text-white' : (step === index + 1 ? 'bg-[#25D366] text-white' : 'bg-gray-200 text-gray-500')">
+                                          :class="step > index + 1 ? 'bg-brand text-white' : (step === index + 1 ? 'bg-brand text-white' : 'bg-gray-200 text-gray-500')">
                                         <template x-if="step > index + 1">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
@@ -29,12 +29,12 @@
                                         </template>
                                     </span>
                                     <span class="text-sm font-medium"
-                                          :class="step >= index + 1 ? 'text-gray-900' : 'text-gray-400'"
+                                          :class="step >= index + 1 ? 'text-gray-900' : 'text-gray-500'"
                                           x-text="label"></span>
                                 </div>
                                 <template x-if="index < steps.length - 1">
                                     <div class="w-12 h-0.5 mx-2"
-                                         :class="step > index + 1 ? 'bg-[#25D366]' : 'bg-gray-200'"></div>
+                                         :class="step > index + 1 ? 'bg-brand' : 'bg-gray-200'"></div>
                                 </template>
                             </div>
                         </template>
@@ -61,7 +61,7 @@
                                 <label for="group" class="block text-sm font-medium text-gray-700 mb-1">{{ __('Assign to Group') }}</label>
                                 <select id="group"
                                         x-model="groupId"
-                                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
+                                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm">
                                     <option value="">{{ __('-- Select a group (optional) --') }}</option>
                                     @foreach($groups as $group)
                                         <option value="{{ $group->id }}">{{ $group->name }}</option>
@@ -74,7 +74,7 @@
                                 <button type="button"
                                         @click="inputMode = 'file'"
                                         class="flex-1 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all duration-200"
-                                        :class="inputMode === 'file' ? 'border-[#25D366] bg-green-50 text-[#25D366]' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
+                                        :class="inputMode === 'file' ? 'border-brand bg-green-50 text-brand-text' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
                                     <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                     </svg>
@@ -83,7 +83,7 @@
                                 <button type="button"
                                         @click="inputMode = 'manual'"
                                         class="flex-1 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all duration-200"
-                                        :class="inputMode === 'manual' ? 'border-[#25D366] bg-green-50 text-[#25D366]' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
+                                        :class="inputMode === 'manual' ? 'border-brand bg-green-50 text-brand-text' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
                                     <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                     </svg>
@@ -115,17 +115,17 @@
                                 </div>
 
                                 <div class="border-2 border-dashed rounded-lg p-8 text-center transition-colors duration-200"
-                                     :class="dragOver ? 'border-[#25D366] bg-green-50' : 'border-gray-300 hover:border-gray-400'"
+                                     :class="dragOver ? 'border-brand bg-green-50' : 'border-gray-300 hover:border-gray-400'"
                                      @dragover.prevent="dragOver = true"
                                      @dragleave.prevent="dragOver = false"
                                      @drop.prevent="handleFileDrop($event)">
-                                    <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-12 h-12 mx-auto text-gray-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                                     </svg>
                                     <p class="text-sm text-gray-600 mb-2">
                                         {{ __('Drag and drop your CSV file here, or') }}
                                     </p>
-                                    <label class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-50 cursor-pointer transition">
+                                    <label class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg font-semibold text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition">
                                         {{ __('Browse Files') }}
                                         <input type="file"
                                                name="file"
@@ -135,7 +135,7 @@
                                                @change="handleFileSelect($event)">
                                     </label>
                                     <template x-if="fileName">
-                                        <p class="mt-3 text-sm text-[#25D366] font-medium">
+                                        <p class="mt-3 text-sm text-brand-text font-medium">
                                             <span x-text="fileName"></span>
                                             <button type="button" @click="clearFile()" class="ml-2 text-red-500 hover:text-red-700">&times;</button>
                                         </p>
@@ -152,7 +152,7 @@
                                           x-model="manualInput"
                                           rows="8"
                                           placeholder="628123456789, John Doe&#10;628987654321, Jane Smith&#10;628555111222"
-                                          class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm font-data"></textarea>
+                                          class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm font-data"></textarea>
                             </div>
                         </div>
 
@@ -166,7 +166,7 @@
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Phone Column') }}</label>
                                         <select x-model="columnMap.phone"
-                                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
+                                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm">
                                             <option value="">{{ __('-- None --') }}</option>
                                             <template x-for="(header, idx) in csvHeaders" :key="idx">
                                                 <option :value="header" x-text="header"></option>
@@ -176,18 +176,18 @@
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Email Column') }}</label>
                                         <select x-model="columnMap.email"
-                                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
+                                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm">
                                             <option value="">{{ __('-- None --') }}</option>
                                             <template x-for="(header, idx) in csvHeaders" :key="idx">
                                                 <option :value="header" x-text="header"></option>
                                             </template>
                                         </select>
-                                        <p class="mt-1 text-xs text-gray-400">{{ __('Map a phone, an email, or both. Each row needs at least one.') }}</p>
+                                        <p class="mt-1 text-xs text-gray-500">{{ __('Map a phone, an email, or both. Each row needs at least one.') }}</p>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Name Column') }}</label>
                                         <select x-model="columnMap.name"
-                                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
+                                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm">
                                             <option value="">{{ __('-- None --') }}</option>
                                             <template x-for="(header, idx) in csvHeaders" :key="idx">
                                                 <option :value="header" x-text="header"></option>
@@ -197,7 +197,7 @@
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Custom Field 1') }}</label>
                                         <select x-model="columnMap.custom_field_1"
-                                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
+                                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm">
                                             <option value="">{{ __('-- None --') }}</option>
                                             <template x-for="(header, idx) in csvHeaders" :key="idx">
                                                 <option :value="header" x-text="header"></option>
@@ -207,7 +207,7 @@
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Custom Field 2') }}</label>
                                         <select x-model="columnMap.custom_field_2"
-                                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-[#25D366] focus:ring-[#25D366] sm:text-sm">
+                                                class="w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm">
                                             <option value="">{{ __('-- None --') }}</option>
                                             <template x-for="(header, idx) in csvHeaders" :key="idx">
                                                 <option :value="header" x-text="header"></option>
@@ -282,7 +282,7 @@
                         <button type="button"
                                 x-show="step > 1"
                                 @click="prevStep()"
-                                class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-50 transition ease-in-out duration-150">
+                                class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg font-semibold text-sm text-gray-700 hover:bg-gray-50 transition ease-in-out duration-150">
                             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                             </svg>
@@ -292,7 +292,7 @@
 
                         <div class="flex gap-3">
                             <a href="{{ route('contacts.index') }}"
-                               class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest hover:bg-gray-50 transition ease-in-out duration-150">
+                               class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg font-semibold text-sm text-gray-700 hover:bg-gray-50 transition ease-in-out duration-150">
                                 {{ __('Cancel') }}
                             </a>
 
@@ -300,7 +300,7 @@
                                     x-show="step < 4"
                                     @click="nextStep()"
                                     :disabled="!canProceed()"
-                                    class="inline-flex items-center px-4 py-2 bg-[#25D366] border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-[#1da851] disabled:opacity-50 disabled:cursor-not-allowed transition ease-in-out duration-150">
+                                    class="inline-flex items-center px-4 py-2 bg-brand border border-transparent rounded-lg font-semibold text-sm text-white hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed transition ease-in-out duration-150">
                                 {{ __('Next') }}
                                 <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -309,7 +309,7 @@
 
                             <button type="submit"
                                     x-show="step === 4"
-                                    class="inline-flex items-center px-6 py-2 bg-[#25D366] border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-[#1da851] transition ease-in-out duration-150">
+                                    class="inline-flex items-center px-6 py-2 bg-brand border border-transparent rounded-lg font-semibold text-sm text-white hover:bg-brand-hover transition ease-in-out duration-150">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                                 </svg>

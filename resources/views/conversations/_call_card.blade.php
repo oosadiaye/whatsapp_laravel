@@ -30,7 +30,7 @@
 @endphp
 
 <div class="flex justify-center my-2">
-    <div class="rounded-lg border {{ $borderClass }} px-4 py-2.5 text-sm max-w-md">
+    <div class="rounded-full border {{ $borderClass }} px-5 py-2 text-sm max-w-md">
         <div class="flex items-center gap-3">
             <svg class="w-4 h-4 flex-shrink-0 {{ $iconClass }}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 @if($isInbound)

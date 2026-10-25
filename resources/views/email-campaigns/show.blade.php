@@ -45,7 +45,7 @@
                         @if($sendable)
                             <form method="POST" action="{{ route('email-campaigns.launch', $campaign) }}" data-confirm="Send this campaign now to {{ $recipientCount }} recipients?">
                                 @csrf
-                                <button type="submit" class="px-4 py-1.5 text-sm rounded-lg bg-[#4f46e5] text-white font-semibold hover:bg-[#4338ca]">{{ __('Send now') }}</button>
+                                <button type="submit" class="px-4 py-1.5 text-sm rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700">{{ __('Send now') }}</button>
                             </form>
                         @endif
                         @if($campaign->status === 'scheduled')
@@ -83,7 +83,7 @@
             ] as $tile)
                 <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
                     <div class="text-2xl font-bold {{ $tile['accent'] ?? 'text-gray-900' }} tabular-nums">{{ $tile['value'] }}</div>
-                    <div class="text-[11px] uppercase tracking-wide text-gray-400 mt-0.5">{{ $tile['label'] }}</div>
+                    <div class="text-[11px] uppercase tracking-wide text-gray-500 mt-0.5">{{ $tile['label'] }}</div>
                 </div>
             @endforeach
         </div>

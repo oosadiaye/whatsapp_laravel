@@ -29,10 +29,10 @@
             <span class="font-medium text-gray-700">{{ number_format($progressPercent, 1) }}%</span>
         </div>
         <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-            <div class="h-3 rounded-full bg-[#25D366] transition-all duration-500 ease-out"
+            <div class="h-3 rounded-full bg-brand transition-all duration-500 ease-out"
                  style="width: {{ min($progressPercent, 100) }}%"></div>
         </div>
-        <p class="text-xs text-gray-400 mt-1">{{ $sent + $failed }} of {{ $total }} messages processed</p>
+        <p class="text-xs text-gray-500 mt-1">{{ $sent + $failed }} of {{ $total }} messages processed</p>
     </div>
 
     {{-- Stat Cards Grid --}}
@@ -79,7 +79,7 @@
     <div class="grid grid-cols-2 gap-4">
         <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
             <p class="text-sm text-gray-500 mb-1">Delivery Rate</p>
-            <p class="text-2xl font-bold text-[#25D366]">{{ number_format($deliveryRate, 1) }}%</p>
+            <p class="text-2xl font-bold text-brand-text">{{ number_format($deliveryRate, 1) }}%</p>
         </div>
         <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
             <p class="text-sm text-gray-500 mb-1">Read Rate</p>
