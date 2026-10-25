@@ -9,8 +9,22 @@ set -euo pipefail
 
 cd "${BLASTIQ_DIR:-$(pwd)}"
 
+# Use the PHP the app actually requires (composer.json: ^8.4), not whatever `php`
+# happens to be first on root's PATH — on this server that is an older 8.x, and
+# Composer's platform check then rejects the autoloader. Override with PHP_BIN=...
+# Defining a function named `php` makes every `php ...` call below (including
+# inside $(...)) use it.
+PHP_BIN="${PHP_BIN:-}"
+if [ -z "$PHP_BIN" ]; then
+  for candidate in /usr/local/apps/php84/bin/php "$(command -v php || true)"; do
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then PHP_BIN="$candidate"; break; fi
+  done
+fi
+php() { "$PHP_BIN" "$@"; }
+
 echo "=== BlastIQ Deploy ==="
 echo "Working directory: $(pwd)"
+echo "PHP: $PHP_BIN ($("$PHP_BIN" -r 'echo PHP_VERSION;'))"
 echo ""
 
 echo "[1/11] Pulling latest code..."
