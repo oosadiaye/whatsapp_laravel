@@ -453,6 +453,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('team.index');
         // Live operations wallboard — realtime call board (Livewire Wallboard).
         Route::view('/wallboard', 'wallboard.index')->name('wallboard');
+        // Who is signed in right now; ending sessions is further gated by users.edit
+        // inside the Livewire component.
+        Route::view('/user-monitor', 'user-monitor.index')->name('user-monitor');
     });
     Route::middleware('permission:users.edit')->group(function () {
         Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');

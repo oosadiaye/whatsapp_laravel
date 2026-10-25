@@ -4,6 +4,7 @@ use App\Http\Middleware\AllowedWebhookIps;
 use App\Http\Middleware\EnsureMailClientEnabled;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\TrackUserSession;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -29,6 +30,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Log out users deactivated mid-session on their next request.
         $middleware->appendToGroup('web', EnsureUserIsActive::class);
+
+        // Record each signed-in browser session for the user monitor, and sign out
+        // sessions an admin has revoked.
+        $middleware->appendToGroup('web', TrackUserSession::class);
 
         $middleware->alias([
             // Optional source-IP allowlist for provider webhooks (empty = off).
