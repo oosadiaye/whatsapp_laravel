@@ -5,148 +5,240 @@
         </h2>
     </x-slot>
 
+    @php
+        $tz = config('app.business_timezone');
+        $hour = (int) now($tz)->format('G');
+        $greeting = $hour < 12 ? __('Good morning') : ($hour < 17 ? __('Good afternoon') : __('Good evening'));
+        $firstName = \Illuminate\Support\Str::of(auth()->user()->name)->before(' ');
+
+        $needsYou = $missedCalls + $unassignedChats + $failedToday;
+        $summary = collect([
+            $liveCalls->count() > 0 ? trans_choice(':count call is live|:count calls are live', $liveCalls->count()) : null,
+            $sendingCampaigns > 0 ? trans_choice(':count campaign is sending|:count campaigns are sending', $sendingCampaigns) : null,
+            $needsYou > 0 ? trans_choice(':count thing needs you|:count things need you', $needsYou) : null,
+        ])->filter()->implode(' · ');
+
+        $messagesDelta = $messagesYesterday > 0
+            ? (int) round((($messagesToday - $messagesYesterday) / $messagesYesterday) * 100)
+            : null;
+
+        $statusBadge = fn (string $status) => match ($status) {
+            'RUNNING' => 'bg-blue-100 text-blue-700',
+            'QUEUED' => 'bg-yellow-100 text-yellow-700',
+            'PAUSED' => 'bg-orange-100 text-orange-700',
+            'COMPLETED' => 'bg-green-100 text-green-700',
+            'FAILED' => 'bg-red-100 text-red-700',
+            default => 'bg-gray-100 text-gray-700',
+        };
+    @endphp
+
     <div class="py-8">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
-            {{-- Stat Cards --}}
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {{-- Total Campaigns --}}
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-start gap-4">
-                    <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-[#25D366]/10 flex items-center justify-center">
-                        <svg class="w-6 h-6 text-[#25D366]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Total Campaigns</p>
-                        <p class="font-display text-3xl font-bold text-gray-900 mt-1 tabular-nums">{{ number_format($totalCampaigns) }}</p>
-                    </div>
+            {{-- Greeting --}}
+            <section class="flex flex-wrap items-end gap-4 pb-2">
+                <div class="flex-1 min-w-[260px]">
+                    <p class="text-xs font-bold uppercase tracking-wider text-gray-500">{{ now($tz)->translatedFormat('l j F') }}</p>
+                    <h1 class="mt-1 font-display text-4xl font-bold tracking-tight text-gray-900 leading-tight">{{ $greeting }}, {{ $firstName }}.</h1>
+                    <p class="mt-2 text-gray-600">{{ $summary !== '' ? $summary : __('Nothing needs your attention right now.') }}</p>
                 </div>
-
-                {{-- Total Contacts --}}
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-start gap-4">
-                    <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-[#25D366]/10 flex items-center justify-center">
-                        <svg class="w-6 h-6 text-[#25D366]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Total Contacts</p>
-                        <p class="font-display text-3xl font-bold text-gray-900 mt-1 tabular-nums">{{ number_format($totalContacts) }}</p>
-                    </div>
+                <div class="flex flex-wrap gap-2">
+                    @can('calls.dial')
+                        <a href="{{ route('calls.workspace') }}" wire:navigate
+                           class="inline-flex items-center gap-2 h-11 px-4 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50">
+                            <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z"/></svg>
+                            {{ __('Quick dial') }}
+                        </a>
+                    @endcan
+                    @can('campaigns.create')
+                        <a href="{{ route('campaigns.create') }}" wire:navigate
+                           class="inline-flex items-center gap-2 h-11 px-5 rounded-lg bg-brand text-brand-ink text-sm font-bold hover:bg-brand-hover">
+                            <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                            {{ __('New campaign') }}
+                        </a>
+                    @endcan
                 </div>
+            </section>
 
-                {{-- Sent Today --}}
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-start gap-4">
-                    <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-[#25D366]/10 flex items-center justify-center">
-                        <svg class="w-6 h-6 text-[#25D366]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Sent Today</p>
-                        <p class="font-display text-3xl font-bold text-gray-900 mt-1 tabular-nums">{{ number_format($messagesToday) }}</p>
-                    </div>
-                </div>
+            <div class="flex flex-wrap gap-5 items-stretch">
 
-                {{-- Delivery Rate --}}
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-start gap-4">
-                    <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-[#25D366]/10 flex items-center justify-center">
-                        <svg class="w-6 h-6 text-[#25D366]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Delivery Rate</p>
-                        <p class="font-display text-3xl font-bold text-gray-900 mt-1 tabular-nums">{{ number_format($deliveryRate, 1) }}%</p>
+                {{-- Live now (calls) --}}
+                @if($canSeeCalls)
+                    <section aria-labelledby="live-h" class="flex-1 basis-[380px] min-w-0 self-start bg-white border border-gray-200 rounded-2xl shadow-sm p-5 flex flex-col gap-4">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-2.5 h-2.5 rounded-full {{ $liveCalls->isNotEmpty() ? 'bg-brand animate-pulse' : 'bg-gray-300' }}"></span>
+                            <h2 id="live-h" class="font-display text-xl font-bold tracking-tight text-gray-900">{{ __('Live now') }}</h2>
+                            <a href="{{ route('calls.workspace') }}" wire:navigate class="ml-auto -my-2 py-2 text-sm font-semibold text-brand-text hover:underline">{{ __('Call workspace') }} →</a>
+                        </div>
+
+                        <ul class="flex flex-col gap-2.5">
+                            @forelse($liveCalls as $call)
+                                @php $connected = $call->status === \App\Models\CallLog::STATUS_CONNECTED; @endphp
+                                <li class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-gray-50">
+                                    <span class="grid place-items-center w-10 h-10 rounded-full shrink-0 {{ $call->direction === 'inbound' ? 'bg-voice-100 text-voice-700' : 'bg-brand-100 text-brand-700' }}">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z"/></svg>
+                                    </span>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="font-semibold text-gray-900 truncate">{{ $call->contact?->name ?? $call->from_phone ?? $call->to_phone ?? __('Unknown caller') }}</div>
+                                        <div class="text-xs text-gray-500">
+                                            {{ ucfirst($call->direction) }}
+                                            @if($call->placedBy) · {{ $call->placedBy->name }} @endif
+                                            · {{ $call->started_at?->diffForHumans() ?? $call->created_at->diffForHumans() }}
+                                        </div>
+                                    </div>
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold {{ $connected ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700' }}">
+                                        <span class="w-1.5 h-1.5 rounded-full {{ $connected ? 'bg-brand' : 'bg-amber-500 animate-pulse' }}"></span>
+                                        {{ ucfirst($call->status) }}
+                                    </span>
+                                </li>
+                            @empty
+                                <li class="py-8 text-center text-sm text-gray-500">{{ __('No calls in progress.') }}</li>
+                            @endforelse
+                        </ul>
+
+                        @if($team->isNotEmpty())
+                            <div class="pt-1">
+                                <h3 class="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Team') }}</h3>
+                                <ul class="flex flex-col gap-2">
+                                    @foreach($team as $member)
+                                        <li class="flex items-center gap-3 text-sm">
+                                            <span class="w-2 h-2 rounded-full {{ $member['online'] ? 'bg-brand' : 'bg-gray-300' }}"></span>
+                                            <span class="flex-1 min-w-0 truncate font-medium text-gray-900">{{ $member['name'] }}</span>
+                                            <span class="text-xs text-gray-500">{{ $member['online'] ? ucfirst($member['presence']) : __('Offline') }}</span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+                    </section>
+                @endif
+
+                <div class="flex-[2_1_560px] min-w-0 flex flex-col gap-5">
+
+                    {{-- KPI strip: one card, four measures --}}
+                    <section aria-label="{{ __('Today in numbers') }}" class="flex flex-wrap bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+                        <div class="flex-1 basis-[130px] min-w-0 p-5">
+                            <div class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Messages today') }}</div>
+                            <div class="mt-1 font-display text-3xl xl:text-4xl font-bold tracking-tight text-gray-900 tabular-nums">{{ number_format($messagesToday) }}</div>
+                            <div class="mt-1.5 flex items-center gap-2 text-xs">
+                                @if($messagesDelta !== null)
+                                    <span class="px-2 py-0.5 rounded-full font-bold {{ $messagesDelta >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">{{ $messagesDelta >= 0 ? '+' : '−' }}{{ abs($messagesDelta) }}%</span>
+                                    <span class="text-gray-500">{{ __('vs yesterday') }}</span>
+                                @else
+                                    <span class="text-gray-500">{{ __('No messages yesterday to compare') }}</span>
+                                @endif
+                            </div>
+                        </div>
+                        <div class="flex-1 basis-[130px] min-w-0 p-5 border-l border-gray-200">
+                            <div class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Delivery rate') }}</div>
+                            <div class="mt-1 font-display text-4xl font-bold tracking-tight text-gray-900 tabular-nums">{{ $deliveryRate }}%</div>
+                            <div class="mt-1.5 text-xs text-gray-500">{{ __('Average across campaigns') }}</div>
+                        </div>
+                        <div class="flex-1 basis-[130px] min-w-0 p-5 border-l border-gray-200">
+                            <div class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Campaigns') }}</div>
+                            <div class="mt-1 font-display text-4xl font-bold tracking-tight text-gray-900 tabular-nums">{{ number_format($totalCampaigns) }}</div>
+                            <div class="mt-1.5 text-xs text-gray-500">{{ trans_choice(':count sending now|:count sending now', $sendingCampaigns) }}</div>
+                        </div>
+                        <div class="flex-1 basis-[130px] min-w-0 p-5 border-l border-gray-200">
+                            <div class="text-[11px] font-bold uppercase tracking-wider text-gray-500">{{ __('Contacts') }}</div>
+                            <div class="mt-1 font-display text-4xl font-bold tracking-tight text-gray-900 tabular-nums">{{ number_format($totalContacts) }}</div>
+                            <div class="mt-1.5 text-xs text-gray-500">{{ __('In your audience') }}</div>
+                        </div>
+                    </section>
+
+                    <div class="flex flex-wrap gap-5 flex-1">
+                        {{-- Recent campaigns with progress --}}
+                        <section aria-labelledby="camp-h" class="flex-[1.7_1_360px] min-w-0 bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+                            <div class="flex items-center mb-3">
+                                <h2 id="camp-h" class="font-display text-xl font-bold tracking-tight text-gray-900">{{ __('Recent campaigns') }}</h2>
+                                @can('campaigns.view')
+                                    <a href="{{ route('campaigns.index') }}" wire:navigate class="ml-auto -my-2 py-2 text-sm font-semibold text-brand-text hover:underline">{{ __('All campaigns') }} →</a>
+                                @endcan
+                            </div>
+                            <ul>
+                                @forelse($recentCampaigns as $campaign)
+                                    @php
+                                        $total = (int) ($campaign->total_contacts ?? 0);
+                                        $sent = (int) ($campaign->sent_count ?? 0);
+                                        $pct = $total > 0 ? min(100, (int) round($sent / $total * 100)) : 0;
+                                    @endphp
+                                    <li class="py-3.5 border-t border-gray-200 first:border-t-0">
+                                        <div class="flex items-center gap-2.5 flex-wrap">
+                                            <span class="font-semibold text-gray-900">{{ $campaign->name }}</span>
+                                            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold {{ $statusBadge((string) $campaign->status) }}">{{ $campaign->status }}</span>
+                                            <span class="ml-auto font-data text-xs text-gray-500">{{ number_format($sent) }} / {{ number_format($total) }}</span>
+                                        </div>
+                                        <div class="mt-2.5 h-2 rounded-full bg-gray-200 overflow-hidden" role="progressbar" aria-valuenow="{{ $pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ $campaign->name }}">
+                                            <div class="h-full rounded-full bg-brand" style="width: {{ $pct }}%"></div>
+                                        </div>
+                                    </li>
+                                @empty
+                                    <li class="py-10 text-center text-gray-500">
+                                        <p class="font-medium">{{ __('No campaigns yet') }}</p>
+                                        <p class="text-sm mt-1">{{ __('Create your first campaign to get started.') }}</p>
+                                    </li>
+                                @endforelse
+                            </ul>
+                        </section>
+
+                        {{-- Needs you --}}
+                        <section aria-labelledby="need-h" class="flex-[1_1_260px] min-w-0 bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+                            <h2 id="need-h" class="font-display text-xl font-bold tracking-tight text-gray-900 mb-3">{{ __('Needs you') }}</h2>
+                            @php
+                                $rows = [];
+                                if ($canSeeCalls) {
+                                    $rows[] = ['count' => $missedCalls, 'text' => __('Missed calls, last 24 h'), 'tone' => 'red', 'href' => route('calls.index'), 'action' => __('Review')];
+                                }
+                                if (auth()->user()->can('conversations.view_all')) {
+                                    $rows[] = ['count' => $unassignedChats, 'text' => __('Unassigned chats'), 'tone' => 'amber', 'href' => route('conversations.index'), 'action' => __('Assign')];
+                                }
+                                $rows[] = ['count' => $failedToday, 'text' => __('Failed sends today'), 'tone' => 'red', 'href' => auth()->user()->can('campaigns.view') ? route('campaigns.index') : null, 'action' => __('Check')];
+                                $tones = ['red' => 'bg-red-100 text-red-700', 'amber' => 'bg-yellow-100 text-yellow-700', 'clear' => 'bg-gray-100 text-gray-500'];
+                            @endphp
+                            <ul class="flex flex-col gap-2.5">
+                                @foreach($rows as $row)
+                                    <li class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-gray-50">
+                                        <span class="grid place-items-center min-w-[34px] h-[34px] px-1 rounded-lg font-display text-base font-bold tabular-nums {{ $row['count'] > 0 ? $tones[$row['tone']] : $tones['clear'] }}">{{ $row['count'] }}</span>
+                                        <span class="flex-1 min-w-0 text-[13.5px] font-medium leading-snug text-gray-800">{{ $row['text'] }}</span>
+                                        @if($row['count'] > 0 && $row['href'])
+                                            <a href="{{ $row['href'] }}" wire:navigate class="text-sm font-bold text-gray-900 hover:underline whitespace-nowrap">{{ $row['action'] }}</a>
+                                        @endif
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </section>
                     </div>
                 </div>
             </div>
 
-            {{-- Charts Section --}}
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {{-- Messages Per Day Line Chart --}}
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 class="font-display text-lg font-semibold text-gray-800 mb-4">Messages Sent (Last 30 Days)</h3>
-                    <div class="relative" style="height: 300px;">
+            {{-- Charts --}}
+            <div class="flex flex-wrap gap-5">
+                <section aria-labelledby="vol-h" class="flex-[2_1_520px] min-w-0 bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+                    <div class="flex items-baseline gap-3 mb-4">
+                        <h2 id="vol-h" class="font-display text-xl font-bold tracking-tight text-gray-900">{{ __('Message volume') }}</h2>
+                        <span class="text-sm text-gray-500">{{ __('Last 30 days') }}</span>
+                    </div>
+                    <div class="relative" style="height: 280px;">
                         @if($messagesPerDay->isEmpty())
-                            <div class="absolute inset-0 grid place-items-center text-sm text-gray-400">{{ __('No messages sent in the last 30 days yet.') }}</div>
+                            <div class="absolute inset-0 grid place-items-center text-sm text-gray-500">{{ __('No messages sent in the last 30 days yet.') }}</div>
                         @else
                             <canvas id="messagesPerDayChart" data-series="{{ json_encode($messagesPerDay) }}"
                                     role="img" aria-label="{{ __('Line chart of messages sent per day over the last 30 days') }}"></canvas>
                         @endif
                     </div>
-                </div>
+                </section>
 
-                {{-- Status Breakdown Doughnut Chart --}}
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 class="font-display text-lg font-semibold text-gray-800 mb-4">Message Status Breakdown</h3>
-                    <div class="relative" style="height: 300px;">
+                <section aria-labelledby="status-h" class="flex-[1_1_300px] min-w-0 bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+                    <h2 id="status-h" class="font-display text-xl font-bold tracking-tight text-gray-900 mb-4">{{ __('Delivery status') }}</h2>
+                    <div class="relative" style="height: 280px;">
                         @if($statusBreakdown->isEmpty())
-                            <div class="absolute inset-0 grid place-items-center text-sm text-gray-400">{{ __('No message status data yet.') }}</div>
+                            <div class="absolute inset-0 grid place-items-center text-sm text-gray-500">{{ __('No message status data yet.') }}</div>
                         @else
                             <canvas id="statusBreakdownChart" data-series="{{ json_encode($statusBreakdown) }}"
                                     role="img" aria-label="{{ __('Doughnut chart of message delivery status breakdown') }}"></canvas>
                         @endif
                     </div>
-                </div>
-            </div>
-
-            {{-- Recent Campaigns Table --}}
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div class="px-6 py-4 border-b border-gray-100">
-                    <h3 class="font-display text-lg font-semibold text-gray-800">Recent Campaigns</h3>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left">
-                        <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wider">
-                            <tr>
-                                <th class="px-6 py-3 font-medium">Name</th>
-                                <th class="px-6 py-3 font-medium">Status</th>
-                                <th class="px-6 py-3 font-medium text-right">Sent</th>
-                                <th class="px-6 py-3 font-medium text-right">Delivered</th>
-                                <th class="px-6 py-3 font-medium">Created</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            @forelse($recentCampaigns as $campaign)
-                                <tr class="hover:bg-gray-50 transition-colors">
-                                    <td class="px-6 py-4 font-medium text-gray-900">{{ $campaign->name }}</td>
-                                    <td class="px-6 py-4">
-                                        @php
-                                            $badgeClasses = match($campaign->status) {
-                                                'DRAFT' => 'bg-gray-100 text-gray-700',
-                                                'QUEUED' => 'bg-yellow-100 text-yellow-700',
-                                                'RUNNING' => 'bg-blue-100 text-blue-700',
-                                                'PAUSED' => 'bg-orange-100 text-orange-700',
-                                                'COMPLETED' => 'bg-green-100 text-green-700',
-                                                'FAILED' => 'bg-red-100 text-red-700',
-                                                'CANCELLED' => 'bg-gray-100 text-gray-700',
-                                                default => 'bg-gray-100 text-gray-700',
-                                            };
-                                        @endphp
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $badgeClasses }}">
-                                            {{ $campaign->status }}
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4 text-right text-gray-600 font-data">{{ number_format($campaign->sent_count ?? 0) }}</td>
-                                    <td class="px-6 py-4 text-right text-gray-600 font-data">{{ number_format($campaign->delivered_count ?? 0) }}</td>
-                                    <td class="px-6 py-4 text-gray-500">{{ $campaign->created_at->format('M d, Y') }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="5" class="px-6 py-12 text-center text-gray-400">
-                                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/>
-                                        </svg>
-                                        <p class="font-medium">No campaigns yet</p>
-                                        <p class="text-sm mt-1">Create your first campaign to get started.</p>
-                                    </td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
+                </section>
             </div>
 
         </div>
@@ -154,122 +246,95 @@
 
     @push('scripts')
     <script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
+        // Chart colours come from the active theme's CSS variables, so the charts follow
+        // light/dark and are redrawn when the theme is toggled.
+        function bqToken(name, alpha) {
+            const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+            return alpha === undefined ? `rgb(${raw})` : `rgb(${raw} / ${alpha})`;
+        }
+
         function bqDrawDashboardCharts() {
             if (typeof Chart === 'undefined') return;
 
+            const tooltip = {
+                backgroundColor: bqToken('--gray-900'),
+                titleColor: bqToken('--gray-50'),
+                bodyColor: bqToken('--gray-50'),
+                padding: 12,
+                cornerRadius: 10,
+            };
+
             const lineEl = document.getElementById('messagesPerDayChart');
             if (lineEl) {
-            Chart.getChart(lineEl)?.destroy();
-            const messagesData = JSON.parse(lineEl.dataset.series || '[]');
-            const messagesLabels = messagesData.map(item => {
-                const date = new Date(item.date);
-                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            });
-            const messagesCounts = messagesData.map(item => item.count);
+                Chart.getChart(lineEl)?.destroy();
+                const messagesData = JSON.parse(lineEl.dataset.series || '[]');
+                const labels = messagesData.map(item => new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
 
-            new Chart(lineEl, {
-                type: 'line',
-                data: {
-                    labels: messagesLabels,
-                    datasets: [{
-                        label: 'Messages Sent',
-                        data: messagesCounts,
-                        borderColor: '#25D366',
-                        backgroundColor: 'rgba(37, 211, 102, 0.08)',
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 2,
-                        pointHoverRadius: 5,
-                        pointBackgroundColor: '#25D366',
-                        borderWidth: 2,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: '#1f2937',
-                            titleColor: '#f9fafb',
-                            bodyColor: '#f9fafb',
-                            padding: 12,
-                            cornerRadius: 8,
-                        }
+                new Chart(lineEl, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Messages sent',
+                            data: messagesData.map(item => item.count),
+                            borderColor: bqToken('--brand'),
+                            backgroundColor: bqToken('--brand', 0.14),
+                            pointBackgroundColor: bqToken('--brand'),
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            borderWidth: 2.5,
+                        }],
                     },
-                    scales: {
-                        x: {
-                            grid: { display: false },
-                            ticks: {
-                                color: '#9ca3af',
-                                maxTicksLimit: 10,
-                                font: { size: 11 },
-                            }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, tooltip },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { color: bqToken('--gray-500'), maxTicksLimit: 10, font: { size: 11 } } },
+                            y: { beginAtZero: true, grid: { color: bqToken('--gray-200') }, ticks: { color: bqToken('--gray-500'), font: { size: 11 }, precision: 0 } },
                         },
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: '#f3f4f6' },
-                            ticks: {
-                                color: '#9ca3af',
-                                font: { size: 11 },
-                                precision: 0,
-                            }
-                        }
-                    }
-                }
-            });
+                    },
+                });
             }
 
             const statusEl = document.getElementById('statusBreakdownChart');
             if (statusEl) {
-            Chart.getChart(statusEl)?.destroy();
-            const statusData = JSON.parse(statusEl.dataset.series || '[]');
-            const statusColorMap = {
-                'SENT': '#3B82F6',
-                'DELIVERED': '#25D366',
-                'READ': '#8B5CF6',
-                'FAILED': '#EF4444',
-            };
-            const statusLabels = statusData.map(item => item.status);
-            const statusCounts = statusData.map(item => item.count);
-            const statusColors = statusData.map(item => statusColorMap[item.status] || '#9ca3af');
+                Chart.getChart(statusEl)?.destroy();
+                const statusData = JSON.parse(statusEl.dataset.series || '[]');
+                const colors = {
+                    SENT: bqToken('--gray-400'),
+                    DELIVERED: bqToken('--voice'),
+                    READ: bqToken('--brand'),
+                    FAILED: bqToken('--danger'),
+                };
 
-            new Chart(statusEl, {
-                type: 'doughnut',
-                data: {
-                    labels: statusLabels,
-                    datasets: [{
-                        data: statusCounts,
-                        backgroundColor: statusColors,
-                        borderWidth: 0,
-                        hoverOffset: 6,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '65%',
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                usePointStyle: true,
-                                pointStyle: 'circle',
-                                padding: 20,
-                                color: '#374151',
-                                font: { size: 12 },
-                            }
+                new Chart(statusEl, {
+                    type: 'doughnut',
+                    data: {
+                        labels: statusData.map(item => item.status),
+                        datasets: [{
+                            data: statusData.map(item => item.count),
+                            backgroundColor: statusData.map(item => colors[item.status] || bqToken('--gray-400')),
+                            borderColor: bqToken('--surface'),
+                            borderWidth: 3,
+                            hoverOffset: 6,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '66%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { usePointStyle: true, pointStyle: 'circle', padding: 18, color: bqToken('--gray-700'), font: { size: 12 } },
+                            },
+                            tooltip,
                         },
-                        tooltip: {
-                            backgroundColor: '#1f2937',
-                            titleColor: '#f9fafb',
-                            bodyColor: '#f9fafb',
-                            padding: 12,
-                            cornerRadius: 8,
-                        }
-                    }
-                }
-            });
+                    },
+                });
             }
         }
 
@@ -281,6 +346,8 @@
         if (! window.__bqDashboardChartsBound) {
             window.__bqDashboardChartsBound = true;
             document.addEventListener('livewire:navigated', bqDrawDashboardCharts);
+            // Redraw with the other theme's colours when the user toggles light/dark.
+            window.addEventListener('bq-theme-changed', bqDrawDashboardCharts);
         }
     </script>
     @endpush
