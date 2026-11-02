@@ -293,10 +293,12 @@
 
                             <div class="border-t border-gray-100 pt-4">
                                 <label class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">{{ __('Models (per tier)') }}</label>
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+                                {{-- Gemini: short curated list. Disabled while OpenRouter is selected so only one provider's field is submitted. --}}
+                                <div x-show="provider === 'gemini'" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div>
                                         <label class="block text-xs font-medium text-gray-700 mb-1">{{ __('Drafting') }}</label>
-                                        <select name="ai_model_draft" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
+                                        <select name="ai_model_draft" :disabled="provider !== 'gemini'" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                             @foreach($aiCuratedModels as $id => $label)
                                                 <option value="{{ $id }}" @selected($aiModels['draft'] === $id)>{{ $label }}</option>
                                             @endforeach
@@ -304,7 +306,7 @@
                                     </div>
                                     <div>
                                         <label class="block text-xs font-medium text-gray-700 mb-1">{{ __('Classification') }}</label>
-                                        <select name="ai_model_classify" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
+                                        <select name="ai_model_classify" :disabled="provider !== 'gemini'" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                             @foreach($aiCuratedModels as $id => $label)
                                                 <option value="{{ $id }}" @selected($aiModels['classify'] === $id)>{{ $label }}</option>
                                             @endforeach
@@ -312,14 +314,22 @@
                                     </div>
                                     <div>
                                         <label class="block text-xs font-medium text-gray-700 mb-1">{{ __('Summarisation') }}</label>
-                                        <select name="ai_model_summarise" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
+                                        <select name="ai_model_summarise" :disabled="provider !== 'gemini'" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
                                             @foreach($aiCuratedModels as $id => $label)
                                                 <option value="{{ $id }}" @selected($aiModels['summarise'] === $id)>{{ $label }}</option>
                                             @endforeach
                                         </select>
                                     </div>
                                 </div>
-                                <p class="mt-1 text-xs text-gray-500">{{ __('Models are provider-specific. Changing provider shows that provider\'s curated list.') }}</p>
+                                <p x-show="provider === 'gemini'" class="mt-1 text-xs text-gray-500">{{ __('Gemini models are a curated list.') }}</p>
+
+                                {{-- OpenRouter: browse the full catalogue; filter by Free / accepts images. --}}
+                                <div x-show="provider === 'openrouter'" x-cloak class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    @include('settings._openrouter-model-picker', ['name' => 'ai_model_draft', 'label' => __('Drafting'), 'value' => $aiModels['draft']])
+                                    @include('settings._openrouter-model-picker', ['name' => 'ai_model_classify', 'label' => __('Classification'), 'value' => $aiModels['classify']])
+                                    @include('settings._openrouter-model-picker', ['name' => 'ai_model_summarise', 'label' => __('Summarisation'), 'value' => $aiModels['summarise']])
+                                </div>
+                                <p x-show="provider === 'openrouter'" x-cloak class="mt-1 text-xs text-gray-500">{{ __('Browse every OpenRouter model. Use the Free and Accepts images filters to narrow the list. Free models can be slower and rate-limited.') }}</p>
                             </div>
 
                             <div class="border-t border-gray-100 pt-4">

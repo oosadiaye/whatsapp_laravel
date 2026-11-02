@@ -1,5 +1,6 @@
 import './bootstrap';
 import './theme';
+import './model-picker';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 

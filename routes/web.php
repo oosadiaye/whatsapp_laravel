@@ -434,6 +434,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/settings/test-email', [SettingsController::class, 'sendTestEmail'])->name('settings.test-email');
         Route::post('/settings/test-voice', [SettingsController::class, 'testVoiceConnection'])->name('settings.test-voice');
         Route::post('/settings/test-ai', [SettingsController::class, 'testAiConnection'])->name('settings.test-ai');
+        Route::get('/settings/ai/openrouter-models', [SettingsController::class, 'openRouterModels'])->name('settings.openrouter-models');
     });
 
     // ─── User Management ───────────────────────────────────────────────────

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\Setting;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 
 /**
@@ -20,13 +22,37 @@ use Illuminate\Support\Str;
  */
 final class AiConfig
 {
+    /** Used when OpenRouter is selected but no model has been picked. Listed in curatedModels(). */
+    public const OPENROUTER_DEFAULT_MODEL = 'google/gemini-2.0-flash-001';
+
+    /**
+     * Read a non-secret AI selection (provider, model ids).
+     *
+     * The Settings form stores these as plain values; they used to be read with
+     * getEncrypted(), which can't decrypt plain text, so the saved choice was ignored
+     * and the env default always won. Values stored encrypted by older code still work.
+     */
+    private static function plainSetting(string $key): ?string
+    {
+        $raw = Setting::get($key);
+        if (! is_string($raw) || $raw === '') {
+            return null;
+        }
+
+        try {
+            return Crypt::decryptString($raw);
+        } catch (DecryptException) {
+            return $raw;
+        }
+    }
+
     /**
      * Get the active AI provider ('gemini' | 'openrouter').
      */
     public static function provider(): string
     {
         try {
-            $fromSettings = Setting::getEncrypted('ai_provider');
+            $fromSettings = self::plainSetting('ai_provider');
             if (filled($fromSettings) && in_array($fromSettings, ['gemini', 'openrouter'], true)) {
                 return $fromSettings;
             }
@@ -74,8 +100,7 @@ final class AiConfig
         }
 
         try {
-            $settingKey = 'ai_model_'.$tier;
-            $fromSettings = Setting::getEncrypted($settingKey);
+            $fromSettings = self::plainSetting('ai_model_'.$tier);
             if (filled($fromSettings)) {
                 return $fromSettings;
             }
@@ -83,7 +108,16 @@ final class AiConfig
             // Fall through.
         }
 
-        return (string) config("ai.models.{$tier}", config('ai.models.draft'));
+        $model = (string) config("ai.models.{$tier}", config('ai.models.draft'));
+
+        // The env defaults are Gemini ids. OpenRouter ids are always vendor/model, so a
+        // bare id means "nothing chosen yet" — use a valid default instead of sending
+        // OpenRouter a model it doesn't have.
+        if (self::provider() === 'openrouter' && ! str_contains($model, '/')) {
+            return self::OPENROUTER_DEFAULT_MODEL;
+        }
+
+        return $model;
     }
 
     /**
@@ -190,12 +224,12 @@ final class AiConfig
     }
 
     /**
-     * Get a curated list of models for the active provider.
-     * This is a static fallback; the Settings page can also live-fetch from OpenRouter.
+     * Get a curated list of models for a provider (default: the active one).
+     * The Settings page browses OpenRouter's full catalogue instead (OpenRouterModelCatalog).
      */
-    public static function curatedModels(): array
+    public static function curatedModels(?string $provider = null): array
     {
-        return match (self::provider()) {
+        return match ($provider ?? self::provider()) {
             'openrouter' => [
                 'anthropic/claude-3.5-sonnet'          => 'Claude 3.5 Sonnet (Anthropic)',
                 'anthropic/claude-3.5-haiku'           => 'Claude 3.5 Haiku (Anthropic)',

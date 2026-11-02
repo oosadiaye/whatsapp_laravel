@@ -11,11 +11,13 @@ use App\Models\Setting;
 use App\Models\WhatsAppInstance;
 use App\Services\AfricasTalkingVoiceService;
 use App\Services\Ai\AiClient;
+use App\Services\Ai\OpenRouterModelCatalog;
 use App\Services\WhatsAppCloudApiService;
 use App\Support\AiConfig;
 use App\Support\GeminiConfig;
 use App\Support\MailConfig;
 use App\Support\VoiceConfig;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -59,10 +61,10 @@ class SettingsController extends Controller
 
         $openRouterKeySet = (string) ($settings['openrouter_api_key'] ?? '') !== '';
         $geminiKeySet = (string) ($settings['gemini_api_key'] ?? '') !== '';
-        $aiProvider = $settings['ai_provider'] ?? config('ai.provider', 'gemini');
+        $aiProvider = AiConfig::provider();
         $aiModels = [];
         foreach (['draft', 'classify', 'summarise'] as $tier) {
-            $aiModels[$tier] = $settings['ai_model_'.$tier] ?? config("ai.models.{$tier}");
+            $aiModels[$tier] = AiConfig::model($tier);
         }
         $aiFeatures = AiConfig::features();
 
@@ -78,7 +80,8 @@ class SettingsController extends Controller
             'geminiKeySet' => $geminiKeySet,
             'aiModels' => $aiModels,
             'aiFeatures' => $aiFeatures,
-            'aiCuratedModels' => AiConfig::curatedModels(),
+            // Gemini select only exists while Gemini is chosen; OpenRouter uses the live catalogue picker.
+            'aiCuratedModels' => AiConfig::curatedModels('gemini'),
             'aiConfigured' => AiConfig::isConfigured(),
             'aiProviderDisplayName' => AiConfig::providerDisplayName(),
             // Compliance-sensitive call recording (pre-fills the toggle + notice).
@@ -362,6 +365,18 @@ class SettingsController extends Controller
 
             return 'WhatsApp saved, but graph.facebook.com could not be reached to verify the credentials.';
         }
+    }
+
+    /**
+     * Browsable OpenRouter model list for the Settings picker. 503 with an empty
+     * list when OpenRouter can't be reached so the UI can fall back to a
+     * free-text model id instead of showing a blank dropdown.
+     */
+    public function openRouterModels(OpenRouterModelCatalog $catalog): JsonResponse
+    {
+        $models = $catalog->all();
+
+        return response()->json(['models' => $models], $models === [] ? 503 : 200);
     }
 
     /**
