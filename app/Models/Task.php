@@ -79,6 +79,30 @@ class Task extends Model
     }
 
     /**
+     * Unfinished cards on live boards that a person is assigned to: what "my
+     * tasks" means. Cards in a completed column, on archived boards or on deleted
+     * boards are not work anyone still has to do.
+     *
+     * @param  list<string>  $completedSlugs
+     */
+    public function scopeOpenAssignedTo(Builder $query, int $userId, array $completedSlugs): Builder
+    {
+        return $query
+            ->whereHas('assignees', fn (Builder $assignees) => $assignees->whereKey($userId))
+            ->whereHas('board', fn (Builder $board) => $board->live())
+            ->whereNotIn('status', $completedSlugs);
+    }
+
+    public static function openAssignedCount(?int $userId): int
+    {
+        if ($userId === null) {
+            return 0;
+        }
+
+        return static::query()->openAssignedTo($userId, TaskStatus::completedSlugs())->count();
+    }
+
+    /**
      * Cards that are past their deadline and not finished.
      *
      * The completed-status list is passed in rather than resolved here because

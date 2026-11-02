@@ -186,6 +186,9 @@
                             <h2 id="need-h" class="font-display text-xl font-bold tracking-tight text-gray-900 mb-3">{{ __('Needs you') }}</h2>
                             @php
                                 $rows = [];
+                                if ($myOpenTasks !== null) {
+                                    $rows[] = ['count' => $myOpenTasks, 'text' => __('Tasks assigned to you'), 'tone' => 'amber', 'href' => route('tasks.mine'), 'action' => __('Open')];
+                                }
                                 if ($canSeeCalls) {
                                     $rows[] = ['count' => $missedCalls, 'text' => __('Missed calls, last 24 h'), 'tone' => 'red', 'href' => route('calls.index'), 'action' => __('Review')];
                                 }

@@ -207,7 +207,21 @@
                 <div>
                     <h3 class="px-3 mb-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">{{ __('Tasks') }}</h3>
                     <div class="space-y-1">
-                        <x-sidebar-link :href="route('tasks.index')" :active="request()->routeIs('tasks.*') || request()->routeIs('boards.*')">
+                        {{-- Cards assigned to ME across every board; the count is open work only. --}}
+                        @php
+                            $myOpenTasks = \App\Models\Task::openAssignedCount(auth()->id());
+                        @endphp
+                        <x-sidebar-link :href="route('tasks.mine')" :active="request()->routeIs('tasks.mine')">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            {{ __('My tasks') }}
+                            @if($myOpenTasks > 0)
+                                <span class="ml-auto rounded-full bg-brand px-2 py-0.5 text-[11px] font-bold text-white" aria-label="{{ $myOpenTasks }} open">{{ $myOpenTasks }}</span>
+                            @endif
+                        </x-sidebar-link>
+
+                        <x-sidebar-link :href="route('tasks.index')" :active="request()->routeIs('tasks.index') || request()->routeIs('boards.*')">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                             </svg>

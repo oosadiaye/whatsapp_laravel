@@ -11,6 +11,7 @@ use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\TaskStatus;
 use App\Models\User;
+use App\Support\TaskAssignmentNotifier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
@@ -40,6 +41,15 @@ class TaskBoard extends Component
     public string $description = '';
 
     public string $newTaskStatus = '';
+
+    /**
+     * People to hand the new card to, chosen on the create form. Ids only; each is
+     * re-checked against active users in createTask() because Livewire state is
+     * client-supplied.
+     *
+     * @var list<int|string>
+     */
+    public array $assigneeIds = [];
 
     public string $search = '';
 
@@ -350,6 +360,8 @@ class TaskBoard extends Component
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'newTaskStatus' => ['required', Rule::in(array_keys($this->statusColumns()))],
+            'assigneeIds' => ['array', 'max:20'],
+            'assigneeIds.*' => ['integer', Rule::exists('users', 'id')->where('is_active', true)],
         ]);
 
         $this->withPositionRetry(function () use (&$task): void {
@@ -378,7 +390,9 @@ class TaskBoard extends Component
             ]);
         });
 
-        $this->reset('title', 'description');
+        $this->assignOnCreate($task);
+
+        $this->reset('title', 'description', 'assigneeIds');
 
         // Filed straight into an over-limit column is the other way a ceiling
         // gets breached without anyone dragging anything.
@@ -672,7 +686,12 @@ class TaskBoard extends Component
         $task = $this->openTaskOrFail();
         $user = $this->findAssignableUserOrFail($userId);
 
-        $task->assignees()->toggle($user->id);
+        $changes = $task->assignees()->toggle($user->id);
+
+        // Only a genuine hand-over mails them; taking someone off a card does not.
+        if (in_array($user->id, $changes['attached'], true)) {
+            app(TaskAssignmentNotifier::class)->notify($task->loadMissing('board'), $user, auth()->user());
+        }
 
         $this->pushBoardChanged($task, TaskBoardChanged::REASON_ASSIGNED);
     }
@@ -848,6 +867,29 @@ class TaskBoard extends Component
         abort_if($task === null, 404);
 
         return $task;
+    }
+
+    /**
+     * Attach the people chosen on the create form and tell each of them.
+     *
+     * Duplicates collapse, so a person listed twice is attached and emailed once.
+     * Validation has already limited the ids to active users.
+     */
+    private function assignOnCreate(Task $task): void
+    {
+        $ids = array_values(array_unique(array_map('intval', $this->assigneeIds)));
+
+        if ($ids === []) {
+            return;
+        }
+
+        $task->assignees()->sync($ids);
+        $task->load('board');
+
+        $notifier = app(TaskAssignmentNotifier::class);
+        foreach (User::query()->whereKey($ids)->get() as $assignee) {
+            $notifier->notify($task, $assignee, auth()->user());
+        }
     }
 
     /**

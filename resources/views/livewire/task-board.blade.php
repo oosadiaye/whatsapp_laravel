@@ -104,6 +104,23 @@
             </div>
 
             @can('tasks.create')
+                @if($assignableUsers->isNotEmpty())
+                    <fieldset class="w-full">
+                        <legend class="mb-1 block text-xs font-medium text-gray-600">Assign to <span class="font-normal text-gray-500">(they are emailed and see it under My tasks)</span></legend>
+                        <div class="flex flex-wrap gap-1.5">
+                            @foreach($assignableUsers as $person)
+                                <label wire:key="new-assignee-{{ $person->id }}" class="cursor-pointer">
+                                    <input type="checkbox" wire:model="assigneeIds" value="{{ $person->id }}" class="peer sr-only">
+                                    <span class="inline-block rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs text-gray-700 transition hover:bg-gray-50 peer-checked:border-brand peer-checked:bg-brand-soft peer-checked:font-medium peer-checked:text-brand-text peer-focus-visible:ring-2 peer-focus-visible:ring-brand">
+                                        {{ $person->name }}
+                                    </span>
+                                </label>
+                            @endforeach
+                        </div>
+                        @error('assigneeIds.*') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                    </fieldset>
+                @endif
+
                 <button type="submit"
                         class="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">
                     Add task

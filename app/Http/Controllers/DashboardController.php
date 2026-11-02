@@ -9,6 +9,7 @@ use App\Models\Campaign;
 use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\MessageLog;
+use App\Models\Task;
 use App\Models\User;
 use App\Services\RoundRobinAssigner;
 use Illuminate\Support\Carbon;
@@ -98,6 +99,8 @@ class DashboardController extends Controller
 
         $failedToday = MessageLog::where('status', 'FAILED')->where('sent_at', '>=', $startOfToday)->count();
 
+        $myOpenTasks = $user?->can('tasks.view') ? Task::openAssignedCount($user->id) : null;
+
         $team = $user?->can('team.view')
             ? User::callStaff()
                 ->where('is_active', true)
@@ -126,6 +129,7 @@ class DashboardController extends Controller
             'missedCalls' => $missedCalls,
             'unassignedChats' => $unassignedChats,
             'failedToday' => $failedToday,
+            'myOpenTasks' => $myOpenTasks,
             'team' => $team,
         ]);
     }

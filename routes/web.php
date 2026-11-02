@@ -18,6 +18,7 @@ use App\Http\Controllers\EmailTemplateController;
 use App\Http\Controllers\EmailTrackingController;
 use App\Http\Controllers\EmailWebhookController;
 use App\Http\Controllers\MailboxController;
+use App\Http\Controllers\MyTasksController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
@@ -388,6 +389,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/boards', [BoardController::class, 'index'])->name('boards.index');
         // Convenience route: the default/only board renders the kanban board.
         Route::get('/tasks', [BoardController::class, 'showDefault'])->name('tasks.index');
+        // Everything assigned to ME, across boards. Static segment, so it cannot be
+        // shadowed by a wildcard.
+        Route::get('/tasks/mine', [MyTasksController::class, 'index'])->name('tasks.mine');
         Route::get('/boards/{board}', [BoardController::class, 'show'])->name('boards.show');
     });
     Route::middleware('permission:tasks.edit')->group(function () {

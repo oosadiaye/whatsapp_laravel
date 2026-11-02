@@ -60,6 +60,14 @@ class SendTaskActivityEmail implements ShouldQueue
 
         $users = $this->recipients->forTask($task, $event->actorId, 'activity');
 
+        // Someone just handed a card gets the dedicated "assigned to you" mail from
+        // the place that attached them. Sending them this generic one as well would
+        // mean two emails for one assignment.
+        if ($event->reason === TaskBoardChanged::REASON_ASSIGNED) {
+            $assigneeIds = $task->assignees->pluck('id');
+            $users = $users->reject(fn (User $user) => $assigneeIds->contains($user->id))->values();
+        }
+
         $activityId = $this->ledger->activityIdFor($event);
 
         foreach ($users as $user) {

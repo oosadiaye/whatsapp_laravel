@@ -251,18 +251,22 @@ class User extends Authenticatable
     /**
      * Whether this user wants email about a given kind of task event.
      *
-     * $kind is 'transition' for a column move and 'activity' for a comment,
-     * assignment or description change. 'all' covers both; 'transitions'
-     * deliberately does not cover activity, which is what makes the level
-     * worth choosing.
+     * $kind is 'transition' for a column move, 'activity' for a comment,
+     * assignment change or description edit, and 'assigned' for "this card was
+     * just given to you". 'all' covers every kind; 'transitions' deliberately
+     * does not cover activity, which is what makes the level worth choosing.
+     *
+     * 'assigned' is the exception that is on at every level except 'off': being
+     * handed work is the one event the assignee cannot act on without being told,
+     * so it must not depend on having opted into "all activity".
      */
     public function wantsTaskNotificationsFor(string $kind): bool
     {
         return match ($this->taskNotificationLevel()) {
             self::TASK_NOTIFICATIONS_OFF => false,
             self::TASK_NOTIFICATIONS_ALL => true,
-            // Default arm: transitions only.
-            default => $kind === 'transition',
+            // Default arm: moves, plus being assigned a card.
+            default => in_array($kind, ['transition', 'assigned'], true),
         };
     }
 }
