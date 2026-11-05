@@ -278,6 +278,27 @@ final class LeadProfileControllerTest extends TestCase
         $this->assertSame(['CEO'], $profile->lead_query['titles']);
     }
 
+    public function test_each_paid_action_has_its_own_rate_limit_bucket(): void
+    {
+        $this->ai(json_encode(['titles' => ['CEO']]));
+        Http::fake(['https://api.apollo.io/*' => Http::response(['total_entries' => 0, 'people' => []])]);
+        LeadConfig::setKey('apollo', 'apollo-test-key-123');
+        $profile = LeadProfile::factory()->active()->withQuery()->create();
+        $this->as();
+
+        // Use up the rebuild bucket...
+        for ($i = 0; $i < 6; $i++) {
+            $this->post(route('lead-profiles.rebuild-query', $profile))->assertRedirect();
+        }
+        $this->post(route('lead-profiles.rebuild-query', $profile))->assertStatus(429);
+
+        // ...which must not lock the admin out of the other actions.
+        $this->post(route('lead-profiles.pull', $profile))->assertRedirect();
+        $this->post(route('lead-profiles.qualify', $profile))->assertRedirect();
+        $this->put(route('lead-profiles.update', $profile), $this->payload(['name' => 'Renamed']))->assertRedirect();
+        $this->post(route('lead-sources.test', 'apollo'))->assertRedirect();
+    }
+
     public function test_the_seventh_rapid_rebuild_is_throttled(): void
     {
         $this->ai(json_encode(['titles' => ['CEO']]));

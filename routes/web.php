@@ -453,18 +453,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/lead-sources/{source}', [LeadSourceSettingsController::class, 'update'])
             ->where('source', '[a-z0-9_]+')->name('lead-sources.update');
         Route::post('/lead-sources/{source}/test', [LeadSourceSettingsController::class, 'test'])
-            ->where('source', '[a-z0-9_]+')->middleware('throttle:6,1')->name('lead-sources.test');
+            ->where('source', '[a-z0-9_]+')->middleware('throttle:6,1,lead-source-test:')->name('lead-sources.test');
 
         // Static segments (/create) before the {leadProfile} wildcards.
         Route::get('/lead-profiles', [LeadProfileController::class, 'index'])->name('lead-profiles.index');
         Route::get('/lead-profiles/create', [LeadProfileController::class, 'create'])->name('lead-profiles.create');
-        Route::post('/lead-profiles', [LeadProfileController::class, 'store'])->middleware('throttle:6,1')->name('lead-profiles.store');
+        Route::post('/lead-profiles', [LeadProfileController::class, 'store'])->middleware('throttle:6,1,lead-store:')->name('lead-profiles.store');
         Route::get('/lead-profiles/{leadProfile}/edit', [LeadProfileController::class, 'edit'])->name('lead-profiles.edit');
-        Route::put('/lead-profiles/{leadProfile}', [LeadProfileController::class, 'update'])->middleware('throttle:6,1')->name('lead-profiles.update');
-        Route::post('/lead-profiles/{leadProfile}/rebuild-query', [LeadProfileController::class, 'rebuildQuery'])->middleware('throttle:6,1')->name('lead-profiles.rebuild-query');
-        Route::post('/lead-profiles/{leadProfile}/pull', [LeadProfileController::class, 'pullNow'])->middleware('throttle:6,1')->name('lead-profiles.pull');
+        Route::put('/lead-profiles/{leadProfile}', [LeadProfileController::class, 'update'])->middleware('throttle:12,1,lead-update:')->name('lead-profiles.update');
+        Route::post('/lead-profiles/{leadProfile}/rebuild-query', [LeadProfileController::class, 'rebuildQuery'])->middleware('throttle:6,1,lead-rebuild:')->name('lead-profiles.rebuild-query');
+        Route::post('/lead-profiles/{leadProfile}/pull', [LeadProfileController::class, 'pullNow'])->middleware('throttle:6,1,lead-pull:')->name('lead-profiles.pull');
         Route::post('/lead-profiles/{leadProfile}/qualify', [LeadProfileController::class, 'qualifyNow'])
-            ->middleware('throttle:6,1')->name('lead-profiles.qualify');
+            ->middleware('throttle:6,1,lead-qualify:')->name('lead-profiles.qualify');
         Route::post('/lead-profiles/{leadProfile}/reset-pull', [LeadProfileController::class, 'resetPull'])->name('lead-profiles.reset-pull');
         Route::delete('/lead-profiles/{leadProfile}', [LeadProfileController::class, 'destroy'])->name('lead-profiles.destroy');
     });
