@@ -13,7 +13,7 @@
         <h2 class="text-xl font-semibold leading-tight text-gray-800">{{ $lead->name }}</h2>
     </x-slot>
 
-    <div class="py-6 max-w-4xl mx-auto sm:px-4 lg:px-8 space-y-6">
+    <div class="py-6 max-w-4xl mx-auto px-4 lg:px-8 space-y-6">
         <a href="{{ route('leads.index') }}" class="text-sm text-brand-text hover:underline">&larr; All leads</a>
 
         <section class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm" aria-labelledby="lead-details">

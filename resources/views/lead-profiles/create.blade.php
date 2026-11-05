@@ -3,7 +3,7 @@
         <h2 class="text-xl font-semibold leading-tight text-gray-800">New lead profile</h2>
     </x-slot>
 
-    <div class="py-6 max-w-3xl mx-auto sm:px-4 lg:px-8">
+    <div class="py-6 max-w-3xl mx-auto px-4 lg:px-8">
         <form method="POST" action="{{ route('lead-profiles.store') }}" class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             @csrf
             @include('lead-profiles._form', ['profile' => null])

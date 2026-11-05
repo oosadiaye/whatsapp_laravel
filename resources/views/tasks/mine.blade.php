@@ -3,7 +3,7 @@
         <h2 class="text-xl font-semibold leading-tight text-gray-800">My tasks</h2>
     </x-slot>
 
-    <div class="py-6 max-w-4xl mx-auto sm:px-4 lg:px-8 space-y-6">
+    <div class="py-6 max-w-4xl mx-auto px-4 lg:px-8 space-y-6">
         @if($total === 0)
             <div class="rounded-xl border border-dashed border-gray-300 p-10 text-center">
                 <p class="font-display text-lg font-semibold text-gray-900">Nothing assigned to you</p>

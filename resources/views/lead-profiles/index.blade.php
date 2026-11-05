@@ -3,14 +3,14 @@
         <h2 class="text-xl font-semibold leading-tight text-gray-800">Lead profiles</h2>
     </x-slot>
 
-    <div class="py-6 max-w-6xl mx-auto sm:px-4 lg:px-8 space-y-4">
+    <div class="py-6 max-w-6xl mx-auto px-4 lg:px-8 space-y-4">
         @if($killSwitch)
             <div class="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
                 Lead automation is paused. <a href="{{ route('lead-sources.index') }}" class="font-semibold underline">Resume it</a> to pull again.
             </div>
         @endif
 
-        <div class="flex items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
             <p class="text-sm text-gray-500">Each profile describes one kind of lead. Pulled leads wait in <a href="{{ route('leads.index') }}" class="text-brand-text underline">Leads</a>.</p>
             <a href="{{ route('lead-profiles.create') }}" class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">New profile</a>
         </div>
@@ -21,7 +21,9 @@
                 <p class="mt-1 text-sm text-gray-500">Describe the leads you want in plain English and BlastIQ builds the search for you.</p>
             </div>
         @else
-            <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+            {{-- `relative` contains the table's absolutely-positioned sr-only header cell; without it the
+                 span escapes the scroll wrapper and makes the whole page scroll sideways on phones. --}}
+            <div class="relative overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
                 <table class="min-w-full divide-y divide-gray-100 text-sm">
                     <thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                         <tr>

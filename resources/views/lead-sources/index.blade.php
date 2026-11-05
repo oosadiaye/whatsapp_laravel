@@ -3,7 +3,7 @@
         <h2 class="text-xl font-semibold leading-tight text-gray-800">Lead sources</h2>
     </x-slot>
 
-    <div class="py-6 max-w-4xl mx-auto sm:px-4 lg:px-8 space-y-6">
+    <div class="py-6 max-w-4xl mx-auto px-4 lg:px-8 space-y-6">
 
         {{-- Global kill switch: one button halts pulling, qualifying and every automatic send. --}}
         <section class="rounded-xl border p-5 {{ $killSwitch ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white' }} shadow-sm">

@@ -3,7 +3,7 @@
         <h2 class="text-xl font-semibold leading-tight text-gray-800">Leads</h2>
     </x-slot>
 
-    <div class="py-6 max-w-7xl mx-auto sm:px-4 lg:px-8 space-y-4">
+    <div class="py-6 max-w-7xl mx-auto px-4 lg:px-8 space-y-4">
         <form method="GET" action="{{ route('leads.index') }}" class="flex flex-wrap items-end gap-3">
             <div>
                 <label for="f-status" class="mb-1 block text-xs font-medium text-gray-600">Status</label>
