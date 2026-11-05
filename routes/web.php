@@ -17,6 +17,7 @@ use App\Http\Controllers\EmailSuppressionController;
 use App\Http\Controllers\EmailTemplateController;
 use App\Http\Controllers\EmailTrackingController;
 use App\Http\Controllers\EmailWebhookController;
+use App\Http\Controllers\LeadSourceSettingsController;
 use App\Http\Controllers\MailboxController;
 use App\Http\Controllers\MyTasksController;
 use App\Http\Controllers\MessageTemplateController;
@@ -439,6 +440,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/settings/test-voice', [SettingsController::class, 'testVoiceConnection'])->name('settings.test-voice');
         Route::post('/settings/test-ai', [SettingsController::class, 'testAiConnection'])->name('settings.test-ai');
         Route::get('/settings/ai/openrouter-models', [SettingsController::class, 'openRouterModels'])->name('settings.openrouter-models');
+    });
+
+    // ─── AI Lead CRM: platform keys, kill switch ────────────────────────────
+    // `kill-switch` is registered before the {source} wildcard (and the wildcard is
+    // constrained to [a-z0-9_]+, which excludes the hyphen) so it cannot be shadowed.
+    Route::middleware('permission:leads.manage')->group(function () {
+        Route::get('/lead-sources', [LeadSourceSettingsController::class, 'index'])->name('lead-sources.index');
+        Route::post('/lead-sources/kill-switch', [LeadSourceSettingsController::class, 'killSwitch'])->name('lead-sources.kill-switch');
+        Route::put('/lead-sources/{source}', [LeadSourceSettingsController::class, 'update'])
+            ->where('source', '[a-z0-9_]+')->name('lead-sources.update');
+        Route::post('/lead-sources/{source}/test', [LeadSourceSettingsController::class, 'test'])
+            ->where('source', '[a-z0-9_]+')->name('lead-sources.test');
     });
 
     // ─── User Management ───────────────────────────────────────────────────
