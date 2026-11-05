@@ -1,9 +1,10 @@
 # AI Lead CRM
 
 Design: `docs/superpowers/specs/2026-11-05-ai-lead-crm-design.md`.
-Phase 1 plan: `docs/superpowers/plans/2026-11-05-ai-lead-crm-phase-1.md`.
+Plans: `docs/superpowers/plans/2026-11-05-ai-lead-crm-phase-1.md` (pull side) and
+`docs/superpowers/plans/2026-11-06-ai-lead-crm-phase-2.md` (qualification and email reveal).
 
-## Built so far (phase 1)
+## Built so far (phases 1 and 2)
 
 - **Lead Sources** (`/lead-sources`): store a platform API key (encrypted), test the connection,
   and the global **pause all automation** switch.
@@ -16,36 +17,56 @@ Phase 1 plan: `docs/superpowers/plans/2026-11-05-ai-lead-crm-phase-1.md`.
   failed page is retried on the next run and the cursor never skips a page. One unreadable row is
   logged and skipped; it does not stall the profile. Overlapping pulls (the hourly job and "Pull a
   page now") are serialised by a per-profile lock.
-- **Leads** (`/leads`): pulled leads with status and profile filters. Leads are NOT contacts: nothing
-  here is reachable by a WhatsApp or email campaign.
+- **AI qualification** (`leads:qualify`, every 10 minutes): each new lead is judged against the
+  profile's brief. Free code gates run first (no email available, no title and no company, excluded
+  titles) and cost nothing. The AI returns only a score and a reason; the tier (hot / warm /
+  rejected) is computed from the profile's thresholds, so the model can never promote a lead. Lead
+  fields are third-party text: they are sanitised and fenced in the prompt. A failed AI call is
+  retried (up to three attempts), but an AI outage does not use up attempts: after three
+  consecutive failures a run stops and counts nothing against the leads.
+- **Email reveal**: only leads that pass get their email revealed (about one platform credit each),
+  within the profile's monthly budget, hot leads first. A lead is never revealed twice (per-lead
+  lock plus a re-check inside it). A credit is counted only when an email comes back. A revealed
+  address that duplicates another lead, an existing Contact (even a deleted one) or the suppression
+  list is rejected and not stored. If saving the extra details fails after the platform has
+  charged, the email is still kept.
+- **Resilience**: one lead that throws an unexpected error cannot stall the profile; a run is
+  limited to 8 minutes; overlapping runs are serialised per profile.
+- **Leads** (`/leads`): pulled leads with status and profile filters, score and tier. Leads are NOT
+  contacts: nothing here is reachable by a WhatsApp or email campaign. Each lead has a detail page
+  (`/leads/{id}`) with its reason and a timeline of everything that happened to it.
+- **Profile screen**: thresholds, AI judgements per day, reveal budget per month, credits used this
+  month, queue counts, and a "Qualify new leads now" button.
 
 ## Apollo notes
 
 - Search is free but returns only first name, obfuscated last name, title and company, no email.
-- Revealing an email (`people/match`) costs about one credit. Phase 1 never reveals; phase 2 will,
-  only for leads that pass qualification, and must not call it twice for the same lead.
+- Revealing an email (`people/match`) costs about one credit, only when an email is returned.
 - The key must be allowed to call people search (a master key is the safe choice).
 - Apollo stops at page 500; the connector reports "no more pages" there.
+- Network errors are shown without the request URL (it contains the lead's platform id).
 
 ## Operating it
 
 - Needs the scheduler (`schedule:run` every minute) and a queue worker.
-- Needs an AI provider configured in Settings, or a profile saves without a generated search and
-  cannot be switched on until you use "Rebuild search".
-- Permissions: `leads.view` (see leads), `leads.manage` (profiles, keys, kill switch); admin and manager.
+- Needs an AI provider configured in Settings. Without one, profiles save without a generated
+  search and cannot be switched on, and qualification reports "No AI provider is configured".
+- Permissions: `leads.view` (see leads), `leads.manage` (profiles, keys, kill switch, Qualify now);
+  admin and manager.
 - Environment fallback for the key: `APOLLO_API_KEY`. A key saved on Lead Sources wins.
-- After deploying, re-run the roles seeder (the deploy script already does) so the new permissions exist.
+- After deploying, re-run the roles seeder (the deploy script already does) and run the new migration
+  (`2026_11_06_000001_add_qualification_fields`).
+- Costs to watch: AI judgements per day (profile setting) and reveal credits per month (profile
+  setting; 0 disables revealing). The kill switch on Lead Sources stops everything.
 
-## Carry-forward to phase 2
+## Phase 3 carry-forward
 
-- `leads.email` is globally unique and nullable: lowercase and trim on write, and treat a unique
-  violation on reveal as "duplicate lead", not a failed job.
-- `leads.contact_id` points at the soft-deleting `contacts` table: promotion must use the
-  `Contact::*IncludingTrashed` resolvers, and `Lead::contact()` must use `withTrashed()`.
+- Promotion of a qualified lead to a Contact must use the `Contact::*IncludingTrashed` resolvers and
+  restore the row; `Lead::contact()` must use `withTrashed()`.
 - `lead_events.type` / `actor` are `string(32)`; SQLite will not enforce that, MySQL will.
 - `LeadProfile.last_pulled_at` means "last attempted run", not "last page fetched".
 
 ## Not built yet
 
-AI qualification, revealing emails, promoting to Contacts, email outreach, reply handling, the
-autonomy levels, and the Hunter, Lusha, Apify and ZoomInfo connectors.
+Promoting to Contacts, email outreach, reply handling, the autonomy levels, and the Hunter, Lusha,
+Apify and ZoomInfo connectors.
