@@ -17,6 +17,8 @@ use App\Http\Controllers\EmailSuppressionController;
 use App\Http\Controllers\EmailTemplateController;
 use App\Http\Controllers\EmailTrackingController;
 use App\Http\Controllers\EmailWebhookController;
+use App\Http\Controllers\LeadController;
+use App\Http\Controllers\LeadProfileController;
 use App\Http\Controllers\LeadSourceSettingsController;
 use App\Http\Controllers\MailboxController;
 use App\Http\Controllers\MyTasksController;
@@ -452,6 +454,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->where('source', '[a-z0-9_]+')->name('lead-sources.update');
         Route::post('/lead-sources/{source}/test', [LeadSourceSettingsController::class, 'test'])
             ->where('source', '[a-z0-9_]+')->name('lead-sources.test');
+
+        // Static segments (/create) before the {leadProfile} wildcards.
+        Route::get('/lead-profiles', [LeadProfileController::class, 'index'])->name('lead-profiles.index');
+        Route::get('/lead-profiles/create', [LeadProfileController::class, 'create'])->name('lead-profiles.create');
+        Route::post('/lead-profiles', [LeadProfileController::class, 'store'])->name('lead-profiles.store');
+        Route::get('/lead-profiles/{leadProfile}/edit', [LeadProfileController::class, 'edit'])->name('lead-profiles.edit');
+        Route::put('/lead-profiles/{leadProfile}', [LeadProfileController::class, 'update'])->name('lead-profiles.update');
+        Route::post('/lead-profiles/{leadProfile}/rebuild-query', [LeadProfileController::class, 'rebuildQuery'])->name('lead-profiles.rebuild-query');
+        Route::post('/lead-profiles/{leadProfile}/pull', [LeadProfileController::class, 'pullNow'])->name('lead-profiles.pull');
+        Route::post('/lead-profiles/{leadProfile}/reset-pull', [LeadProfileController::class, 'resetPull'])->name('lead-profiles.reset-pull');
+        Route::delete('/lead-profiles/{leadProfile}', [LeadProfileController::class, 'destroy'])->name('lead-profiles.destroy');
+    });
+
+    Route::middleware('permission:leads.view')->group(function () {
+        Route::get('/leads', [LeadController::class, 'index'])->name('leads.index');
     });
 
     // ─── User Management ───────────────────────────────────────────────────
