@@ -157,7 +157,7 @@ final class ApolloLeadSource implements LeadSource
         }
 
         try {
-            $response = $this->http($key)->post(self::BASE.$path.'?'.$this->queryString($params));
+            $response = $this->http($key)->post($this->baseUrl().$path.'?'.$this->queryString($params));
         } catch (ConnectionException $e) {
             throw new LeadSourceException('Could not reach Apollo (network error); will retry on the next run.', true, $e);
         }
@@ -165,6 +165,11 @@ final class ApolloLeadSource implements LeadSource
         $this->guard($response);
 
         return $response;
+    }
+
+    private function baseUrl(): string
+    {
+        return rtrim((string) config('leads.apollo_base_url', self::BASE), '/');
     }
 
     private function http(string $key): PendingRequest

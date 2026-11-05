@@ -12,6 +12,9 @@ return [
         'apollo' => \App\Services\Leads\Apollo\ApolloLeadSource::class,
     ],
 
+    // Apollo API base URL. Override to point at Apollo's sandbox or a local mock for end-to-end tests.
+    'apollo_base_url' => env('APOLLO_BASE_URL', 'https://api.apollo.io/api/v1'),
+
     // People requested per search page. Search is free on Apollo; this only sets batch size.
     'page_size' => (int) env('LEADS_PAGE_SIZE', 25),
 

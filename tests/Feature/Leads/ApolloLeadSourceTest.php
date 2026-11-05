@@ -105,6 +105,18 @@ final class ApolloLeadSourceTest extends TestCase
         });
     }
 
+    public function test_the_base_url_can_be_pointed_at_a_sandbox_or_mock(): void
+    {
+        config(['leads.apollo_base_url' => 'http://127.0.0.1:9101/api/v1/']);
+        Http::fake(['http://127.0.0.1:9101/*' => Http::response(['total_entries' => 0, 'people' => []])]);
+
+        $this->source()->search(new LeadQuery(titles: ['CEO']), 1, 25);
+        $this->source()->reveal(new LeadData(source: 'apollo', sourceId: 'p1', name: 'Ada'));
+
+        Http::assertSent(fn (Request $r): bool => str_starts_with($r->url(), 'http://127.0.0.1:9101/api/v1/mixed_people/api_search?'));
+        Http::assertSent(fn (Request $r): bool => str_starts_with($r->url(), 'http://127.0.0.1:9101/api/v1/people/match?'));
+    }
+
     public function test_has_more_is_false_on_the_last_page(): void
     {
         Http::fake([self::SEARCH => Http::response(['total_entries' => 60, 'people' => [$this->person()]])]);
