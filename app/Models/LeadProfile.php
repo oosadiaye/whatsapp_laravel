@@ -23,6 +23,7 @@ class LeadProfile extends Model
     protected $fillable = [
         'name', 'is_active', 'brief', 'hard_filters', 'sources', 'lead_query',
         'daily_pull_cap', 'pull_state', 'last_pulled_at', 'last_pull_error', 'created_by',
+        'hot_threshold', 'warm_threshold', 'daily_qualify_cap', 'monthly_reveal_budget', 'last_qualify_error',
     ];
 
     protected function casts(): array
@@ -35,6 +36,10 @@ class LeadProfile extends Model
             'daily_pull_cap' => 'integer',
             'pull_state' => 'array',
             'last_pulled_at' => 'datetime',
+            'hot_threshold' => 'integer',
+            'warm_threshold' => 'integer',
+            'daily_qualify_cap' => 'integer',
+            'monthly_reveal_budget' => 'integer',
         ];
     }
 

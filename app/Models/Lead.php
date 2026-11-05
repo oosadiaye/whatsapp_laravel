@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Database\Factories\LeadFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -48,10 +49,17 @@ class Lead extends Model
 
     public const EMAIL_UNAVAILABLE = 'unavailable';
 
+    public const TIER_HOT = 'hot';
+
+    public const TIER_WARM = 'warm';
+
+    public const TIER_REJECTED = 'rejected';
+
     protected $fillable = [
         'lead_profile_id', 'source', 'source_id', 'email', 'email_status', 'name', 'title', 'company',
         'domain', 'country', 'phone', 'linkedin_url', 'raw', 'score', 'tier', 'qualification_reason',
         'status', 'contact_id', 'owner_user_id', 'last_activity_at',
+        'qualify_attempts', 'qualified_at', 'revealed_at',
     ];
 
     protected function casts(): array
@@ -60,7 +68,21 @@ class Lead extends Model
             'raw' => 'array',
             'score' => 'integer',
             'last_activity_at' => 'datetime',
+            'qualify_attempts' => 'integer',
+            'qualified_at' => 'datetime',
+            'revealed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Emails are stored trimmed and lowercased so the unique index behaves the same
+     * on MySQL (case-insensitive) and SQLite (case-sensitive), and a blank becomes NULL.
+     */
+    protected function email(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $value): ?string => $value === null || trim($value) === '' ? null : mb_strtolower(trim($value)),
+        );
     }
 
     public function profile(): BelongsTo
