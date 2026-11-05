@@ -30,7 +30,7 @@ class LeadProfileRequest extends FormRequest
             'hf_countries' => ['nullable', 'string', 'max:500'],
             'hf_titles_include' => ['nullable', 'string', 'max:500'],
             'hf_titles_exclude' => ['nullable', 'string', 'max:500'],
-            'hf_employee_ranges' => ['nullable', 'string', 'max:200', 'regex:/^\s*\d+\s*,\s*\d+\s*(;\s*\d+\s*,\s*\d+\s*)*$/'],
+            'hf_employee_ranges' => ['nullable', 'string', 'max:200', 'regex:/^\s*\d{1,6}\s*,\s*\d{1,6}\s*(;\s*\d{1,6}\s*,\s*\d{1,6}\s*)*$/', $this->rangesAreOrdered(...)],
         ];
     }
 
@@ -51,6 +51,21 @@ class LeadProfileRequest extends FormRequest
             ), fn (string $range): bool => $range !== '')),
             'require_verified_email' => $this->boolean('hf_require_verified_email'),
         ];
+    }
+
+    /**
+     * Each "min,max" pair must have min <= max.
+     */
+    private function rangesAreOrdered(string $attribute, mixed $value, \Closure $fail): void
+    {
+        foreach (explode(';', (string) $value) as $pair) {
+            [$min, $max] = array_pad(array_map('intval', explode(',', $pair)), 2, 0);
+            if ($min > $max) {
+                $fail('Each company size range must have its minimum no larger than its maximum.');
+
+                return;
+            }
+        }
     }
 
     /**

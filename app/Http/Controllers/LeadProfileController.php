@@ -66,7 +66,7 @@ class LeadProfileController extends Controller
     {
         $hardFilters = $request->hardFilters();
         $searchInputsChanged = $leadProfile->brief !== $request->input('brief')
-            || ($leadProfile->hard_filters ?? []) != $hardFilters;
+            || $this->normaliseFilters($leadProfile->hard_filters ?? []) !== $this->normaliseFilters($hardFilters);
 
         $leadProfile->fill([
             'name' => $request->input('name'),
@@ -79,6 +79,13 @@ class LeadProfileController extends Controller
         $failure = ($searchInputsChanged || ! $leadProfile->hasQuery())
             ? $this->rebuild($leadProfile, $builder)
             : null;
+
+        if ($failure !== null && $searchInputsChanged) {
+            // The old search no longer matches the brief/filters: never keep pulling with it.
+            $leadProfile->update(['lead_query' => null, 'pull_state' => null, 'is_active' => false]);
+
+            return back()->with('warning', 'Saved, but the profile was switched off because its search could not be regenerated: '.$failure);
+        }
 
         $leadProfile->refresh();
         $wantsActive = $request->boolean('is_active');
@@ -135,6 +142,25 @@ class LeadProfileController extends Controller
         $leadProfile->delete();
 
         return redirect()->route('lead-profiles.index')->with('success', 'Lead profile deleted. Leads it already pulled were kept.');
+    }
+
+    /**
+     * Canonical string form of the hard filters: keys and list items sorted, so only a
+     * real change (not a reordering) counts as one.
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    private function normaliseFilters(array $filters): string
+    {
+        foreach ($filters as $key => $value) {
+            if (is_array($value)) {
+                $filters[$key] = array_values($value);
+                sort($filters[$key], SORT_STRING | SORT_FLAG_CASE);
+            }
+        }
+        ksort($filters);
+
+        return (string) json_encode($filters);
     }
 
     /**

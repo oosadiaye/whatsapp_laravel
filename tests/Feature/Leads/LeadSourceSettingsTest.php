@@ -109,4 +109,13 @@ final class LeadSourceSettingsTest extends TestCase
         $this->post(route('lead-sources.kill-switch'), ['on' => 0])->assertRedirect();
         $this->assertFalse(LeadConfig::killSwitchOn());
     }
+
+    public function test_a_rejected_api_key_is_never_flashed_back_into_the_session(): void
+    {
+        $this->as('manager')->put(route('lead-sources.update', 'apollo'), ['api_key' => 'x'])
+            ->assertSessionHasErrors('api_key');
+
+        $this->assertNull(session()->getOldInput('api_key'));
+        $this->assertArrayNotHasKey('api_key', (array) session()->get('_old_input', []));
+    }
 }

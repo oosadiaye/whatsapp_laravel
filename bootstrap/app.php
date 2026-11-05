@@ -65,5 +65,6 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Never flash a typed API key back into the session on a validation failure.
+        $exceptions->dontFlash(['api_key']);
     })->create();

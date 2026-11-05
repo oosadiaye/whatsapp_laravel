@@ -229,6 +229,125 @@ final class LeadProfileControllerTest extends TestCase
         $this->assertNotNull($lead->fresh());
     }
 
+    public function test_a_failed_rebuild_after_a_brief_change_switches_the_profile_off_and_drops_the_stale_search(): void
+    {
+        $this->ai(null);
+        $profile = LeadProfile::factory()->active()->withQuery()->create([
+            'hard_filters' => ['countries' => ['Nigeria']],
+            'pull_state' => ['apollo' => ['next_page' => 3, 'exhausted' => false]],
+        ]);
+
+        $this->as()->put(route('lead-profiles.update', $profile), $this->payload([
+            'brief' => 'A completely different brief about CTOs at banks.',
+            'is_active' => '1',
+        ]))->assertSessionHas('warning', fn (string $m) => str_contains($m, 'switched off'));
+
+        $profile->refresh();
+        $this->assertFalse($profile->is_active);
+        $this->assertNull($profile->lead_query);
+        $this->assertNull($profile->pull_state);
+    }
+
+    public function test_a_failed_rebuild_after_a_hard_filter_change_switches_the_profile_off(): void
+    {
+        $this->ai(null);
+        $profile = LeadProfile::factory()->active()->withQuery()->create([
+            'brief' => 'Founders and CEOs of small fintech companies based in Lagos.',
+            'hard_filters' => ['countries' => ['Nigeria'], 'titles_include' => [], 'titles_exclude' => [], 'employee_ranges' => [], 'require_verified_email' => false],
+        ]);
+
+        $this->as()->put(route('lead-profiles.update', $profile), $this->payload([
+            'hf_countries' => 'Ghana',
+            'is_active' => '1',
+        ]))->assertSessionHas('warning');
+
+        $profile->refresh();
+        $this->assertFalse($profile->is_active);
+        $this->assertNull($profile->lead_query);
+    }
+
+    public function test_the_explicit_rebuild_action_failing_keeps_the_existing_search(): void
+    {
+        $this->ai(null);
+        $profile = LeadProfile::factory()->active()->withQuery(['titles' => ['CEO']])->create();
+
+        $this->as()->post(route('lead-profiles.rebuild-query', $profile))->assertSessionHas('error');
+
+        $profile->refresh();
+        $this->assertTrue($profile->is_active);
+        $this->assertSame(['CEO'], $profile->lead_query['titles']);
+    }
+
+    public function test_the_seventh_rapid_rebuild_is_throttled(): void
+    {
+        $this->ai(json_encode(['titles' => ['CEO']]));
+        $profile = LeadProfile::factory()->create();
+        $this->as();
+
+        for ($i = 0; $i < 6; $i++) {
+            $this->post(route('lead-profiles.rebuild-query', $profile))->assertRedirect();
+        }
+
+        $this->post(route('lead-profiles.rebuild-query', $profile))->assertStatus(429);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function badRanges(): array
+    {
+        return [
+            'min above max' => ['5,1'],
+            'too many digits' => ['99999999999,1'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('badRanges')]
+    public function test_employee_ranges_must_be_ordered_and_bounded(string $range): void
+    {
+        $this->ai('{}');
+
+        $this->as()->post(route('lead-profiles.store'), $this->payload(['hf_employee_ranges' => $range]))
+            ->assertSessionHasErrors('hf_employee_ranges');
+    }
+
+    public function test_valid_employee_ranges_are_still_accepted(): void
+    {
+        $this->ai(json_encode(['titles' => ['CEO']]));
+
+        $this->as()->post(route('lead-profiles.store'), $this->payload(['hf_employee_ranges' => '11, 50; 51,200']))
+            ->assertSessionHasNoErrors();
+    }
+
+    public function test_reordering_hard_filter_items_does_not_call_the_ai(): void
+    {
+        $fake = $this->ai(json_encode(['titles' => ['CTO']]));
+        $profile = LeadProfile::factory()->withQuery(['titles' => ['CEO']])->create([
+            'brief' => 'Founders and CEOs of small fintech companies based in Lagos.',
+            'hard_filters' => ['countries' => ['Nigeria', 'Ghana'], 'titles_include' => [], 'titles_exclude' => [], 'employee_ranges' => [], 'require_verified_email' => false],
+        ]);
+
+        $this->as()->put(route('lead-profiles.update', $profile), $this->payload(['hf_countries' => 'Ghana, Nigeria']))->assertRedirect();
+
+        $this->assertCount(0, $fake->calls);
+        $this->assertSame(['CEO'], $profile->fresh()->lead_query['titles']);
+    }
+
+    public function test_untrusted_text_is_escaped_on_the_leads_and_profile_pages(): void
+    {
+        $script = '<script>alert(1)</script>';
+        $profile = LeadProfile::factory()->withQuery()->create(['last_pull_error' => $script]);
+        Lead::factory()->create(['name' => $script]);
+
+        $this->as()->get(route('leads.index'))
+            ->assertDontSee($script, false)
+            ->assertSee(e($script), false);
+
+        $this->get(route('lead-profiles.edit', $profile))
+            ->assertDontSee($script, false)
+            ->assertSee(e($script), false);
+    }
+
     public function test_the_edit_page_shows_the_generated_search_for_review(): void
     {
         $profile = LeadProfile::factory()->withQuery(['titles' => ['Chief Technology Officer'], 'keywords' => 'logistics'])->create();
