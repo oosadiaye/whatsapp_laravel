@@ -9,7 +9,10 @@ use App\Models\EmailSuppression;
 use App\Models\Lead;
 use App\Models\LeadEvent;
 use App\Models\LeadProfile;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 /**
  * Turns a qualified lead into a contactable one by asking the platform for the
@@ -40,6 +43,8 @@ final class LeadRevealer
 
     private const CREDITS_PER_REVEAL = 1;
 
+    private const COLUMN_LIMIT = 255;
+
     public function __construct(private readonly LeadSourceRegistry $sources) {}
 
     public function creditsUsedThisMonth(LeadProfile $profile): int
@@ -57,6 +62,26 @@ final class LeadRevealer
      * @throws LeadSourceException
      */
     public function reveal(Lead $lead, LeadProfile $profile): string
+    {
+        // One reveal per lead at a time: a stale instance or an overlapping run must not pay twice.
+        $lock = Cache::lock("lead-reveal:{$lead->id}", 120);
+        if (! $lock->get()) {
+            return self::SKIPPED;
+        }
+
+        try {
+            $lead->refresh();
+
+            return $this->revealLocked($lead, $profile);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @throws LeadSourceException
+     */
+    private function revealLocked(Lead $lead, LeadProfile $profile): string
     {
         if ($lead->email_status !== Lead::EMAIL_UNREVEALED || $lead->email !== null) {
             return self::SKIPPED;
@@ -88,16 +113,11 @@ final class LeadRevealer
             return $this->reject($lead, $duplicateReason);
         }
 
+        // Core fields first: the address has been paid for and must be kept whatever else fails.
         try {
             $lead->update([
                 'email' => $email,
                 'email_status' => $revealed->emailStatus,
-                'name' => $revealed->name,
-                'title' => $revealed->title,
-                'company' => $revealed->company,
-                'domain' => $revealed->domain,
-                'country' => $revealed->country,
-                'linkedin_url' => $revealed->linkedinUrl,
                 'revealed_at' => now(),
             ]);
         } catch (UniqueConstraintViolationException) {
@@ -108,7 +128,33 @@ final class LeadRevealer
             return $this->reject($lead, 'Duplicate of another lead.');
         }
 
+        $this->saveEnrichment($lead, $revealed);
+
         return self::REVEALED;
+    }
+
+    /** Best effort: a bad third-party value must never cost the lead its already-paid-for email. */
+    private function saveEnrichment(Lead $lead, LeadData $revealed): void
+    {
+        try {
+            $lead->update([
+                'name' => $this->fit($revealed->name) ?? $lead->name,
+                'title' => $this->fit($revealed->title),
+                'company' => $this->fit($revealed->company),
+                'domain' => $this->fit($revealed->domain),
+                'country' => $this->fit($revealed->country),
+                'linkedin_url' => $this->fit($revealed->linkedinUrl),
+            ]);
+        } catch (QueryException $e) {
+            // The exception text can embed the SQL bindings (the email), so it is reported, never put in a message.
+            report($e);
+            $lead->refresh();
+        }
+    }
+
+    private function fit(?string $value): ?string
+    {
+        return $value === null || $value === '' ? null : Str::limit($value, self::COLUMN_LIMIT, '');
     }
 
     private function duplicateReason(Lead $lead, string $email): ?string

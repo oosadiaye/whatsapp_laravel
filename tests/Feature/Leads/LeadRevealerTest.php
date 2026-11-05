@@ -12,9 +12,13 @@ use App\Models\LeadProfile;
 use App\Services\Leads\LeadRevealer;
 use App\Services\Leads\LeadSourceException;
 use App\Support\LeadConfig;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -240,6 +244,111 @@ final class LeadRevealerTest extends TestCase
         $this->assertSame(Lead::EMAIL_UNREVEALED, $lead->email_status);
         $this->assertNull($lead->revealed_at);
         $this->assertSame(0, $this->revealer()->creditsUsedThisMonth($profile));
+    }
+
+    protected function tearDown(): void
+    {
+        Lead::flushEventListeners();
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    public function test_an_enrichment_write_failure_after_the_charge_still_keeps_the_email_and_the_credit(): void
+    {
+        $this->fakeReveal();
+        $profile = $this->profile();
+        $lead = $this->lead($profile);
+        $originalCompany = $lead->company;
+
+        Lead::updating(function (Lead $model): void {
+            if ($model->isDirty('company')) {
+                throw new QueryException('sqlite', 'update leads', [], new \Exception('Data too long'));
+            }
+        });
+
+        $outcome = $this->revealer()->reveal($lead, $profile);
+
+        $this->assertSame(LeadRevealer::REVEALED, $outcome);
+        $fresh = $lead->fresh();
+        $this->assertSame('ada@acmepay.test', $fresh->email);
+        $this->assertSame('verified', $fresh->email_status);
+        $this->assertNotNull($fresh->revealed_at);
+        $this->assertSame($originalCompany, $fresh->company);
+        $this->assertNotSame('Acme Pay', $fresh->company, 'enrichment was skipped');
+        $this->assertSame(1, $this->revealer()->creditsUsedThisMonth($profile));
+        $this->assertSame(1, LeadEvent::where('type', 'revealed')->count());
+    }
+
+    public function test_enrichment_strings_are_truncated_to_the_column_width(): void
+    {
+        $this->fakeReveal(['organization' => ['name' => str_repeat('C', 400), 'primary_domain' => 'acmepay.test']]);
+        $profile = $this->profile();
+        $lead = $this->lead($profile);
+
+        $this->assertSame(LeadRevealer::REVEALED, $this->revealer()->reveal($lead, $profile));
+
+        $this->assertSame(str_repeat('C', 255), $lead->fresh()->company);
+    }
+
+    public function test_a_stale_lead_instance_that_was_already_revealed_is_skipped_without_a_call(): void
+    {
+        Http::fake();
+        $profile = $this->profile();
+        $stale = $this->lead($profile);
+        Lead::whereKey($stale->id)->update(['email' => 'done@acmepay.test', 'email_status' => 'verified']);
+
+        $this->assertSame(LeadRevealer::SKIPPED, $this->revealer()->reveal($stale, $profile));
+        Http::assertNothingSent();
+    }
+
+    public function test_a_lead_whose_reveal_is_in_flight_elsewhere_is_skipped_without_a_call(): void
+    {
+        Http::fake();
+        $profile = $this->profile();
+        $lead = $this->lead($profile);
+        $lock = Cache::lock("lead-reveal:{$lead->id}", 60);
+        $this->assertTrue($lock->get());
+
+        $outcome = $this->revealer()->reveal($lead, $profile);
+        $lock->release();
+
+        $this->assertSame(LeadRevealer::SKIPPED, $outcome);
+        Http::assertNothingSent();
+    }
+
+    public function test_the_reveal_lock_is_released_after_a_normal_call_and_after_a_platform_error(): void
+    {
+        $this->fakeReveal();
+        $profile = $this->profile();
+        $lead = $this->lead($profile);
+
+        $this->revealer()->reveal($lead, $profile);
+        $this->assertTrue(Cache::lock("lead-reveal:{$lead->id}", 5)->get(), 'released after success');
+        Cache::lock("lead-reveal:{$lead->id}")->forceRelease();
+
+        Http::swap(new HttpFactory);
+        Http::fake([self::MATCH => Http::response('no', 401)]);
+        $other =$this->lead($profile, ['source_id' => 'p2']);
+        try {
+            $this->revealer()->reveal($other, $profile);
+            $this->fail('Expected LeadSourceException');
+        } catch (LeadSourceException) {
+            $this->assertTrue(Cache::lock("lead-reveal:{$other->id}", 5)->get(), 'released after an exception');
+        }
+    }
+
+    public function test_the_monthly_budget_rolls_over_at_midnight_in_the_business_timezone(): void
+    {
+        config(['app.business_timezone' => 'Africa/Lagos']);
+        Carbon::setTestNow(Carbon::parse('2026-12-01 01:30', 'Africa/Lagos'));
+        $profile = $this->profile();
+
+        $november = LeadEvent::record($this->lead($profile, ['source_id' => 'nov']), 'revealed', ['credits' => 1]);
+        $november->forceFill(['created_at' => Carbon::parse('2026-11-30 23:30', 'Africa/Lagos')->utc()])->save();
+        $december = LeadEvent::record($this->lead($profile, ['source_id' => 'dec']), 'revealed', ['credits' => 1]);
+        $december->forceFill(['created_at' => Carbon::parse('2026-12-01 00:15', 'Africa/Lagos')->utc()])->save();
+
+        $this->assertSame(1, $this->revealer()->creditsUsedThisMonth($profile));
     }
 
     public function test_the_request_asks_for_the_lead_by_its_platform_id(): void

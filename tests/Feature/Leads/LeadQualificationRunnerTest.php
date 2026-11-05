@@ -8,13 +8,17 @@ use App\Models\Lead;
 use App\Models\LeadEvent;
 use App\Models\LeadProfile;
 use App\Services\Ai\AiClient;
+use App\Services\Ai\AiResult;
 use App\Services\Leads\LeadQualificationRunner;
 use App\Support\LeadConfig;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Tests\Support\ScriptedAiClient;
 use Tests\TestCase;
 
@@ -41,6 +45,14 @@ final class LeadQualificationRunnerTest extends TestCase
                 'organization' => ['name' => 'Acme', 'primary_domain' => 'acme.test'],
             ]]);
         }]);
+    }
+
+    protected function tearDown(): void
+    {
+        Lead::flushEventListeners();
+        LeadEvent::flushEventListeners();
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     private function ai(array $replies): ScriptedAiClient
@@ -148,23 +160,278 @@ final class LeadQualificationRunnerTest extends TestCase
 
     public function test_an_ai_failure_counts_an_attempt_and_the_lead_is_abandoned_after_three(): void
     {
-        $ai = $this->ai([null, null, null, '{"score": 99, "reason": "late"}']);
+        // Attempts only count in a run where the provider answered at least one lead.
+        $ok = '{"score": 10, "reason": "no"}';
+        $ai = $this->ai([null, $ok, null, $ok, null, $ok, $ok]);
         $profile = $this->profile();
         $lead = $this->newLead($profile, 'flaky');
+        $this->newLead($profile, 'g1');
 
         $first = $this->runFor($profile);
         $this->assertSame(1, $first['failed']);
         $this->assertSame(1, $lead->fresh()->qualify_attempts);
         $this->assertSame(Lead::STATUS_NEW, $lead->fresh()->status);
 
+        $this->newLead($profile, 'g2');
         $this->runFor($profile);
+        $this->newLead($profile, 'g3');
         $this->runFor($profile);
         $this->assertSame(3, $lead->fresh()->qualify_attempts);
+        $this->assertSame('qualify_failed', $lead->events()->latest('id')->first()->type);
+
+        $this->newLead($profile, 'g4');
+        $this->runFor($profile);
+        $this->assertCount(7, $ai->calls, 'flaky gets no fourth attempt, only g4 is judged');
+        $this->assertSame(3, $lead->fresh()->qualify_attempts);
+        $this->assertSame(Lead::STATUS_NEW, $lead->fresh()->status);
+    }
+
+    public function test_an_ai_outage_stops_after_three_consecutive_failures_and_burns_no_attempts(): void
+    {
+        $ai = $this->ai([]);
+        $profile = $this->profile();
+        foreach (['a', 'b', 'c', 'd', 'e'] as $id) {
+            $this->newLead($profile, $id);
+        }
+
+        $result = $this->runFor($profile);
+
+        $this->assertCount(3, $ai->calls);
+        $this->assertSame(0, (int) Lead::sum('qualify_attempts'));
+        $this->assertSame(0, LeadEvent::where('type', 'qualify_failed')->count());
+        $this->assertStringContainsString('not answering', $result['errors'][0]);
+        $this->assertStringContainsString('not answering', $profile->fresh()->last_qualify_error);
+    }
+
+    public function test_when_the_provider_answered_at_least_once_the_failed_leads_count_an_attempt(): void
+    {
+        $this->ai([null, '{"score": 10, "reason": "no"}']);
+        $profile = $this->profile();
+        $failed = $this->newLead($profile, 'a');
+        $this->newLead($profile, 'b');
 
         $this->runFor($profile);
-        $this->assertCount(3, $ai->calls, 'no fourth attempt');
-        $this->assertSame(Lead::STATUS_NEW, $lead->fresh()->status);
-        $this->assertSame('qualify_failed', $lead->events()->latest('id')->first()->type);
+
+        $this->assertSame(1, $failed->fresh()->qualify_attempts);
+        $this->assertSame(1, $failed->events()->where('type', 'qualify_failed')->count());
+    }
+
+    public function test_a_failed_ai_answer_still_counts_toward_the_daily_cap(): void
+    {
+        $ai = $this->ai([null, '{"score": 10, "reason": "no"}', '{"score": 10, "reason": "no"}']);
+        $profile = $this->profile(['daily_qualify_cap' => 2]);
+        foreach (['a', 'b', 'c'] as $id) {
+            $this->newLead($profile, $id);
+        }
+
+        $this->runFor($profile);
+        $this->assertCount(2, $ai->calls);
+
+        $this->runFor($profile);
+        $this->assertCount(2, $ai->calls, 'the recorded failure used one of the two daily slots');
+    }
+
+    public function test_one_poison_lead_does_not_stop_the_others_and_the_lock_is_released(): void
+    {
+        $this->ai(['{"score": 90, "reason": "p"}', '{"score": 90, "reason": "g"}']);
+        $profile = $this->profile();
+        $poison = $this->newLead($profile, 'poison');
+        $good = $this->newLead($profile, 'good');
+        Lead::updating(function (Lead $model): void {
+            if ($model->source_id === 'poison') {
+                throw new \RuntimeException('secret detail ada@leak.test');
+            }
+        });
+
+        $result = $this->runFor($profile);
+
+        $this->assertSame(Lead::STATUS_QUALIFIED, $good->fresh()->status);
+        $this->assertSame('good@acme.test', $good->fresh()->email);
+        $this->assertSame(Lead::STATUS_NEW, $poison->fresh()->status);
+        $this->assertSame(1, $poison->fresh()->qualify_attempts);
+        $this->assertSame(1, $result['failed']);
+        $this->assertStringContainsString('unexpected error', $result['errors'][0]);
+        $this->assertStringNotContainsString('leak.test', implode(' ', $result['errors']));
+        $this->assertStringContainsString('unexpected error', $profile->fresh()->last_qualify_error);
+        $this->assertTrue(Cache::lock("lead-qualify:{$profile->id}", 5)->get(), 'lock released');
+    }
+
+    public function test_a_lead_whose_reveal_blows_up_moves_to_the_back_and_does_not_block_the_others(): void
+    {
+        $this->ai([]);
+        $profile = $this->profile();
+        $poison = $this->newLead($profile, 'poison', ['status' => Lead::STATUS_QUALIFIED, 'tier' => Lead::TIER_HOT]);
+        $good = $this->newLead($profile, 'good', ['status' => Lead::STATUS_QUALIFIED, 'tier' => Lead::TIER_HOT]);
+        Lead::updating(function (Lead $model): void {
+            if ($model->source_id === 'poison' && $model->isDirty('email')) {
+                throw new \RuntimeException('boom');
+            }
+        });
+        $before = $poison->fresh()->updated_at;
+        $this->travel(5)->minutes();
+
+        $result = $this->runFor($profile);
+
+        $this->assertSame(1, $result['revealed']);
+        $this->assertSame('good@acme.test', $good->fresh()->email);
+        $this->assertNull($poison->fresh()->email);
+        $this->assertTrue($poison->fresh()->updated_at->greaterThan($before));
+        $this->assertStringContainsString('unexpected error', $result['errors'][0]);
+    }
+
+    public function test_hot_leads_get_scarce_credits_before_warm_ones(): void
+    {
+        $this->ai([]);
+        $profile = $this->profile(['monthly_reveal_budget' => 1]);
+        $warm = $this->newLead($profile, 'warm', ['status' => Lead::STATUS_QUALIFIED, 'tier' => Lead::TIER_WARM]);
+        $hot = $this->newLead($profile, 'hot', ['status' => Lead::STATUS_QUALIFIED, 'tier' => Lead::TIER_HOT]);
+
+        $this->runFor($profile);
+
+        $this->assertSame('hot@acme.test', $hot->fresh()->email);
+        $this->assertNull($warm->fresh()->email);
+    }
+
+    public function test_the_run_stops_when_its_time_budget_is_spent(): void
+    {
+        $ai = new class implements AiClient
+        {
+            public int $calls = 0;
+
+            public function chat(array $messages, array $opts = []): ?AiResult
+            {
+                $this->calls++;
+                Carbon::setTestNow(now()->addMinutes(9));
+
+                return new AiResult('{"score": 90, "reason": "ok"}', 'scripted', 1, 1);
+            }
+        };
+        $this->app->instance(AiClient::class, $ai);
+        $profile = $this->profile();
+        $first = $this->newLead($profile, 'first');
+        $second = $this->newLead($profile, 'second');
+
+        $result = $this->runFor($profile);
+
+        $this->assertSame(1, $ai->calls);
+        $this->assertSame(Lead::STATUS_QUALIFIED, $first->fresh()->status);
+        $this->assertSame(Lead::STATUS_NEW, $second->fresh()->status);
+        $this->assertContains('Run time limit reached; the rest continues next run.', $result['errors']);
+    }
+
+    public function test_leads_waiting_only_for_the_cap_do_not_use_up_the_batch_and_free_rejections_still_happen(): void
+    {
+        $ai = $this->ai(['{"score": 10, "reason": "no"}']);
+        $profile = $this->profile(['daily_qualify_cap' => 1]);
+        foreach (range(1, 25) as $i) {
+            $this->newLead($profile, "n{$i}");
+        }
+        $intern = $this->newLead($profile, 'late-intern', ['title' => 'Intern']);
+
+        $this->runFor($profile);
+
+        $this->assertCount(1, $ai->calls);
+        $this->assertSame(Lead::STATUS_REJECTED, $intern->fresh()->status);
+    }
+
+    public function test_at_most_one_batch_of_twenty_leads_is_processed_per_run(): void
+    {
+        $ai = $this->ai(array_fill(0, 30, '{"score": 10, "reason": "no"}'));
+        $profile = $this->profile(['daily_qualify_cap' => 100]);
+        foreach (range(1, 30) as $i) {
+            $this->newLead($profile, "n{$i}");
+        }
+
+        $this->runFor($profile);
+
+        $this->assertCount(20, $ai->calls);
+    }
+
+    public function test_a_waiting_lead_with_an_unknown_source_is_rejected_instead_of_clogging_the_queue(): void
+    {
+        $this->ai([]);
+        $profile = $this->profile();
+        $lead = $this->newLead($profile, 'x', ['source' => 'nosuch', 'status' => Lead::STATUS_QUALIFIED, 'tier' => Lead::TIER_HOT]);
+
+        $this->runFor($profile);
+
+        $lead->refresh();
+        $this->assertSame(Lead::STATUS_REJECTED, $lead->status);
+        $this->assertSame('Unknown lead source', $lead->qualification_reason);
+        $this->assertSame(1, $lead->events()->where('type', 'rejected')->count());
+    }
+
+    public function test_a_failed_event_write_leaves_the_lead_unqualified(): void
+    {
+        $this->ai(['{"score": 90, "reason": "a"}']);
+        $profile = $this->profile();
+        $lead = $this->newLead($profile, 'a');
+        LeadEvent::creating(function (LeadEvent $event): void {
+            if ($event->type === 'qualified') {
+                throw new \RuntimeException('event store down');
+            }
+        });
+
+        $this->runFor($profile);
+
+        $lead->refresh();
+        $this->assertSame(Lead::STATUS_NEW, $lead->status);
+        $this->assertNull($lead->score);
+        $this->assertNull($lead->email);
+        $this->assertSame(0, LeadEvent::where('type', 'qualified')->count());
+    }
+
+    public function test_the_lock_is_released_after_a_run_and_after_an_exception_that_escapes(): void
+    {
+        $this->ai([]);
+        $profile = $this->profile();
+
+        $this->runFor($profile);
+        $this->assertTrue(Cache::lock("lead-qualify:{$profile->id}", 5)->get(), 'released after a normal run');
+        Cache::lock("lead-qualify:{$profile->id}")->forceRelease();
+
+        Schema::rename('lead_events', 'lead_events_away');
+        try {
+            $this->runFor($profile);
+            $this->fail('Expected the counting query to fail');
+        } catch (QueryException) {
+            // expected
+        } finally {
+            Schema::rename('lead_events_away', 'lead_events');
+        }
+        $this->assertTrue(Cache::lock("lead-qualify:{$profile->id}", 5)->get(), 'released after an exception');
+    }
+
+    public function test_the_daily_cap_resets_at_midnight_in_the_business_timezone(): void
+    {
+        config(['app.business_timezone' => 'Africa/Lagos']);
+        Carbon::setTestNow(Carbon::parse('2026-12-01 01:30', 'Africa/Lagos'));
+        $ai = $this->ai(['{"score": 10, "reason": "no"}']);
+        $profile = $this->profile(['daily_qualify_cap' => 1]);
+        $old = $this->newLead($profile, 'old', ['status' => Lead::STATUS_REJECTED]);
+        LeadEvent::record($old, 'rejected', [], 'ai')
+            ->forceFill(['created_at' => Carbon::parse('2026-11-30 23:30', 'Africa/Lagos')->utc()])->save();
+        $this->newLead($profile, 'fresh');
+
+        $this->runFor($profile);
+
+        $this->assertCount(1, $ai->calls, 'yesterday (Lagos) does not count against today');
+    }
+
+    public function test_an_ai_decision_made_today_in_the_business_timezone_uses_the_cap(): void
+    {
+        config(['app.business_timezone' => 'Africa/Lagos']);
+        Carbon::setTestNow(Carbon::parse('2026-12-01 01:30', 'Africa/Lagos'));
+        $ai = $this->ai(['{"score": 10, "reason": "no"}']);
+        $profile = $this->profile(['daily_qualify_cap' => 1]);
+        $old = $this->newLead($profile, 'old', ['status' => Lead::STATUS_REJECTED]);
+        LeadEvent::record($old, 'rejected', [], 'ai')
+            ->forceFill(['created_at' => Carbon::parse('2026-12-01 00:15', 'Africa/Lagos')->utc()])->save();
+        $this->newLead($profile, 'fresh');
+
+        $this->runFor($profile);
+
+        $this->assertCount(0, $ai->calls);
     }
 
     public function test_the_kill_switch_an_inactive_profile_and_a_missing_ai_key_do_nothing(): void

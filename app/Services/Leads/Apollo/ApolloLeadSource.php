@@ -159,7 +159,7 @@ final class ApolloLeadSource implements LeadSource
         try {
             $response = $this->http($key)->post(self::BASE.$path.'?'.$this->queryString($params));
         } catch (ConnectionException $e) {
-            throw new LeadSourceException('Could not reach Apollo: '.$e->getMessage(), true, $e);
+            throw new LeadSourceException('Could not reach Apollo (network error); will retry on the next run.', true, $e);
         }
 
         $this->guard($response);

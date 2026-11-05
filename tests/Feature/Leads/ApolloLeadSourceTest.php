@@ -199,6 +199,19 @@ final class ApolloLeadSourceTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_a_network_error_does_not_leak_the_url_or_lead_id_in_its_message(): void
+    {
+        Http::fake(fn () => throw new \Illuminate\Http\Client\ConnectionException('cURL error 28 for https://api.apollo.io/api/v1/people/match?id=secret-lead-id'));
+
+        try {
+            $this->source()->reveal(new LeadData(source: 'apollo', sourceId: 'secret-lead-id', name: 'Ada', title: 'CEO', company: 'Acme'));
+            $this->fail('Expected LeadSourceException');
+        } catch (LeadSourceException $e) {
+            $this->assertSame('Could not reach Apollo (network error); will retry on the next run.', $e->getMessage());
+            $this->assertTrue($e->retryable);
+        }
+    }
+
     public function test_test_connection_succeeds_on_200_and_throws_on_401(): void
     {
         Http::fake([self::SEARCH => Http::sequence()

@@ -116,13 +116,71 @@ final class LeadQualifier
      */
     private function decode(string $text): ?array
     {
-        if (preg_match('/\{.*\}/s', $text, $match) !== 1) {
+        $text = trim($text);
+
+        $data = json_decode($text, true);
+        if (is_array($data)) {
+            return $data;
+        }
+
+        $fenced = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', $text);
+        $data = json_decode(trim((string) $fenced), true);
+        if (is_array($data)) {
+            return $data;
+        }
+
+        $object = $this->firstBalancedObject($text);
+        $data = $object === null ? null : json_decode($object, true);
+
+        return is_array($data) ? $data : null;
+    }
+
+    /** The first top-level {...} in the text, scanning braces while respecting JSON strings and escapes. */
+    private function firstBalancedObject(string $text): ?string
+    {
+        $start = strpos($text, '{');
+        if ($start === false) {
             return null;
         }
 
-        $data = json_decode($match[0], true);
+        $depth = 0;
+        $inString = false;
+        $escaped = false;
+        $length = strlen($text);
 
-        return is_array($data) ? $data : null;
+        for ($i = $start; $i < $length; $i++) {
+            $char = $text[$i];
+
+            if ($inString) {
+                if ($escaped) {
+                    $escaped = false;
+                } elseif ($char === '\\') {
+                    $escaped = true;
+                } elseif ($char === '"') {
+                    $inString = false;
+                }
+
+                continue;
+            }
+
+            if ($char === '"') {
+                $inString = true;
+            } elseif ($char === '{') {
+                $depth++;
+            } elseif ($char === '}' && --$depth === 0) {
+                return substr($text, $start, $i - $start + 1);
+            }
+        }
+
+        return null;
+    }
+
+    /** Third-party text goes into the prompt as one short line with no markup that could close the fence. */
+    private function clean(?string $value): string
+    {
+        $cleaned = trim((string) preg_replace('/[<>[:cntrl:]\s]+/u', ' ', (string) $value));
+
+        return mb_substr($cleaned, 0, 200);
     }
 
     private function prompt(Lead $lead, LeadProfile $profile): string
@@ -134,9 +192,9 @@ final class LeadQualifier
         ]);
         $constraintText = $constraints === [] ? 'None' : implode("\n", $constraints);
 
-        $name = $lead->name;
-        $title = $lead->title ?? 'unknown';
-        $company = $lead->company ?? 'unknown';
+        $name = $this->clean($lead->name);
+        $title = $this->clean($lead->title) ?: 'unknown';
+        $company = $this->clean($lead->company) ?: 'unknown';
 
         return <<<PROMPT
 You are screening sales leads for a B2B team. Score how well ONE lead matches what the team is looking for.
