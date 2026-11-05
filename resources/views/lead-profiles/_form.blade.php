@@ -72,6 +72,37 @@
         </label>
     </fieldset>
 
+    <fieldset class="rounded-xl border border-gray-200 p-4">
+        <legend class="px-1 text-xs font-bold uppercase tracking-wide text-gray-500">Qualification and credits</legend>
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+                <label for="lp-hot" class="mb-1 block text-xs font-medium text-gray-600">Hot at score (1 to 100)</label>
+                <input id="lp-hot" type="number" name="hot_threshold" min="1" max="100" value="{{ old('hot_threshold', $profile?->hot_threshold ?? 75) }}"
+                       class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-brand focus:ring-brand">
+                @error('hot_threshold') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label for="lp-warm" class="mb-1 block text-xs font-medium text-gray-600">Warm at score (not above hot)</label>
+                <input id="lp-warm" type="number" name="warm_threshold" min="0" max="100" value="{{ old('warm_threshold', $profile?->warm_threshold ?? 50) }}"
+                       class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-brand focus:ring-brand">
+                @error('warm_threshold') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label for="lp-qcap" class="mb-1 block text-xs font-medium text-gray-600">AI judgements per day</label>
+                <input id="lp-qcap" type="number" name="daily_qualify_cap" min="1" max="1000" value="{{ old('daily_qualify_cap', $profile?->daily_qualify_cap ?? 100) }}"
+                       class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-brand focus:ring-brand">
+                @error('daily_qualify_cap') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label for="lp-budget" class="mb-1 block text-xs font-medium text-gray-600">Email reveals per month (credits, 0 = never)</label>
+                <input id="lp-budget" type="number" name="monthly_reveal_budget" min="0" max="100000" value="{{ old('monthly_reveal_budget', $profile?->monthly_reveal_budget ?? 200) }}"
+                       class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-brand focus:ring-brand">
+                @error('monthly_reveal_budget') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+        </div>
+        <p class="mt-3 text-xs text-gray-500">Only leads that score at least the warm threshold get their email revealed; each reveal uses about one platform credit.</p>
+    </fieldset>
+
     @if($profile)
         <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-800">
             <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $profile->is_active))>

@@ -57,8 +57,30 @@
                 </form>
             </div>
 
+            <div class="mt-3">
+                <form method="POST" action="{{ route('lead-profiles.qualify', $profile) }}">
+                    @csrf
+                    <button type="submit" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Qualify new leads now</button>
+                </form>
+            </div>
+
             @if($profile->last_pull_error)
                 <p class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ $profile->last_pull_error }}</p>
+            @endif
+        </section>
+
+        <section class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm" aria-labelledby="pipeline">
+            <h3 id="pipeline" class="font-display text-lg font-bold text-gray-900">Pipeline and credits</h3>
+            <dl class="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[12rem_1fr]">
+                <dt class="font-medium text-gray-600">Reveal credits this month</dt>
+                <dd class="text-gray-900">{{ $creditsUsed }} of {{ $profile->monthly_reveal_budget }}</dd>
+                @foreach(['new' => 'Waiting to be judged', 'qualified' => 'Qualified', 'rejected' => 'Rejected'] as $status => $label)
+                    <dt class="font-medium text-gray-600">{{ $label }}</dt>
+                    <dd class="text-gray-900 tabular-nums">{{ $pipeline[$status] ?? 0 }}</dd>
+                @endforeach
+            </dl>
+            @if($profile->last_qualify_error)
+                <p class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ $profile->last_qualify_error }}</p>
             @endif
         </section>
 

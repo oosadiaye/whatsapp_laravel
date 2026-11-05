@@ -34,4 +34,12 @@ class LeadController extends Controller
             'profiles' => LeadProfile::query()->orderBy('name')->get(['id', 'name']),
         ]);
     }
+
+    public function show(Lead $lead): View
+    {
+        return view('leads.show', [
+            'lead' => $lead->load('profile:id,name'),
+            'events' => $lead->events()->orderByDesc('id')->limit(100)->get(),
+        ]);
+    }
 }

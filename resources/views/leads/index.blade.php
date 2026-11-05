@@ -46,13 +46,15 @@
                             <th class="px-4 py-3">Source</th>
                             <th class="px-4 py-3">Profile</th>
                             <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3">Score</th>
+                            <th class="px-4 py-3">Tier</th>
                             <th class="px-4 py-3">Pulled</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
                         @foreach($leads as $lead)
                             <tr>
-                                <td class="px-4 py-3 font-medium text-gray-900">{{ $lead->name }}</td>
+                                <td class="px-4 py-3 font-medium text-gray-900"><a href="{{ route('leads.show', $lead) }}" class="hover:underline">{{ $lead->name }}</a></td>
                                 <td class="px-4 py-3 text-gray-600">{{ $lead->title ?? '—' }}</td>
                                 <td class="px-4 py-3 text-gray-600">{{ $lead->company ?? '—' }}</td>
                                 <td class="px-4 py-3">
@@ -65,6 +67,14 @@
                                 <td class="px-4 py-3 text-gray-600">{{ ucfirst($lead->source) }}</td>
                                 <td class="px-4 py-3 text-gray-600">{{ $lead->profile?->name ?? '—' }}</td>
                                 <td class="px-4 py-3"><span class="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700">{{ ucfirst($lead->status) }}</span></td>
+                                <td class="px-4 py-3 tabular-nums text-gray-800" title="{{ $lead->qualification_reason }}">{{ $lead->score ?? '—' }}</td>
+                                <td class="px-4 py-3">
+                                    @if($lead->tier)
+                                        <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold {{ $lead->tier === 'hot' ? 'bg-red-50 text-red-700' : ($lead->tier === 'warm' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600') }}">{{ ucfirst($lead->tier) }}</span>
+                                    @else
+                                        <span class="text-gray-400">—</span>
+                                    @endif
+                                </td>
                                 <td class="px-4 py-3 text-gray-500">{{ $lead->created_at->diffForHumans() }}</td>
                             </tr>
                         @endforeach

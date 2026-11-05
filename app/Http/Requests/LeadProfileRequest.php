@@ -27,6 +27,18 @@ class LeadProfileRequest extends FormRequest
             'sources' => ['required', 'array', 'min:1'],
             'sources.*' => ['string', Rule::in(app(LeadSourceRegistry::class)->keys())],
             'daily_pull_cap' => ['required', 'integer', 'min:1', 'max:500'],
+            'hot_threshold' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'warm_threshold' => [
+                'nullable', 'integer', 'min:0', 'max:100',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $hot = $this->input('hot_threshold');
+                    if ($hot !== null && $hot !== '' && (int) $value > (int) $hot) {
+                        $fail('The warm threshold cannot be higher than the hot threshold.');
+                    }
+                },
+            ],
+            'daily_qualify_cap' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'monthly_reveal_budget' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'hf_countries' => ['nullable', 'string', 'max:500'],
             'hf_titles_include' => ['nullable', 'string', 'max:500'],
             'hf_titles_exclude' => ['nullable', 'string', 'max:500'],
@@ -51,6 +63,24 @@ class LeadProfileRequest extends FormRequest
             ), fn (string $range): bool => $range !== '')),
             'require_verified_email' => $this->boolean('hf_require_verified_email'),
         ];
+    }
+
+    /**
+     * Only the qualification fields the form actually sent, as integers. Omitted
+     * fields are left out so create uses the column defaults and update keeps values.
+     *
+     * @return array<string, int>
+     */
+    public function qualification(): array
+    {
+        $out = [];
+        foreach (['hot_threshold', 'warm_threshold', 'daily_qualify_cap', 'monthly_reveal_budget'] as $field) {
+            if ($this->filled($field) || $this->input($field) === '0' || $this->input($field) === 0) {
+                $out[$field] = (int) $this->input($field);
+            }
+        }
+
+        return $out;
     }
 
     /**

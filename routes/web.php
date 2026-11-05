@@ -463,12 +463,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/lead-profiles/{leadProfile}', [LeadProfileController::class, 'update'])->middleware('throttle:6,1')->name('lead-profiles.update');
         Route::post('/lead-profiles/{leadProfile}/rebuild-query', [LeadProfileController::class, 'rebuildQuery'])->middleware('throttle:6,1')->name('lead-profiles.rebuild-query');
         Route::post('/lead-profiles/{leadProfile}/pull', [LeadProfileController::class, 'pullNow'])->middleware('throttle:6,1')->name('lead-profiles.pull');
+        Route::post('/lead-profiles/{leadProfile}/qualify', [LeadProfileController::class, 'qualifyNow'])
+            ->middleware('throttle:6,1')->name('lead-profiles.qualify');
         Route::post('/lead-profiles/{leadProfile}/reset-pull', [LeadProfileController::class, 'resetPull'])->name('lead-profiles.reset-pull');
         Route::delete('/lead-profiles/{leadProfile}', [LeadProfileController::class, 'destroy'])->name('lead-profiles.destroy');
     });
 
     Route::middleware('permission:leads.view')->group(function () {
         Route::get('/leads', [LeadController::class, 'index'])->name('leads.index');
+        Route::get('/leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
     });
 
     // ─── User Management ───────────────────────────────────────────────────

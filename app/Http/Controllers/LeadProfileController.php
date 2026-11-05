@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\LeadProfileRequest;
+use App\Jobs\QualifyLeadProfileJob;
 use App\Models\LeadProfile;
 use App\Services\Leads\LeadPuller;
+use App\Services\Leads\LeadRevealer;
+use App\Support\AiConfig;
 use App\Services\Leads\LeadQuery;
 use App\Services\Leads\LeadQueryBuilder;
 use App\Services\Leads\LeadQueryException;
@@ -38,6 +41,7 @@ class LeadProfileController extends Controller
             'sources' => array_values($request->input('sources')),
             'daily_pull_cap' => (int) $request->input('daily_pull_cap'),
             'hard_filters' => $request->hardFilters(),
+            ...$request->qualification(),
             'is_active' => false,
             'created_by' => auth()->id(),
         ]);
@@ -59,6 +63,8 @@ class LeadProfileController extends Controller
             'profile' => $leadProfile,
             'sourceKeys' => $registry->keys(),
             'query' => $leadProfile->hasQuery() ? LeadQuery::fromArray($leadProfile->lead_query) : null,
+            'creditsUsed' => app(LeadRevealer::class)->creditsUsedThisMonth($leadProfile),
+            'pipeline' => $leadProfile->leads()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status'),
         ]);
     }
 
@@ -74,6 +80,7 @@ class LeadProfileController extends Controller
             'sources' => array_values($request->input('sources')),
             'daily_pull_cap' => (int) $request->input('daily_pull_cap'),
             'hard_filters' => $hardFilters,
+            ...$request->qualification(),
         ])->save();
 
         $failure = ($searchInputsChanged || ! $leadProfile->hasQuery())
@@ -128,6 +135,25 @@ class LeadProfileController extends Controller
         }
 
         return back()->with('success', "Pulled {$result['created']} new lead(s); {$result['skipped']} already known.");
+    }
+
+    public function qualifyNow(LeadProfile $leadProfile): RedirectResponse
+    {
+        if (LeadConfig::killSwitchOn()) {
+            return back()->with('warning', 'The lead automation kill switch is on; nothing will be qualified.');
+        }
+
+        if (! $leadProfile->is_active || ! $leadProfile->hasQuery()) {
+            return back()->with('warning', 'Switch the profile on (it needs a generated search) before qualifying.');
+        }
+
+        if (! AiConfig::isConfigured()) {
+            return back()->with('warning', 'No AI provider is configured. Add a key in Settings first.');
+        }
+
+        QualifyLeadProfileJob::dispatch($leadProfile->id);
+
+        return back()->with('success', 'Qualification queued. New results appear under Leads within a few minutes.');
     }
 
     public function resetPull(LeadProfile $leadProfile): RedirectResponse
