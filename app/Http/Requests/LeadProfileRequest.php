@@ -27,12 +27,28 @@ class LeadProfileRequest extends FormRequest
             'sources' => ['required', 'array', 'min:1'],
             'sources.*' => ['string', Rule::in(app(LeadSourceRegistry::class)->keys())],
             'daily_pull_cap' => ['required', 'integer', 'min:1', 'max:500'],
-            'hot_threshold' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'hot_threshold' => [
+                'nullable', 'integer', 'min:1', 'max:100',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    // Compare with the warm value sent in this request, else with the stored one.
+                    $warm = $this->input('warm_threshold');
+                    if ($warm === null || $warm === '') {
+                        $warm = $this->route('leadProfile')?->warm_threshold;
+                    }
+                    if ($warm !== null && (int) $value < (int) $warm) {
+                        $fail('The hot threshold cannot be lower than the warm threshold.');
+                    }
+                },
+            ],
             'warm_threshold' => [
                 'nullable', 'integer', 'min:0', 'max:100',
                 function (string $attribute, mixed $value, \Closure $fail): void {
+                    // Compare with the hot value sent in this request, else with the stored one.
                     $hot = $this->input('hot_threshold');
-                    if ($hot !== null && $hot !== '' && (int) $value > (int) $hot) {
+                    if ($hot === null || $hot === '') {
+                        $hot = $this->route('leadProfile')?->hot_threshold;
+                    }
+                    if ($hot !== null && (int) $value > (int) $hot) {
                         $fail('The warm threshold cannot be higher than the hot threshold.');
                     }
                 },

@@ -74,6 +74,40 @@ final class LeadQualificationScreensTest extends TestCase
         $this->assertSame(30, $profile->daily_qualify_cap);
     }
 
+    public function test_a_warm_threshold_above_the_stored_hot_threshold_is_rejected_on_update(): void
+    {
+        $this->app->instance(AiClient::class, new FakeAiClient(json_encode(['titles' => ['CEO']])));
+        $profile = LeadProfile::factory()->withQuery()->create(['hot_threshold' => 70, 'warm_threshold' => 40]);
+
+        $this->as()->put(route('lead-profiles.update', $profile), $this->payload(['warm_threshold' => 85]))
+            ->assertSessionHasErrors('warm_threshold');
+
+        $this->assertSame(40, $profile->fresh()->warm_threshold);
+    }
+
+    public function test_a_hot_threshold_below_the_stored_warm_threshold_is_rejected_on_update(): void
+    {
+        $this->app->instance(AiClient::class, new FakeAiClient(json_encode(['titles' => ['CEO']])));
+        $profile = LeadProfile::factory()->withQuery()->create(['hot_threshold' => 70, 'warm_threshold' => 40]);
+
+        $this->as()->put(route('lead-profiles.update', $profile), $this->payload(['hot_threshold' => 30]))
+            ->assertSessionHasErrors('hot_threshold');
+
+        $this->assertSame(70, $profile->fresh()->hot_threshold);
+    }
+
+    public function test_changing_both_thresholds_together_is_checked_against_each_other_not_the_stored_values(): void
+    {
+        $this->app->instance(AiClient::class, new FakeAiClient(json_encode(['titles' => ['CEO']])));
+        $profile = LeadProfile::factory()->withQuery()->create(['hot_threshold' => 70, 'warm_threshold' => 40]);
+
+        $this->as()->put(route('lead-profiles.update', $profile), $this->payload(['hot_threshold' => 95, 'warm_threshold' => 90]))
+            ->assertSessionHasNoErrors();
+
+        $profile->refresh();
+        $this->assertSame([95, 90], [$profile->hot_threshold, $profile->warm_threshold]);
+    }
+
     public function test_invalid_qualification_values_are_rejected(): void
     {
         $this->app->instance(AiClient::class, new FakeAiClient(json_encode(['titles' => ['CEO']])));
