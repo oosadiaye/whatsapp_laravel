@@ -59,6 +59,10 @@ return [
         'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
     ],
 
+    'apollo' => [
+        'key' => env('APOLLO_API_KEY'),
+    ],
+
     /*
     | ffmpeg — used only to remux browser recordings (Chrome emits webm/opus,
     | which Gemini doesn't accept) into ogg before analysis. Entirely optional:
