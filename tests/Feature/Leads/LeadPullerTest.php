@@ -6,7 +6,14 @@ namespace Tests\Feature\Leads;
 
 use App\Models\Lead;
 use App\Models\LeadProfile;
+use App\Services\Leads\LeadData;
+use App\Services\Leads\LeadPage;
 use App\Services\Leads\LeadPuller;
+use App\Services\Leads\LeadQuery;
+use App\Services\Leads\LeadSource;
+use App\Services\Leads\LeadSourceException;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use App\Support\LeadConfig;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -164,5 +171,157 @@ final class LeadPullerTest extends TestCase
         app(LeadPuller::class)->pull($profile);
 
         $this->assertNull($profile->fresh()->last_pull_error);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    public function test_a_pull_is_refused_while_another_is_running_for_the_same_profile(): void
+    {
+        Http::fake();
+        $profile = $this->profile();
+        $before = $profile->fresh()->getAttributes();
+        $lock = Cache::lock("lead-pull:{$profile->id}", 120);
+        $this->assertTrue($lock->get());
+
+        try {
+            $result = app(LeadPuller::class)->pull($profile);
+        } finally {
+            $lock->release();
+        }
+
+        $this->assertSame(['A pull for this profile is already running.'], $result['errors']);
+        $this->assertSame(0, $result['created']);
+        Http::assertNothingSent();
+        $this->assertSame($before, $profile->fresh()->getAttributes());
+    }
+
+    public function test_the_lock_is_released_after_a_pull(): void
+    {
+        Http::fake([self::SEARCH => Http::response(['total_entries' => 100, 'people' => $this->people(1)])]);
+        $profile = $this->profile();
+
+        app(LeadPuller::class)->pull($profile);
+
+        $lock = Cache::lock("lead-pull:{$profile->id}", 120);
+        $this->assertTrue($lock->get());
+        $lock->release();
+    }
+
+    public function test_the_day_boundary_follows_the_business_timezone(): void
+    {
+        config(['app.business_timezone' => 'Africa/Lagos']);
+        // 00:30 on 5 Nov in Lagos is 23:30 on 4 Nov UTC.
+        Carbon::setTestNow(Carbon::parse('2026-11-04 23:30:00', 'UTC'));
+        Http::fake([self::SEARCH => Http::response(['total_entries' => 100, 'people' => $this->people(2, 500)])]);
+
+        // 23:30 Lagos time on 4 Nov = 22:30 UTC: yesterday in Lagos, so it must not count.
+        $profile = $this->profile(['daily_pull_cap' => 2]);
+        Lead::factory()->count(2)->create(['lead_profile_id' => $profile->id, 'source' => 'apollo', 'created_at' => Carbon::parse('2026-11-04 22:30:00', 'UTC')]);
+        $this->assertSame(2, app(LeadPuller::class)->pull($profile)['created']);
+
+        // 00:15 Lagos time on 5 Nov = 23:15 UTC: today in Lagos, so it counts.
+        $other = $this->profile(['daily_pull_cap' => 2]);
+        Lead::factory()->count(2)->create(['lead_profile_id' => $other->id, 'source' => 'apollo', 'created_at' => Carbon::parse('2026-11-04 23:15:00', 'UTC')]);
+        Http::fake();
+        $this->assertSame(0, app(LeadPuller::class)->pull($other)['created']);
+        Http::assertNothingSent();
+    }
+
+    public function test_one_below_the_cap_still_pulls(): void
+    {
+        Http::fake([self::SEARCH => Http::response(['total_entries' => 100, 'people' => $this->people(2, 900)])]);
+        $profile = $this->profile(['daily_pull_cap' => 25]);
+        Lead::factory()->count(24)->create(['lead_profile_id' => $profile->id, 'source' => 'apollo']);
+
+        $this->assertSame(2, app(LeadPuller::class)->pull($profile)['created']);
+    }
+
+    public function test_an_empty_page_marks_the_source_exhausted(): void
+    {
+        Http::fake([self::SEARCH => Http::response(['total_entries' => 100, 'people' => []])]);
+        $profile = $this->profile();
+
+        app(LeadPuller::class)->pull($profile);
+
+        $this->assertTrue($profile->fresh()->sourceState('apollo')['exhausted']);
+    }
+
+    public function test_failed_stores_are_reported_but_the_cursor_still_advances(): void
+    {
+        Http::fake([self::SEARCH => Http::response(['total_entries' => 100, 'people' => $this->people(3)])]);
+        Lead::creating(function (Lead $lead): void {
+            if ($lead->source_id === 'p2') {
+                throw new \RuntimeException('boom');
+            }
+        });
+        $profile = $this->profile();
+
+        try {
+            $result = app(LeadPuller::class)->pull($profile);
+        } finally {
+            Lead::flushEventListeners();
+        }
+
+        $this->assertSame(2, $result['created']);
+        $this->assertSame(1, $result['failed']);
+        $this->assertCount(1, $result['errors']);
+        $this->assertStringContainsString('1 lead(s) from Apollo', $result['errors'][0]);
+        $this->assertSame(2, $profile->fresh()->sourceState('apollo')['next_page']);
+    }
+
+    public function test_one_failing_source_does_not_disturb_the_other_sources_state(): void
+    {
+        config(['leads.sources' => [
+            'broken' => BrokenTestSource::class,
+            'apollo' => \App\Services\Leads\Apollo\ApolloLeadSource::class,
+        ]]);
+        Http::fake([self::SEARCH => Http::response(['total_entries' => 100, 'people' => $this->people(2)])]);
+        $profile = $this->profile([
+            'sources' => ['broken', 'apollo'],
+            'pull_state' => ['broken' => ['next_page' => 3, 'exhausted' => false]],
+        ]);
+
+        $result = app(LeadPuller::class)->pull($profile);
+
+        $this->assertSame(2, $result['created']);
+        $this->assertCount(1, $result['errors']);
+        $profile->refresh();
+        $this->assertSame(['next_page' => 3, 'exhausted' => false], $profile->sourceState('broken'));
+        $this->assertSame(['next_page' => 2, 'exhausted' => false], $profile->sourceState('apollo'));
+    }
+}
+
+/** Test double: configured, but every search fails. */
+final class BrokenTestSource implements LeadSource
+{
+    public function key(): string
+    {
+        return 'broken';
+    }
+
+    public function label(): string
+    {
+        return 'Broken';
+    }
+
+    public function isConfigured(): bool
+    {
+        return true;
+    }
+
+    public function testConnection(): void {}
+
+    public function search(LeadQuery $query, int $page, int $perPage): LeadPage
+    {
+        throw new LeadSourceException('Broken source is down.', true);
+    }
+
+    public function reveal(LeadData $lead): LeadData
+    {
+        return $lead;
     }
 }

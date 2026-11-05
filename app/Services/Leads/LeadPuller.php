@@ -7,6 +7,7 @@ namespace App\Services\Leads;
 use App\Models\Lead;
 use App\Models\LeadProfile;
 use App\Support\LeadConfig;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * One pull pass for a profile: for each of its sources, fetch ONE page (if the
@@ -19,22 +20,44 @@ use App\Support\LeadConfig;
  */
 final class LeadPuller
 {
+    private const LOCK_SECONDS = 120;
+
     public function __construct(
         private readonly LeadSourceRegistry $sources,
         private readonly LeadIngestor $ingestor,
     ) {}
 
     /**
-     * @return array{created: int, skipped: int, errors: list<string>}
+     * @return array{created: int, skipped: int, failed: int, errors: list<string>}
      */
     public function pull(LeadProfile $profile): array
     {
-        $result = ['created' => 0, 'skipped' => 0, 'errors' => []];
+        $result = ['created' => 0, 'skipped' => 0, 'failed' => 0, 'errors' => []];
 
         if (LeadConfig::killSwitchOn() || ! $profile->is_active || ! $profile->hasQuery()) {
             return $result;
         }
 
+        $lock = Cache::lock("lead-pull:{$profile->id}", self::LOCK_SECONDS);
+        if (! $lock->get()) {
+            $result['errors'][] = 'A pull for this profile is already running.';
+
+            return $result;
+        }
+
+        try {
+            return $this->run($profile, $result);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @param  array{created: int, skipped: int, failed: int, errors: list<string>}  $result
+     * @return array{created: int, skipped: int, failed: int, errors: list<string>}
+     */
+    private function run(LeadProfile $profile, array $result): array
+    {
         $query = LeadQuery::fromArray($profile->lead_query);
         $state = $profile->pull_state ?? [];
 
@@ -68,7 +91,13 @@ final class LeadPuller
             $ingested = $this->ingestor->ingest($profile, $page->leads);
             $result['created'] += $ingested['created'];
             $result['skipped'] += $ingested['skipped'];
+            $result['failed'] += $ingested['failed'];
 
+            if ($ingested['failed'] > 0) {
+                $result['errors'][] = "{$ingested['failed']} lead(s) from {$source->label()} could not be stored (see the application log).";
+            }
+
+            // The cursor advances even when some rows failed: a bad row must not stall the profile.
             $state[$key] = [
                 'next_page' => $cursor['next_page'] + 1,
                 'exhausted' => ! $page->hasMore || $page->leads === [],
@@ -86,10 +115,12 @@ final class LeadPuller
 
     private function pulledToday(LeadProfile $profile, string $source): int
     {
+        $startOfToday = now(config('app.business_timezone', config('app.timezone')))->startOfDay()->utc();
+
         return Lead::query()
             ->where('lead_profile_id', $profile->id)
             ->where('source', $source)
-            ->where('created_at', '>=', now()->startOfDay())
+            ->where('created_at', '>=', $startOfToday)
             ->count();
     }
 }
