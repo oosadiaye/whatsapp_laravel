@@ -192,6 +192,14 @@ final class AiConfig
     }
 
     /**
+     * Extra max_tokens added to every OpenRouter request to cover a reasoning model's hidden thinking.
+     */
+    public static function openRouterReasoningHeadroom(): int
+    {
+        return max(0, (int) config('ai.openrouter.reasoning_headroom', 1600));
+    }
+
+    /**
      * Get the OpenRouter referer header.
      */
     public static function openRouterReferer(): string

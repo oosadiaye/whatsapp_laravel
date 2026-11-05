@@ -33,6 +33,10 @@ return [
         'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
         'referer'  => env('OPENROUTER_REFERER', 'https://blastiq.app'),
         'title'    => env('OPENROUTER_TITLE', 'BlastIQ'),
+        // Reasoning models spend hidden "thinking" tokens out of max_tokens. Added on top of the
+        // caller's budget so a short answer (a JSON score) is not cut off mid-thought. Only tokens
+        // actually generated are billed, so non-reasoning models cost nothing extra.
+        'reasoning_headroom' => (int) env('AI_OPENROUTER_REASONING_HEADROOM', 1600),
     ],
 
     'gemini' => [

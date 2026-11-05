@@ -27,7 +27,8 @@ final class OpenRouterClient implements AiClient
         }
 
         $model = $opts['model'] ?? AiConfig::model($opts['tier'] ?? 'draft');
-        $maxTokens = $opts['max_tokens'] ?? AiConfig::maxOutputTokens();
+        // Reasoning models count their hidden thinking against max_tokens, so leave room for it.
+        $maxTokens = (int) ($opts['max_tokens'] ?? AiConfig::maxOutputTokens()) + AiConfig::openRouterReasoningHeadroom();
         $temperature = $opts['temperature'] ?? 0.7;
 
         $url = rtrim(AiConfig::openRouterBaseUrl(), '/').'/chat/completions';
@@ -72,6 +73,16 @@ final class OpenRouterClient implements AiClient
 
         if ($text === null) {
             Log::warning('OpenRouter response missing message content', ['choice' => $choice]);
+            return null;
+        }
+
+        if (trim((string) $text) === '') {
+            // Typical for a reasoning model that ran out of tokens while thinking: no answer, only reasoning.
+            Log::warning('OpenRouter answer was empty or truncated (finish_reason='.($choice['finish_reason'] ?? 'unknown').'); consider raising ai.openrouter.reasoning_headroom', [
+                'model' => $model,
+                'max_tokens' => $maxTokens,
+            ]);
+
             return null;
         }
 
