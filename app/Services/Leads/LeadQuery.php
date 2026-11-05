@@ -53,8 +53,8 @@ final readonly class LeadQuery
             personLocations: self::strings($data['person_locations'] ?? []),
             organizationLocations: self::strings($data['organization_locations'] ?? []),
             employeeRanges: self::ranges($data['employee_ranges'] ?? []),
-            keywords: mb_substr(trim((string) ($data['keywords'] ?? '')), 0, 200),
-            requireVerifiedEmail: (bool) ($data['require_verified_email'] ?? false),
+            keywords: self::keywords($data['keywords'] ?? ''),
+            requireVerifiedEmail: self::bool($data['require_verified_email'] ?? false),
         );
     }
 
@@ -86,15 +86,23 @@ final readonly class LeadQuery
         $countries = self::strings($filters['countries'] ?? []);
         $ranges = self::ranges($filters['employee_ranges'] ?? []);
 
+        // Admin items go first so the item cap can never drop them.
+        $excludeTitles = self::strings([...self::strings($filters['titles_exclude'] ?? []), ...$this->excludeTitles]);
+        $excluded = array_map('mb_strtolower', $excludeTitles);
+        $titles = array_filter(
+            [...self::strings($filters['titles_include'] ?? []), ...$this->titles],
+            fn (string $title): bool => ! in_array(mb_strtolower($title), $excluded, true),
+        );
+
         return new self(
-            titles: self::strings([...$this->titles, ...self::strings($filters['titles_include'] ?? [])]),
-            excludeTitles: self::strings([...$this->excludeTitles, ...self::strings($filters['titles_exclude'] ?? [])]),
+            titles: self::strings($titles),
+            excludeTitles: $excludeTitles,
             seniorities: $this->seniorities,
             personLocations: $countries !== [] ? $countries : $this->personLocations,
             organizationLocations: $this->organizationLocations,
             employeeRanges: $ranges !== [] ? $ranges : $this->employeeRanges,
             keywords: $this->keywords,
-            requireVerifiedEmail: $this->requireVerifiedEmail || (bool) ($filters['require_verified_email'] ?? false),
+            requireVerifiedEmail: $this->requireVerifiedEmail || self::bool($filters['require_verified_email'] ?? false),
         );
     }
 
@@ -127,10 +135,31 @@ final readonly class LeadQuery
             if ($item === '') {
                 continue;
             }
-            $out[mb_strtolower($item)] ??= mb_substr($item, 0, self::MAX_LENGTH);
+            $item = mb_substr($item, 0, self::MAX_LENGTH);
+            $out[mb_strtolower($item)] ??= $item;
         }
 
         return array_slice(array_values($out), 0, self::MAX_ITEMS);
+    }
+
+    /** Keywords arrive as a string or a list of strings; anything else is dropped. */
+    private static function keywords(mixed $value): string
+    {
+        if (is_array($value)) {
+            $value = implode(' ', array_filter($value, 'is_string'));
+        }
+
+        return is_string($value) ? mb_substr(trim($value), 0, 200) : '';
+    }
+
+    /** Tolerant boolean: "false" and "0" are false, "true" and "1" are true, junk is false. */
+    private static function bool(mixed $value): bool
+    {
+        if (is_array($value)) {
+            return false;
+        }
+
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
     }
 
     /**
@@ -140,7 +169,13 @@ final readonly class LeadQuery
     {
         return array_values(array_filter(
             self::strings($value),
-            fn (string $range): bool => preg_match('/^\d+,\d+$/', $range) === 1,
+            function (string $range): bool {
+                if (preg_match('/^(\d+),(\d+)$/', $range, $m) !== 1) {
+                    return false;
+                }
+
+                return (int) $m[1] <= (int) $m[2];
+            },
         ));
     }
 }
