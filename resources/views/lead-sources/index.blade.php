@@ -44,7 +44,7 @@
                     <div class="min-w-[16rem] flex-1">
                         <label for="key-{{ $key }}" class="mb-1 block text-xs font-medium text-gray-600">API key</label>
                         <input id="key-{{ $key }}" type="password" name="api_key" autocomplete="off"
-                               placeholder="{{ $source->isConfigured() ? 'Leave blank to keep the saved key' : 'Paste the key' }}"
+                               placeholder="{{ $source->isConfigured() ? 'Paste a new key to replace the saved one' : 'Paste the key' }}"
                                class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-brand focus:ring-brand">
                         @error('api_key') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                     </div>
