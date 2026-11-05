@@ -13,6 +13,7 @@ use App\Support\LeadConfig;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 final class ApolloLeadSourceTest extends TestCase
@@ -113,6 +114,39 @@ final class ApolloLeadSourceTest extends TestCase
         $this->assertFalse($page->hasMore);
     }
 
+    public function test_has_more_is_false_at_apollos_500_page_cap(): void
+    {
+        Http::fake([self::SEARCH => Http::response(['total_entries' => 100000, 'people' => [$this->person()]])]);
+
+        $this->assertFalse($this->source()->search(new LeadQuery(titles: ['CEO']), 500, 25)->hasMore);
+        $this->assertTrue($this->source()->search(new LeadQuery(titles: ['CEO']), 499, 25)->hasMore);
+    }
+
+    public function test_reveal_keeps_existing_details_the_response_omits(): void
+    {
+        Http::fake([self::MATCH => Http::response(['person' => [
+            'email' => 'ada@acmepay.test',
+            'email_status' => 'verified',
+            'organization' => ['name' => 'Acme Pay'],
+        ]])]);
+
+        $lead = new LeadData(
+            source: 'apollo',
+            sourceId: 'p1',
+            name: 'Ada',
+            domain: 'acmepay.test',
+            country: 'Nigeria',
+            linkedinUrl: 'https://linkedin.com/in/adaobi',
+        );
+
+        $revealed = $this->source()->reveal($lead);
+
+        $this->assertSame('ada@acmepay.test', $revealed->email);
+        $this->assertSame('acmepay.test', $revealed->domain);
+        $this->assertSame('Nigeria', $revealed->country);
+        $this->assertSame('https://linkedin.com/in/adaobi', $revealed->linkedinUrl);
+    }
+
     public function test_people_without_an_id_are_skipped(): void
     {
         Http::fake([self::SEARCH => Http::response(['total_entries' => 2, 'people' => [$this->person(['id' => '']), $this->person()]])]);
@@ -134,9 +168,7 @@ final class ApolloLeadSourceTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider failures
-     */
+    #[DataProvider('failures')]
     public function test_http_failures_become_typed_exceptions(int $status, bool $retryable, string $needle): void
     {
         Http::fake([self::SEARCH => Http::response('nope', $status)]);

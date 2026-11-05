@@ -31,6 +31,8 @@ final class ApolloLeadSource implements LeadSource
     /** Apollo caps search results at 500 pages of 100. */
     private const MAX_RESULTS = 50000;
 
+    private const MAX_PAGES = 500;
+
     public function key(): string
     {
         return 'apollo';
@@ -67,7 +69,7 @@ final class ApolloLeadSource implements LeadSource
 
         $total = min((int) $response->json('total_entries', count($leads)), self::MAX_RESULTS);
 
-        return new LeadPage($leads, $total, $people !== [] && $page * $perPage < $total);
+        return new LeadPage($leads, $total, $people !== [] && $page < self::MAX_PAGES && $page * $perPage < $total);
     }
 
     public function reveal(LeadData $lead): LeadData
@@ -95,9 +97,9 @@ final class ApolloLeadSource implements LeadSource
             'company' => $this->text($organization['name'] ?? null) ?? $lead->company,
             'email' => strtolower(trim($email)),
             'emailStatus' => (string) ($person['email_status'] ?? 'unknown'),
-            'domain' => $this->domainOf($organization),
-            'country' => $this->text($person['country'] ?? null),
-            'linkedinUrl' => $this->text($person['linkedin_url'] ?? null),
+            'domain' => $this->domainOf($organization) ?? $lead->domain,
+            'country' => $this->text($person['country'] ?? null) ?? $lead->country,
+            'linkedinUrl' => $this->text($person['linkedin_url'] ?? null) ?? $lead->linkedinUrl,
         ]);
     }
 
