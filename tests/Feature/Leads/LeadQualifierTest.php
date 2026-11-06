@@ -224,6 +224,44 @@ final class LeadQualifierTest extends TestCase
         $this->assertSame($score, $q->qualify($this->lead(), $this->profile())->score);
     }
 
+    public function test_the_prompt_says_what_the_search_already_matched_so_unseen_facts_are_not_penalised(): void
+    {
+        // Found with a real model: told only "do not guess facts you cannot see", it marked Founders and
+        // CEOs low because the company name did not prove "fintech" or "Lagos" - facts the search had
+        // already filtered on. The prompt must state them and tell the model to take them as given.
+        [$q, $ai] = $this->qualifier('{"score": 80, "reason": "ok"}');
+        $profile = $this->profile([
+            'lead_query' => [
+                'titles' => ['Founder', 'CEO'],
+                'seniorities' => ['founder', 'c_suite'],
+                'person_locations' => ['Nigeria'],
+                'organization_locations' => ['Lagos, Nigeria'],
+                'employee_ranges' => ['10,50'],
+                'keywords' => 'fintech',
+                'exclude_titles' => ['Intern'],
+            ],
+        ]);
+
+        $q->qualify($this->lead(), $profile);
+
+        $prompt = $ai->calls[0][0]['content'];
+        foreach (['Founder, CEO', 'founder, c_suite', 'Nigeria', 'Lagos, Nigeria', '10,50', 'fintech'] as $fact) {
+            $this->assertStringContainsString($fact, $prompt);
+        }
+        $this->assertStringContainsStringIgnoringCase('already matched', $prompt);
+        $this->assertStringContainsStringIgnoringCase('do not lower the score', $prompt);
+        $this->assertStringNotContainsString('Intern', $prompt, 'exclusions are enforced by the free gate, not shown to the model');
+    }
+
+    public function test_a_profile_without_a_search_still_produces_a_valid_prompt(): void
+    {
+        [$q, $ai] = $this->qualifier('{"score": 80, "reason": "ok"}');
+
+        $q->qualify($this->lead(), $this->profile(['lead_query' => null, 'hard_filters' => []]));
+
+        $this->assertStringContainsString('<lead>', $ai->calls[0][0]['content']);
+    }
+
     public function test_only_non_secret_fields_reach_the_prompt(): void
     {
         [$q, $ai] = $this->qualifier('{"score": 80, "reason": "ok"}');

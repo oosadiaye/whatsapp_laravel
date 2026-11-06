@@ -46,6 +46,27 @@ Plans: `docs/superpowers/plans/2026-11-05-ai-lead-crm-phase-1.md` (pull side) an
 - Apollo stops at page 500; the connector reports "no more pages" there.
 - Network errors are shown without the request URL (it contains the lead's platform id).
 
+## Choosing an AI model (tested with real OpenRouter models, 2026-11)
+
+- **Qualification needs one AI call per lead**, plus one when a profile's search is built. On a
+  free OpenRouter key the limit is **50 free-model requests per day**, so keep "AI judgements per
+  day" at or below about 40 on the free tier.
+- **Free model that worked best:** `nvidia/nemotron-3-ultra-550b-a55b:free`. It returned valid JSON on
+  every test, resisted a prompt-injection title, and answers in about 5 seconds.
+  `recursive/flint-v1.0:free` was a close second (a good fallback). `google/gemma-4-31b-it:free`
+  was rate-limited upstream when tested, and `nvidia/nemotron-3.5-super-vl:free` once returned
+  malformed JSON (the app handles that by retrying).
+- **Most free models are reasoning models.** Their hidden thinking counts against `max_tokens`, so with a
+  small budget they stop mid-thought and return nothing. `ai.openrouter.reasoning_headroom`
+  (env `AI_OPENROUTER_REASONING_HEADROOM`, default 1600) is added to every OpenRouter request to
+  cover it. Only generated tokens are billed, so non-reasoning models cost no more.
+- **The qualifier tells the model what the search already matched** (titles, seniority, locations,
+  company size, industry) and to take those as true. Without that, a real model marked CEOs and
+  Founders low because a company name could not prove "fintech" or "Lagos".
+- **Privacy:** free-tier models may log or train on prompts. Lead names, job titles and companies
+  are personal data, so use a paid model or a provider with no data retention before running this
+  on real leads, and check OpenRouter's data-policy settings.
+
 ## Operating it
 
 - Needs the scheduler (`schedule:run` every minute) and a queue worker.
