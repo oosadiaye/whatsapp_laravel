@@ -253,6 +253,17 @@ final class LeadQualifierTest extends TestCase
         $this->assertStringNotContainsString('Intern', $prompt, 'exclusions are enforced by the free gate, not shown to the model');
     }
 
+    public function test_a_company_only_lead_is_judged_as_a_company(): void
+    {
+        [$q, $ai] = $this->qualifier('{"score": 80, "reason": "ok"}');
+
+        $q->qualify($this->lead(['title' => null, 'name' => 'PaystackX', 'company' => 'PaystackX']), $this->profile());
+        $q->qualify($this->lead(['source_id' => 'p2']), $this->profile());
+
+        $this->assertStringContainsString('No person is known yet', $ai->calls[0][0]['content']);
+        $this->assertStringNotContainsString('No person is known yet', $ai->calls[1][0]['content']);
+    }
+
     public function test_a_profile_without_a_search_still_produces_a_valid_prompt(): void
     {
         [$q, $ai] = $this->qualifier('{"score": 80, "reason": "ok"}');

@@ -122,8 +122,30 @@ supervisor runs the worker and Reverb (`deploy/`; rerun `deploy/install-supervis
 Replies are only seen if the sending mailbox is **connected and syncing**: `MAIL_CLIENT_ENABLED=true` and the
 mailbox added under Mailbox. If the sync is off, replies are never detected and follow-ups would keep going.
 
+## Lead platforms
+
+Add a platform under Lead Sources (key, "Test connection"), then tick it on a lead profile. Env fallbacks:
+`APOLLO_API_KEY`, `HUNTER_API_KEY`, `LUSHA_API_KEY`.
+
+| Platform | How a lead looks | What search sends | Reveal (spends credits) |
+|---|---|---|---|
+| **Apollo** | a person (no email) | titles, seniority, locations, company size, keywords | `people/match`, about 1 credit |
+| **Lusha** (API v3) | a person preview | job titles, locations, company size | `contacts/enrich`, email only, charged per revealed field |
+| **Hunter** | a **company** (no person yet) | a plain-English query from the keywords and locations | Domain Search: picks the most senior person with a usable email and fills in name, title, email |
+
+Hunter notes: Discover is free but limited to 50 requests a minute, and paging past the first page needs a paid
+Hunter plan. Because the lead is a company until revealed, the AI judges the company against the brief (the prompt
+says so); the revealed person is not judged again. Titles, company size and exclusions cannot be sent to Hunter.
+Lusha notes: seniority and industry are not sent (their values are account-specific); search may report
+`billing.creditsCharged` on your plan, so watch the first runs. The connectors follow the vendors' published
+docs and are tested against recorded-shape fakes, not live accounts.
+
+Not built, on purpose: **ZoomInfo** (its API reference is gated behind a login, so request shapes cannot be
+verified without an account) and **Apify / Outscraper** (scraper platforms: asynchronous runs and a different
+output per actor, which need their own design). Adding a platform is one class plus one line in `config/leads.php`.
+
 ## Not built yet
 
 - A board task for a person when a lead replies "interested" (alerts only for now).
 - Promoting by hand, a pipeline board view, open/click tracking on lead emails.
-- The Hunter, Lusha, Apify and ZoomInfo connectors.
+- ZoomInfo and Apify / Outscraper connectors (see Lead platforms).
