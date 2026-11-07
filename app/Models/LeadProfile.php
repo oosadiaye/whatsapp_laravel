@@ -24,6 +24,7 @@ class LeadProfile extends Model
         'name', 'is_active', 'brief', 'hard_filters', 'sources', 'lead_query',
         'daily_pull_cap', 'pull_state', 'last_pulled_at', 'last_pull_error', 'created_by',
         'hot_threshold', 'warm_threshold', 'daily_qualify_cap', 'monthly_reveal_budget', 'last_qualify_error',
+        'autonomy', 'sender_email_account_id', 'playbook', 'followup_count', 'followup_delay_days', 'daily_send_cap', 'last_outreach_error',
     ];
 
     protected function casts(): array
@@ -40,12 +41,20 @@ class LeadProfile extends Model
             'warm_threshold' => 'integer',
             'daily_qualify_cap' => 'integer',
             'monthly_reveal_budget' => 'integer',
+            'followup_count' => 'integer',
+            'followup_delay_days' => 'integer',
+            'daily_send_cap' => 'integer',
         ];
     }
 
     public function leads(): HasMany
     {
         return $this->hasMany(Lead::class);
+    }
+
+    public function senderAccount(): BelongsTo
+    {
+        return $this->belongsTo(EmailAccount::class, 'sender_email_account_id');
     }
 
     public function creator(): BelongsTo

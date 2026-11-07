@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\Setting;
+use App\Services\Leads\Outreach\AutonomyPolicy;
 use Illuminate\Database\QueryException;
 
 /**
@@ -48,6 +49,23 @@ final class LeadConfig
     public static function setKillSwitch(bool $on): void
     {
         Setting::set('leads_kill_switch', $on ? '1' : '0');
+    }
+
+    /** The autonomy level used by profiles that do not choose their own. Defaults to the safest. */
+    public static function autonomyDefault(): string
+    {
+        try {
+            $level = (string) Setting::get('leads_autonomy_default');
+        } catch (QueryException) {
+            $level = '';
+        }
+
+        return in_array($level, AutonomyPolicy::LEVELS, true) ? $level : AutonomyPolicy::APPROVE_ALL;
+    }
+
+    public static function setAutonomyDefault(string $level): void
+    {
+        Setting::set('leads_autonomy_default', $level);
     }
 
     public static function pageSize(): int

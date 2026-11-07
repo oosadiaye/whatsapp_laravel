@@ -60,6 +60,7 @@ class Lead extends Model
         'domain', 'country', 'phone', 'linkedin_url', 'raw', 'score', 'tier', 'qualification_reason',
         'status', 'contact_id', 'owner_user_id', 'last_activity_at',
         'qualify_attempts', 'qualified_at', 'revealed_at',
+        'outreach_started_at', 'next_followup_at', 'followups_sent',
     ];
 
     protected function casts(): array
@@ -71,6 +72,9 @@ class Lead extends Model
             'qualify_attempts' => 'integer',
             'qualified_at' => 'datetime',
             'revealed_at' => 'datetime',
+            'outreach_started_at' => 'datetime',
+            'next_followup_at' => 'datetime',
+            'followups_sent' => 'integer',
         ];
     }
 
@@ -93,5 +97,25 @@ class Lead extends Model
     public function events(): HasMany
     {
         return $this->hasMany(LeadEvent::class);
+    }
+
+    public function messages(): HasMany
+    {
+        return $this->hasMany(LeadMessage::class);
+    }
+
+    public function replies(): HasMany
+    {
+        return $this->hasMany(LeadReply::class);
+    }
+
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    public function contact(): BelongsTo
+    {
+        return $this->belongsTo(Contact::class)->withTrashed();
     }
 }

@@ -62,6 +62,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // signed-URL middleware instead of a CSRF token.
             'email/unsubscribe',
             'email/sequence-unsubscribe/*',
+            'email/lead-unsubscribe/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
