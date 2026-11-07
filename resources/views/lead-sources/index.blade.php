@@ -27,6 +27,23 @@
             </form>
         </section>
 
+        {{-- Default autonomy for every profile that does not choose its own. --}}
+        <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm" aria-labelledby="autonomy-default">
+            <h3 id="autonomy-default" class="font-display text-lg font-bold text-gray-900">How much can the AI do on its own?</h3>
+            <p class="mt-1 text-sm text-gray-600">The default for every lead profile. A profile can choose its own level on its settings page.</p>
+            <form method="POST" action="{{ route('lead-sources.autonomy') }}" class="mt-4 space-y-3">
+                @csrf
+                @foreach(\App\Services\Leads\Outreach\AutonomyPolicy::LABELS as $level => $label)
+                    <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-3 text-sm text-gray-800 has-[:checked]:border-brand has-[:checked]:bg-brand-soft">
+                        <input type="radio" name="level" value="{{ $level }}" class="mt-0.5" @checked($autonomyDefault === $level)>
+                        <span>{{ $label }}</span>
+                    </label>
+                @endforeach
+                <p class="text-xs text-gray-500">Unsubscribe requests are always honoured, and sensitive or unclear replies always come to a person, at every level.</p>
+                <button type="submit" class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800">Save default</button>
+            </form>
+        </section>
+
         @foreach($sources as $key => $source)
             <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm" aria-labelledby="source-{{ $key }}">
                 <div class="mb-3 flex items-center justify-between gap-3">

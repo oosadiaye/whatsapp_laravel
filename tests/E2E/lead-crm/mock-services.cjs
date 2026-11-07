@@ -65,6 +65,34 @@ http.createServer(async (req, res) => {
     if (/search filters/i.test(prompt)) {
       calls.gemini_filters++;
       text = JSON.stringify({ titles: ['Founder', 'CEO'], seniorities: ['c_suite'], person_locations: ['Lagos, Nigeria'], keywords: 'fintech' });
+    } else if (/You sort replies to a cold sales email/i.test(prompt)) {
+      calls.gemini_classify = (calls.gemini_classify || 0) + 1;
+      const reply = ((prompt.match(/<reply>\n([\s\S]*?)\n<\/reply>/) || [])[1] || '').toLowerCase();
+      let cls = 'other'; let sensitive = false;
+      if (/unsubscribe|remove me|stop (emailing|sending)/.test(reply)) cls = 'unsubscribe';
+      else if (/lawyer|report you|sue /.test(reply)) { cls = 'question'; sensitive = true; }
+      else if (/away until|out of office|on leave/.test(reply)) cls = 'out_of_office';
+      else if (/not interested|no thanks|no thank you/.test(reply)) cls = 'not_interested';
+      else if (/how much|price|cost|\?/.test(reply)) cls = 'question';
+      else if (/interested|demo|tell me more|yes/.test(reply)) cls = 'interested';
+      text = JSON.stringify({ class: cls, confidence: 92, sensitive, summary: `Mock read: ${cls}.` });
+    } else if (/You write short, honest business emails/i.test(prompt)) {
+      calls.gemini_draft = (calls.gemini_draft || 0) + 1;
+      const name = ((prompt.match(/Name: (.*)/) || [])[1] || 'there').split(' ')[0];
+      const isAnswer = /<reply>/.test(prompt);
+      const isFollowUp = /FOLLOW-UP/.test(prompt);
+      const body = isAnswer
+        ? `Hi ${name}, thanks for getting back to me. Happy to help. Would Tuesday or Thursday suit you for a 20 minute call?
+
+Joy`
+        : isFollowUp
+          ? `Hi ${name}, just checking you saw my earlier note about invoicing for your team. Is this something you would like to look at, yes or no?
+
+Joy`
+          : `Hi ${name}, I came across your company and thought our invoicing software for Nigerian SMEs could save your team time. Would a short chat next week suit you?
+
+Joy`;
+      text = JSON.stringify({ subject: 'Invoicing for your team', body });
     } else {
       calls.gemini_score++;
       calls.scorePrompts.push(prompt);

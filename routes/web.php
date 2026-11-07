@@ -455,6 +455,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:leads.manage')->group(function () {
         Route::get('/lead-sources', [LeadSourceSettingsController::class, 'index'])->name('lead-sources.index');
         Route::post('/lead-sources/kill-switch', [LeadSourceSettingsController::class, 'killSwitch'])->name('lead-sources.kill-switch');
+        Route::post('/lead-sources/autonomy', [LeadSourceSettingsController::class, 'autonomy'])->name('lead-sources.autonomy');
         Route::put('/lead-sources/{source}', [LeadSourceSettingsController::class, 'update'])
             ->where('source', '[a-z0-9_]+')->name('lead-sources.update');
         Route::post('/lead-sources/{source}/test', [LeadSourceSettingsController::class, 'test'])
@@ -472,6 +473,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('throttle:6,1,lead-qualify:')->name('lead-profiles.qualify');
         Route::post('/lead-profiles/{leadProfile}/reset-pull', [LeadProfileController::class, 'resetPull'])->name('lead-profiles.reset-pull');
         Route::delete('/lead-profiles/{leadProfile}', [LeadProfileController::class, 'destroy'])->name('lead-profiles.destroy');
+
+        // Drafts waiting for a person, replies that need one, and the sidebar badge counts.
+        Route::get('/lead-approvals', [\App\Http\Controllers\LeadApprovalController::class, 'index'])->name('lead-approvals.index');
+        Route::get('/lead-approvals/attention', [\App\Http\Controllers\LeadApprovalController::class, 'attention'])->name('lead-approvals.attention');
+        Route::post('/lead-approvals/messages/{message}/approve', [\App\Http\Controllers\LeadApprovalController::class, 'approve'])
+            ->middleware('throttle:30,1,lead-approve:')->name('lead-approvals.approve');
+        Route::post('/lead-approvals/messages/{message}/discard', [\App\Http\Controllers\LeadApprovalController::class, 'discard'])->name('lead-approvals.discard');
+        Route::post('/lead-approvals/replies/{reply}/resolve', [\App\Http\Controllers\LeadApprovalController::class, 'resolveReply'])->name('lead-approvals.resolve');
     });
 
     Route::middleware('permission:leads.view')->group(function () {

@@ -6,9 +6,11 @@ namespace App\Http\Controllers;
 
 use App\Services\Leads\LeadSourceException;
 use App\Services\Leads\LeadSourceRegistry;
+use App\Services\Leads\Outreach\AutonomyPolicy;
 use App\Support\LeadConfig;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class LeadSourceSettingsController extends Controller
@@ -18,6 +20,7 @@ class LeadSourceSettingsController extends Controller
         return view('lead-sources.index', [
             'sources' => $registry->all(),
             'killSwitch' => LeadConfig::killSwitchOn(),
+            'autonomyDefault' => LeadConfig::autonomyDefault(),
         ]);
     }
 
@@ -51,6 +54,15 @@ class LeadSourceSettingsController extends Controller
         }
 
         return back()->with('success', $connector->label().' connection works.');
+    }
+
+    public function autonomy(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['level' => ['required', 'string', Rule::in(AutonomyPolicy::LEVELS)]]);
+
+        LeadConfig::setAutonomyDefault($data['level']);
+
+        return back()->with('success', 'Default saved: '.AutonomyPolicy::LABELS[$data['level']]);
     }
 
     public function killSwitch(Request $request): RedirectResponse

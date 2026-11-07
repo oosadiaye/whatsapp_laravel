@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\LeadProfileRequest;
 use App\Jobs\QualifyLeadProfileJob;
+use App\Models\EmailAccount;
 use App\Models\LeadProfile;
 use App\Services\Leads\LeadPuller;
 use App\Services\Leads\LeadRevealer;
@@ -30,7 +31,7 @@ class LeadProfileController extends Controller
 
     public function create(LeadSourceRegistry $registry): View
     {
-        return view('lead-profiles.create', ['sourceKeys' => $registry->keys()]);
+        return view('lead-profiles.create', ['sourceKeys' => $registry->keys(), 'mailboxes' => $this->mailboxes()]);
     }
 
     public function store(LeadProfileRequest $request, LeadQueryBuilder $builder): RedirectResponse
@@ -42,6 +43,7 @@ class LeadProfileController extends Controller
             'daily_pull_cap' => (int) $request->input('daily_pull_cap'),
             'hard_filters' => $request->hardFilters(),
             ...$request->qualification(),
+            ...$request->outreach(),
             'is_active' => false,
             'created_by' => auth()->id(),
         ]);
@@ -62,6 +64,7 @@ class LeadProfileController extends Controller
         return view('lead-profiles.edit', [
             'profile' => $leadProfile,
             'sourceKeys' => $registry->keys(),
+            'mailboxes' => $this->mailboxes($leadProfile),
             'query' => $leadProfile->hasQuery() ? LeadQuery::fromArray($leadProfile->lead_query) : null,
             'creditsUsed' => app(LeadRevealer::class)->creditsUsedThisMonth($leadProfile),
             'pipeline' => $leadProfile->leads()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status'),
@@ -81,6 +84,7 @@ class LeadProfileController extends Controller
             'daily_pull_cap' => (int) $request->input('daily_pull_cap'),
             'hard_filters' => $hardFilters,
             ...$request->qualification(),
+            ...$request->outreach(),
         ])->save();
 
         $failure = ($searchInputsChanged || ! $leadProfile->hasQuery())
@@ -107,6 +111,21 @@ class LeadProfileController extends Controller
         }
 
         return back()->with('success', 'Lead profile saved.');
+    }
+
+    /**
+     * Mailboxes this person may choose: their own active ones, plus the one the profile already uses.
+     *
+     * @return \Illuminate\Support\Collection<int, EmailAccount>
+     */
+    private function mailboxes(?LeadProfile $profile = null)
+    {
+        return EmailAccount::query()
+            ->where('is_active', true)
+            ->where(fn ($q) => $q->where('user_id', auth()->id())
+                ->when($profile?->sender_email_account_id, fn ($q2, $id) => $q2->orWhere('id', $id)))
+            ->orderBy('email')
+            ->get();
     }
 
     public function rebuildQuery(LeadProfile $leadProfile, LeadQueryBuilder $builder): RedirectResponse

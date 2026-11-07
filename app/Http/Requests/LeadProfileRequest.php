@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\EmailAccount;
 use App\Services\Leads\LeadSourceRegistry;
+use App\Services\Leads\Outreach\AutonomyPolicy;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -55,6 +57,12 @@ class LeadProfileRequest extends FormRequest
             ],
             'daily_qualify_cap' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'monthly_reveal_budget' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'autonomy' => ['nullable', 'string', Rule::in(AutonomyPolicy::LEVELS)],
+            'sender_email_account_id' => ['nullable', 'integer', $this->mailboxIsAllowed(...)],
+            'playbook' => ['nullable', 'string', 'max:3000'],
+            'followup_count' => ['nullable', 'integer', 'min:0', 'max:5'],
+            'followup_delay_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'daily_send_cap' => ['nullable', 'integer', 'min:1', 'max:500'],
             'hf_countries' => ['nullable', 'string', 'max:500'],
             'hf_titles_include' => ['nullable', 'string', 'max:500'],
             'hf_titles_exclude' => ['nullable', 'string', 'max:500'],
@@ -97,6 +105,48 @@ class LeadProfileRequest extends FormRequest
         }
 
         return $out;
+    }
+
+    /**
+     * Outreach settings the form sent. An empty autonomy means "use the global default"; an empty mailbox
+     * clears it. Omitted numeric fields are left out so create uses the column defaults.
+     *
+     * @return array<string, mixed>
+     */
+    public function outreach(): array
+    {
+        $out = [];
+
+        if ($this->has('autonomy')) {
+            $out['autonomy'] = $this->filled('autonomy') ? (string) $this->input('autonomy') : null;
+        }
+        if ($this->has('sender_email_account_id')) {
+            $out['sender_email_account_id'] = $this->filled('sender_email_account_id') ? (int) $this->input('sender_email_account_id') : null;
+        }
+        if ($this->has('playbook')) {
+            $out['playbook'] = trim((string) $this->input('playbook')) ?: null;
+        }
+        foreach (['followup_count', 'followup_delay_days', 'daily_send_cap'] as $field) {
+            if ($this->filled($field) || $this->input($field) === '0') {
+                $out[$field] = (int) $this->input($field);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * A profile may send only from an active mailbox of the person saving it (or the one it already uses),
+     * so nobody can send as a colleague by editing a form field.
+     */
+    private function mailboxIsAllowed(string $attribute, mixed $value, \Closure $fail): void
+    {
+        $account = EmailAccount::query()->whereKey((int) $value)->where('is_active', true)->first();
+        $alreadyUsed = $this->route('leadProfile')?->sender_email_account_id === (int) $value;
+
+        if ($account === null || ( ! $alreadyUsed && $account->user_id !== $this->user()?->id)) {
+            $fail('Choose one of your own connected mailboxes.');
+        }
     }
 
     /**

@@ -103,6 +103,62 @@
         <p class="mt-3 text-xs text-gray-500">Only leads that score at least the warm threshold get their email revealed; each reveal uses about one platform credit.</p>
     </fieldset>
 
+    <fieldset class="rounded-xl border border-gray-200 p-4" id="outreach-settings">
+        <legend class="px-1 text-xs font-bold uppercase tracking-wide text-gray-500">Outreach and autonomy</legend>
+        <div class="space-y-4">
+            <div>
+                <label for="lp-autonomy" class="mb-1 block text-xs font-medium text-gray-600">How much can the AI do on its own?</label>
+                <select id="lp-autonomy" name="autonomy" class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-brand focus:ring-brand">
+                    <option value="">Use the default ({{ \App\Services\Leads\Outreach\AutonomyPolicy::LABELS[\App\Support\LeadConfig::autonomyDefault()] }})</option>
+                    @foreach(\App\Services\Leads\Outreach\AutonomyPolicy::LABELS as $level => $label)
+                        <option value="{{ $level }}" @selected(old('autonomy', $profile?->autonomy) === $level)>{{ $label }}</option>
+                    @endforeach
+                </select>
+                <p class="mt-1 text-xs text-gray-500">Whatever you choose, unsubscribe requests are always honoured and sensitive or unclear replies always come to you.</p>
+                @error('autonomy') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label for="lp-mailbox" class="mb-1 block text-xs font-medium text-gray-600">Send from this mailbox</label>
+                <select id="lp-mailbox" name="sender_email_account_id" class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-brand focus:ring-brand">
+                    <option value="">No mailbox chosen (outreach stays off)</option>
+                    @foreach($mailboxes as $mailbox)
+                        <option value="{{ $mailbox->id }}" @selected((int) old('sender_email_account_id', $profile?->sender_email_account_id) === $mailbox->id)>{{ $mailbox->email }}</option>
+                    @endforeach
+                </select>
+                <p class="mt-1 text-xs text-gray-500">Replies arrive in this mailbox and the person who owns it gets the alerts. Connect one under Email if the list is empty.</p>
+                @error('sender_email_account_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label for="lp-playbook" class="mb-1 block text-xs font-medium text-gray-600">What the AI may say about you (facts only)</label>
+                <textarea id="lp-playbook" name="playbook" rows="5" maxlength="3000"
+                          placeholder="e.g. We sell invoicing software for Nigerian SMEs. Plans start at N15,000 a month. A demo takes 20 minutes."
+                          class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-brand focus:ring-brand">{{ old('playbook', $profile?->playbook) }}</textarea>
+                <p class="mt-1 text-xs text-gray-500">The AI writes emails and answers only from these facts. If a question is not covered, it says it will check and come back.</p>
+                @error('playbook') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+            <div class="grid gap-4 sm:grid-cols-3">
+                <div>
+                    <label for="lp-fcount" class="mb-1 block text-xs font-medium text-gray-600">Follow-ups (0 to 5)</label>
+                    <input id="lp-fcount" type="number" name="followup_count" min="0" max="5" value="{{ old('followup_count', $profile?->followup_count ?? 2) }}"
+                           class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-brand focus:ring-brand">
+                    @error('followup_count') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label for="lp-fdelay" class="mb-1 block text-xs font-medium text-gray-600">Days between emails</label>
+                    <input id="lp-fdelay" type="number" name="followup_delay_days" min="1" max="30" value="{{ old('followup_delay_days', $profile?->followup_delay_days ?? 3) }}"
+                           class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-brand focus:ring-brand">
+                    @error('followup_delay_days') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label for="lp-scap" class="mb-1 block text-xs font-medium text-gray-600">Emails sent per day</label>
+                    <input id="lp-scap" type="number" name="daily_send_cap" min="1" max="500" value="{{ old('daily_send_cap', $profile?->daily_send_cap ?? 20) }}"
+                           class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-brand focus:ring-brand">
+                    @error('daily_send_cap') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                </div>
+            </div>
+        </div>
+    </fieldset>
+
     @if($profile)
         <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-800">
             <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $profile->is_active))>

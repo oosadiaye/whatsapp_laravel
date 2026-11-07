@@ -216,6 +216,20 @@
                             </x-sidebar-link>
                         @endcan
                         @can('leads.manage')
+                            <x-sidebar-link :href="route('lead-approvals.index')" :active="request()->routeIs('lead-approvals.*')">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                {{ __('Replies & approvals') }}
+                                @php
+                                    $leadAttention = \App\Services\Leads\Outreach\LeadAttention::counts()['total'];
+                                @endphp
+                                <span x-data="{ total: {{ $leadAttention }}, async refresh() { try { const r = await fetch('{{ route('lead-approvals.attention') }}', { headers: { 'Accept': 'application/json' } }); this.total = (await r.json()).total; } catch (e) {} } }"
+                                      @lead-alert.window="refresh()"
+                                      x-show="total > 0" x-text="total" data-testid="lead-attention-badge"
+                                      style="{{ $leadAttention === 0 ? 'display:none' : '' }}"
+                                      class="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-xs font-semibold"></span>
+                            </x-sidebar-link>
                             <x-sidebar-link :href="route('lead-profiles.index')" :active="request()->routeIs('lead-profiles.*')">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>

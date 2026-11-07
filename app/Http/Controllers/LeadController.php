@@ -37,9 +37,17 @@ class LeadController extends Controller
 
     public function show(Lead $lead): View
     {
-        return view('leads.show', [
+        $replies = $lead->replies()->with('message')->orderByDesc('id')->get();
+        $view = view('leads.show', [
             'lead' => $lead->load('profile:id,name'),
             'events' => $lead->events()->orderByDesc('id')->limit(100)->get(),
+            'messages' => $lead->messages()->orderBy('id')->get(),
+            'replies' => $replies,
         ]);
+
+        // Opening the lead is how a person "sees" its replies: the sidebar badge counts the unseen ones.
+        $lead->replies()->whereNull('seen_at')->update(['seen_at' => now()]);
+
+        return $view;
     }
 }
