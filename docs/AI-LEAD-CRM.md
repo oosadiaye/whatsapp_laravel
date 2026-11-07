@@ -87,7 +87,43 @@ Plans: `docs/superpowers/plans/2026-11-05-ai-lead-crm-phase-1.md` (pull side) an
 - `lead_events.type` / `actor` are `string(32)`; SQLite will not enforce that, MySQL will.
 - `LeadProfile.last_pulled_at` means "last attempted run", not "last page fetched".
 
+## Outreach, autonomy and replies (phases 3 and 4)
+
+Plan: `docs/superpowers/plans/2026-11-07-ai-lead-crm-phase-3-4.md`.
+
+- **Autonomy** (Lead Sources for the default, the lead profile to override): **Manual** (every email and
+  reply waits for a person), **Semi-automatic** (first emails and follow-ups go out by themselves, replies
+  wait), **Fully automatic** (the AI also answers replies). At every level an unsubscribe request is honoured
+  and a sensitive, unclear or low-confidence reply is passed to a person and never answered by the AI.
+- **Outreach** (`leads:outreach`, every 5 minutes): a qualified lead with an email is added to Contacts (the
+  deleted-contact-safe way) and the AI writes a first email from the profile's **playbook** (the only facts it
+  may state; unknown links are stripped). Follow-ups (count and gap set per profile) are written after the wait
+  if the lead has not answered. Hot leads first, a few drafts per run, a stop after three AI failures in a row.
+- **Sending** has one path (`LeadMessageSender`): kill switch, suppression, "has the lead replied", the sender
+  mailbox and the daily send cap are re-checked right before sending. A held message stays `approved` and goes
+  out on a later sweep. Every email carries a signed one-click unsubscribe link.
+- **Replies**: every inbound mail from a connected mailbox is matched to a lead by sender address. A match stops
+  all outreach at once, alerts the owner and is classified by the AI (interested, question, not now, not
+  interested, unsubscribe, out of office, other). Interested or a question gets an answer drafted from the
+  playbook; an answer the AI is not sure of becomes "needs you".
+- **Screens**: *Replies & approvals* (approve, edit then approve, discard, mark dealt with), a sidebar badge, the
+  lead page (emails, replies, timeline), outreach settings on the profile, the default on Lead Sources.
+- **Alerts** (live): a prospect replying, a reply that needs a person, and drafts waiting for approval each push a
+  toast and update the sidebar badge instantly over Reverb, and (for replies and "needs you") email the owner.
+  The owner is the person whose mailbox sends the outreach, plus the profile's creator.
+
+## Running it in the background (needed for live alerts and automation)
+
+Four things must be running: the web app, **Reverb** (instant alerts), a **queue worker** that includes the
+`mail-send` and `mail-sync` queues, and the **scheduler**. Locally, `live.bat` starts all four. On the server:
+supervisor runs the worker and Reverb (`deploy/`; rerun `deploy/install-supervisor.sh` so the worker also reads
+`mail-send,mail-sync`) and cron runs `schedule:run` every minute.
+
+Replies are only seen if the sending mailbox is **connected and syncing**: `MAIL_CLIENT_ENABLED=true` and the
+mailbox added under Mailbox. If the sync is off, replies are never detected and follow-ups would keep going.
+
 ## Not built yet
 
-Promoting to Contacts, email outreach, reply handling, the autonomy levels, and the Hunter, Lusha,
-Apify and ZoomInfo connectors.
+- A board task for a person when a lead replies "interested" (alerts only for now).
+- Promoting by hand, a pipeline board view, open/click tracking on lead emails.
+- The Hunter, Lusha, Apify and ZoomInfo connectors.

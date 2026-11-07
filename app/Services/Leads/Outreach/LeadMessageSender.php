@@ -13,6 +13,7 @@ use App\Models\LeadMessage;
 use App\Models\LeadProfile;
 use App\Services\MailClient\OutboundEmail;
 use App\Support\LeadConfig;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 
@@ -46,6 +47,13 @@ final class LeadMessageSender
         if (LeadConfig::killSwitchOn()) {
             return 0;
         }
+
+        // A message stuck in `sending` (a worker died between the claim and the save) may or may not have gone
+        // out, so it is never resent automatically: a person decides from the approvals screen.
+        LeadMessage::query()
+            ->where('status', LeadMessage::STATUS_SENDING)
+            ->where('updated_at', '<', now()->subMinutes(15))
+            ->update(['status' => LeadMessage::STATUS_FAILED, 'failure' => 'Interrupted while sending. Check the sent mail before trying again.']);
 
         $sent = 0;
         $messages = LeadMessage::query()
@@ -96,20 +104,39 @@ final class LeadMessageSender
         }
 
         $isReply = $message->kind === LeadMessage::KIND_REPLY;
-        if (! $isReply && $this->sentToday($profile) >= $profile->daily_send_cap) {
+
+        // The cap check and the claim happen under one per-profile lock, so two senders cannot both see room for one more.
+        $lock = Cache::lock("lead-send:{$profile->id}", 15);
+        if (! $lock->block(5)) {
             return self::WAITING;
         }
 
-        // Claim it: two overlapping sweeps (or a sweep and an approval click) must never both send.
-        $claimed = LeadMessage::query()
-            ->whereKey($message->id)
-            ->where('status', LeadMessage::STATUS_APPROVED)
-            ->update(['status' => LeadMessage::STATUS_SENDING]);
-        if ($claimed === 0) {
-            return self::SKIPPED;
+        try {
+            if (! $isReply && $this->sentToday($profile) >= $profile->daily_send_cap) {
+                return self::WAITING;
+            }
+
+            // Claim it: two overlapping sweeps (or a sweep and an approval click) must never both send.
+            $claimed = LeadMessage::query()
+                ->whereKey($message->id)
+                ->where('status', LeadMessage::STATUS_APPROVED)
+                ->update(['status' => LeadMessage::STATUS_SENDING, 'updated_at' => now()]);
+            if ($claimed === 0) {
+                return self::SKIPPED;
+            }
+        } finally {
+            $lock->release();
         }
 
-        SendUserEmail::dispatch($account->id, $this->outbound($message, $lead, $account->id));
+        try {
+            SendUserEmail::dispatch($account->id, $this->outbound($message, $lead, $account->id));
+        } catch (\Throwable $e) {
+            // Nothing was queued, so it is safe to put it back and try again on a later sweep.
+            LeadMessage::query()->whereKey($message->id)->update(['status' => LeadMessage::STATUS_APPROVED]);
+            Log::error('Lead outreach: could not queue the email', ['message_id' => $message->id, 'error' => $e->getMessage()]);
+
+            return self::WAITING;
+        }
 
         $message->forceFill(['status' => LeadMessage::STATUS_SENT, 'sent_at' => now()])->save();
         $this->afterSend($message, $lead, $profile);
@@ -131,6 +158,10 @@ final class LeadMessageSender
             $this->suppressor->suppress($lead, 'Address is on the suppression list.');
 
             return 'The address is on the suppression list.';
+        }
+
+        if ($message->kind === LeadMessage::KIND_REPLY && in_array($lead->status, [Lead::STATUS_LOST, Lead::STATUS_REJECTED], true)) {
+            return 'The lead is no longer a prospect.';
         }
 
         $stopsOutreach = [Lead::STATUS_REPLIED, Lead::STATUS_MEETING, Lead::STATUS_WON, Lead::STATUS_LOST, Lead::STATUS_REJECTED];
@@ -211,8 +242,8 @@ final class LeadMessageSender
 
         return LeadMessage::query()
             ->whereIn('kind', [LeadMessage::KIND_FIRST, LeadMessage::KIND_FOLLOWUP])
-            ->where('status', LeadMessage::STATUS_SENT)
-            ->where('sent_at', '>=', $startOfToday)
+            ->whereIn('status', [LeadMessage::STATUS_SENT, LeadMessage::STATUS_SENDING])
+            ->where('updated_at', '>=', $startOfToday)
             ->whereHas('lead', fn ($q) => $q->where('lead_profile_id', $profile->id))
             ->count();
     }

@@ -7,6 +7,7 @@ namespace App\Services\Leads\Outreach;
 use App\Events\Leads\LeadReplyAlert;
 use App\Mail\LeadReplyMail;
 use App\Models\Lead;
+use App\Models\LeadProfile;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -34,6 +35,23 @@ final class LeadAlerts
     public function approvalWaiting(Lead $lead, string $what): void
     {
         $this->notify($lead, 'approval', "{$what} for ".($lead->name ?: 'a lead').' is waiting for your approval', '', false);
+    }
+
+    /** One alert per outreach run that left drafts waiting, so a manual-mode owner knows without opening the page. */
+    public function draftsWaiting(LeadProfile $profile, int $count): void
+    {
+        $account = $profile->senderAccount;
+        $ids = array_unique(array_filter([$account?->user_id, $profile->created_by]));
+        $headline = $count === 1 ? '1 email is waiting for your approval' : "{$count} emails are waiting for your approval";
+        $url = route('lead-approvals.index');
+
+        foreach (User::query()->whereIn('id', $ids)->where('is_active', true)->get() as $user) {
+            try {
+                LeadReplyAlert::dispatch($user->id, 0, '', (string) $profile->name, 'approval', $headline, $url);
+            } catch (\Throwable $e) {
+                Log::warning('Lead alert: live push failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
+        }
     }
 
     private function notify(Lead $lead, string $kind, string $headline, string $snippet, bool $email = true): void

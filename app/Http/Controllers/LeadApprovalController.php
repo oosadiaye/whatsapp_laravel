@@ -57,14 +57,23 @@ class LeadApprovalController extends Controller
         $edited = (isset($data['subject']) && $data['subject'] !== $message->subject)
             || (isset($data['body']) && trim($data['body']) !== trim($message->body));
 
-        $message->forceFill([
-            'subject' => $data['subject'] ?? $message->subject,
-            'body' => isset($data['body']) ? trim($data['body']) : $message->body,
-            'by_ai' => $edited ? false : $message->by_ai,
-            'status' => LeadMessage::STATUS_APPROVED,
-            'decided_by' => $request->user()->id,
-            'failure' => null,
-        ])->save();
+        // Conditional on the status we just read: a discard or another approval that got there first wins.
+        $won = LeadMessage::query()
+            ->whereKey($message->id)
+            ->whereIn('status', [LeadMessage::STATUS_PENDING, LeadMessage::STATUS_FAILED])
+            ->update([
+                'subject' => $data['subject'] ?? $message->subject,
+                'body' => isset($data['body']) ? trim($data['body']) : $message->body,
+                'by_ai' => $edited ? false : $message->by_ai,
+                'status' => LeadMessage::STATUS_APPROVED,
+                'decided_by' => $request->user()->id,
+                'failure' => null,
+                'updated_at' => now(),
+            ]);
+        if ($won === 0) {
+            return back()->with('warning', 'That email has already been handled.');
+        }
+        $message->refresh();
 
         LeadEvent::record($message->lead, 'draft_approved', ['message_id' => $message->id, 'edited' => $edited], (string) $request->user()->id);
 
@@ -84,7 +93,13 @@ class LeadApprovalController extends Controller
             return back()->with('warning', 'That email has already been handled.');
         }
 
-        $message->forceFill(['status' => LeadMessage::STATUS_DISCARDED, 'decided_by' => $request->user()->id, 'failure' => 'Discarded by a person.'])->save();
+        $won = LeadMessage::query()
+            ->whereKey($message->id)
+            ->whereIn('status', [LeadMessage::STATUS_PENDING, LeadMessage::STATUS_FAILED])
+            ->update(['status' => LeadMessage::STATUS_DISCARDED, 'decided_by' => $request->user()->id, 'failure' => 'Discarded by a person.', 'updated_at' => now()]);
+        if ($won === 0) {
+            return back()->with('warning', 'That email has already been handled.');
+        }
         LeadEvent::record($message->lead, 'draft_discarded', ['message_id' => $message->id], (string) $request->user()->id);
 
         return back()->with('success', 'Draft discarded.');

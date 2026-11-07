@@ -218,6 +218,7 @@ final class LeadReplyHandlingTest extends TestCase
 
         $this->assertSame(0, LeadMessage::where('kind', 'reply')->count());
         $this->assertSame(LeadReply::STATUS_NEEDS_HUMAN, $reply->fresh()->status);
+        $this->assertStringContainsString('sensitive', $reply->fresh()->summary, 'the card says why it was escalated');
         Event::assertDispatched(LeadReplyAlert::class, fn (LeadReplyAlert $e) => $e->kind === 'needs_attention');
     }
 

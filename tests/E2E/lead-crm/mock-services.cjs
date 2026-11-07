@@ -67,7 +67,7 @@ http.createServer(async (req, res) => {
       text = JSON.stringify({ titles: ['Founder', 'CEO'], seniorities: ['c_suite'], person_locations: ['Lagos, Nigeria'], keywords: 'fintech' });
     } else if (/You sort replies to a cold sales email/i.test(prompt)) {
       calls.gemini_classify = (calls.gemini_classify || 0) + 1;
-      const reply = ((prompt.match(/<reply>\n([\s\S]*?)\n<\/reply>/) || [])[1] || '').toLowerCase();
+      const reply = ((prompt.match(/<reply>\r?\n([\s\S]*?)\r?\n<\/reply>/) || [])[1] || '').toLowerCase();
       let cls = 'other'; let sensitive = false;
       if (/unsubscribe|remove me|stop (emailing|sending)/.test(reply)) cls = 'unsubscribe';
       else if (/lawyer|report you|sue /.test(reply)) { cls = 'question'; sensitive = true; }

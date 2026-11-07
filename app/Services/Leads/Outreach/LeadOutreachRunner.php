@@ -35,14 +35,15 @@ final class LeadOutreachRunner
         private readonly LeadMessageDrafter $drafter,
         private readonly LeadPromoter $promoter,
         private readonly AutonomyPolicy $autonomy,
+        private readonly LeadAlerts $alerts,
     ) {}
 
     /**
-     * @return array{drafted: int, failed: int, note: ?string}
+     * @return array{drafted: int, awaiting: int, failed: int, note: ?string}
      */
     public function run(LeadProfile $profile): array
     {
-        $summary = ['drafted' => 0, 'failed' => 0, 'note' => null];
+        $summary = ['drafted' => 0, 'awaiting' => 0, 'failed' => 0, 'note' => null];
 
         if (LeadConfig::killSwitchOn()) {
             $summary['note'] = 'Paused by the global kill switch.';
@@ -65,8 +66,8 @@ final class LeadOutreachRunner
     }
 
     /**
-     * @param  array{drafted: int, failed: int, note: ?string}  $summary
-     * @return array{drafted: int, failed: int, note: ?string}
+     * @param  array{drafted: int, awaiting: int, failed: int, note: ?string}  $summary
+     * @return array{drafted: int, awaiting: int, failed: int, note: ?string}
      */
     private function runLocked(LeadProfile $profile, array $summary): array
     {
@@ -100,6 +101,10 @@ final class LeadOutreachRunner
             $this->draftOne($lead, $profile, $senderName, LeadMessage::KIND_FIRST, $summary, $consecutiveFailures);
         }
 
+        if ($summary['awaiting'] > 0) {
+            $this->alerts->draftsWaiting($profile, $summary['awaiting']);
+        }
+
         return $summary;
     }
 
@@ -118,7 +123,7 @@ final class LeadOutreachRunner
     }
 
     /**
-     * @param  array{drafted: int, failed: int, note: ?string}  $summary
+     * @param  array{drafted: int, awaiting: int, failed: int, note: ?string}  $summary
      */
     private function draftOne(Lead $lead, LeadProfile $profile, string $senderName, string $kind, array &$summary, int &$consecutiveFailures): void
     {
@@ -164,6 +169,9 @@ final class LeadOutreachRunner
             ], 'ai');
 
             $summary['drafted']++;
+            if (! $auto) {
+                $summary['awaiting']++;
+            }
         } catch (\Throwable $e) {
             $summary['failed']++;
             Log::error('Lead outreach: drafting failed for a lead', ['lead_id' => $lead->id, 'error' => $e->getMessage()]);

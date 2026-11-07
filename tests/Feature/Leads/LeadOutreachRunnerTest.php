@@ -17,7 +17,9 @@ use App\Services\Leads\Outreach\LeadOutreachRunner;
 use App\Support\LeadConfig;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
+use App\Events\Leads\LeadReplyAlert;
 use Tests\Support\FakeAiClient;
 use Tests\TestCase;
 
@@ -89,6 +91,32 @@ final class LeadOutreachRunnerTest extends TestCase
         $this->assertSame('first', $message->kind);
         $this->assertSame($lead->id, $message->lead_id);
         Queue::assertNothingPushed(); // drafting never sends; the sender does
+    }
+
+    public function test_the_owner_is_alerted_once_when_a_run_leaves_drafts_waiting_for_approval(): void
+    {
+        Event::fake([LeadReplyAlert::class]);
+        $profile = $this->profile(AutonomyPolicy::APPROVE_ALL);
+        $this->lead($profile);
+        $this->lead($profile);
+
+        $this->runner()->run($profile);
+
+        Event::assertDispatchedTimes(LeadReplyAlert::class, 1);
+        Event::assertDispatched(LeadReplyAlert::class, fn (LeadReplyAlert $e) => $e->kind === 'approval'
+            && $e->userId === $profile->senderAccount->user_id
+            && str_contains($e->headline, '2 emails are waiting'));
+    }
+
+    public function test_no_alert_when_nothing_waits_for_approval(): void
+    {
+        Event::fake([LeadReplyAlert::class]);
+        $profile = $this->profile(AutonomyPolicy::AUTO_FIRST);
+        $this->lead($profile);
+
+        $this->runner()->run($profile);
+
+        Event::assertNotDispatched(LeadReplyAlert::class);
     }
 
     public function test_an_approved_draft_is_sent_by_the_next_sweep_and_a_waiting_one_is_not(): void

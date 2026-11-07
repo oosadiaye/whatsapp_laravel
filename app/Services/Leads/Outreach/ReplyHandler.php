@@ -37,6 +37,8 @@ final class ReplyHandler
 
     private const OUT_OF_OFFICE_PAUSE_DAYS = 7;
 
+    private const MAX_ANSWERS_PER_DAY = 3;
+
     public function __construct(
         private readonly AiClient $ai,
         private readonly LeadMessageDrafter $drafter,
@@ -97,7 +99,7 @@ final class ReplyHandler
             return 'handled';
         }
 
-        if ($verdict['sensitive']) {
+        if ($verdict['sensitive'] || $this->looksSensitive($text)) {
             return $this->escalate($reply, $lead, 'This reply looks sensitive (a complaint, a legal matter or an angry tone).', $text);
         }
 
@@ -114,6 +116,23 @@ final class ReplyHandler
 
     private function answer(LeadReply $reply, Lead $lead, string $class, string $text): string
     {
+        if (LeadMessage::query()->where('lead_reply_id', $reply->id)->exists()) {
+            $reply->forceFill(['status' => LeadReply::STATUS_HANDLED])->save();
+
+            return 'handled';
+        }
+
+        // An auto-responder on the other side can answer every answer. Past a few a day, a person takes over.
+        $recent = LeadMessage::query()
+            ->where('lead_id', $lead->id)
+            ->where('kind', LeadMessage::KIND_REPLY)
+            ->whereIn('status', [LeadMessage::STATUS_PENDING, LeadMessage::STATUS_APPROVED, LeadMessage::STATUS_SENDING, LeadMessage::STATUS_SENT])
+            ->where('created_at', '>=', now()->subDay())
+            ->count();
+        if ($recent >= self::MAX_ANSWERS_PER_DAY) {
+            return $this->escalate($reply, $lead, 'This conversation is moving very fast, which can mean an automatic reply on their side.', $text);
+        }
+
         $profile = $lead->profile;
         $draft = $this->drafter->answer(
             $lead,
@@ -149,8 +168,22 @@ final class ReplyHandler
         return 'handled';
     }
 
+    /** The model's own "sensitive" flag is not the only gate: obvious legal or abuse words always escalate. */
+    private function looksSensitive(string $text): bool
+    {
+        return (bool) preg_match('/\b(lawyer|attorney|solicitor|legal action|sue you|court|gdpr|ndpa|ndpr|report you|reported you|harass|spam|scam|fraud|police)\b/i', $text);
+    }
+
     private function close(LeadReply $reply, Lead $lead, string $status): string
     {
+        $this->discardOpenAnswers($lead);
+        $lead->refresh();
+        if ($lead->status === Lead::STATUS_UNSUBSCRIBED) {
+            $reply->forceFill(['status' => LeadReply::STATUS_HANDLED])->save();
+
+            return 'handled';
+        }
+
         $lead->forceFill(['status' => $status, 'last_activity_at' => now()])->save();
         $reply->forceFill(['status' => LeadReply::STATUS_HANDLED])->save();
 
@@ -160,6 +193,13 @@ final class ReplyHandler
     /** An automatic out-of-office is not an answer: go back to contacted and try again after a pause. */
     private function pause(LeadReply $reply, Lead $lead): string
     {
+        $lead->refresh();
+        if ($lead->status === Lead::STATUS_UNSUBSCRIBED) {
+            $reply->forceFill(['status' => LeadReply::STATUS_HANDLED])->save();
+
+            return 'handled';
+        }
+
         $hasMore = $lead->followups_sent < $lead->profile->followup_count;
         $lead->forceFill([
             'status' => Lead::STATUS_CONTACTED,
@@ -168,6 +208,16 @@ final class ReplyHandler
         $reply->forceFill(['status' => LeadReply::STATUS_HANDLED])->save();
 
         return 'handled';
+    }
+
+    /** A "no" or an away message makes any answer still waiting for this lead out of date. */
+    private function discardOpenAnswers(Lead $lead): void
+    {
+        LeadMessage::query()
+            ->where('lead_id', $lead->id)
+            ->where('kind', LeadMessage::KIND_REPLY)
+            ->whereIn('status', [LeadMessage::STATUS_PENDING, LeadMessage::STATUS_APPROVED])
+            ->update(['status' => LeadMessage::STATUS_DISCARDED, 'failure' => 'The lead answered again; this draft is out of date.']);
     }
 
     private function noteOnly(LeadReply $reply, Lead $lead, string $why): string
@@ -180,7 +230,10 @@ final class ReplyHandler
 
     private function escalate(LeadReply $reply, Lead $lead, string $why, string $text): string
     {
-        $reply->forceFill(['status' => LeadReply::STATUS_NEEDS_HUMAN, 'summary' => $reply->summary ?: $why])->save();
+        $reply->forceFill([
+            'status' => LeadReply::STATUS_NEEDS_HUMAN,
+            'summary' => mb_substr(trim($why.' '.($reply->summary ?? '')), 0, 500),
+        ])->save();
         LeadEvent::record($lead, 'escalated', ['why' => $why], 'ai');
         $this->alerts->needsAttention($lead, $why, mb_substr($text, 0, 300));
 

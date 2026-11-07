@@ -37,3 +37,25 @@ Use a local database: the run creates leads, profiles and settings.
 17 leads are rejected by the free gates (8 without email, 10 interns, 1 both), so the AI is called
 43 times. 31 credits are spent (34 reveal calls, 3 of which return no email). A run handles at most
 20 leads, so a first run on 25 leads leaves 5 waiting.
+
+## Outreach, autonomy and replies (phases 3 and 4)
+
+Two more helpers, plus the real background processes:
+
+```bash
+node tests/E2E/lead-crm/smtp-sink.cjs                 # SMTP on 2525 + HTTP list of every email sent on 9102
+php artisan reverb:start                              # live alerts (set REVERB_SERVER_PORT/REVERB_PORT if 8080 is blocked)
+php artisan queue:work --queue=default,mail-send,mail-sync
+php artisan schedule:work                             # run with MAIL_CLIENT_ENABLED=false so the sync does not hit the fake mailbox
+```
+
+Point a connected mailbox at the sink (smtp_host 127.0.0.1, smtp_port 2525, no encryption), set the AI to the
+fake Gemini (`GEMINI_BASE_URL=http://127.0.0.1:9101/gemini`), and mail the alerts to the sink too
+(`MAIL_MAILER=smtp MAIL_HOST=127.0.0.1 MAIL_PORT=2525`). The fake Gemini now also writes outreach emails and
+classifies replies from keywords (unsubscribe, lawyer, away until, no thanks, a question, interested).
+
+Pretend a prospect answered (stores an inbound email and fires the same `MailReceived` event as the real sync):
+
+```bash
+php tests/E2E/lead-crm/simulate-reply.php prospect@example.test "Yes, tell me more about a demo."
+```
