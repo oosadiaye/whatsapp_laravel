@@ -63,6 +63,14 @@ return [
         'key' => env('APOLLO_API_KEY'),
     ],
 
+    'hunter' => [
+        'key' => env('HUNTER_API_KEY'),
+    ],
+
+    'lusha' => [
+        'key' => env('LUSHA_API_KEY'),
+    ],
+
     /*
     | ffmpeg — used only to remux browser recordings (Chrome emits webm/opus,
     | which Gemini doesn't accept) into ogg before analysis. Entirely optional:
