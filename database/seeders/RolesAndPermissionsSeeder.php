@@ -151,6 +151,12 @@ class RolesAndPermissionsSeeder extends Seeder
             // allowlist below omits it, so agents work cards without being handed
             // a view of everyone's workload.
             'tasks.report',
+
+            // AI lead CRM. view = see leads and their pipeline; manage = create lead
+            // profiles, store platform API keys, run pulls and the kill switch.
+            // Both are in $allPermissions (admin + manager); the agent allowlist omits them.
+            'leads.view',
+            'leads.manage',
         ];
 
         foreach ($perms as $perm) {

@@ -4256,6 +4256,12 @@ git commit -m "docs: AI lead CRM phase 1"
 
 ---
 
+## Carry-forward to phase 2 (from the Task 1 code review)
+
+- `leads.email` is globally unique and nullable. Phase 1 never stores an email, so nothing collides yet. When emails are revealed (phase 2): lowercase and trim on write (a model mutator), and treat a unique-violation on reveal as "duplicate lead", not a failed job (look the existing lead up first, mark the newer one rejected as duplicate).
+- `leads.contact_id` references the soft-deleting `contacts` table. Promotion must use the `Contact::*IncludingTrashed` resolvers and restore the row, and the `Lead::contact()` relation must use `withTrashed()`.
+- `lead_events.type` / `actor` are `string(32)`; SQLite will not enforce that, MySQL will. Keep type values short and add constants when phase 2 adds more types.
+
 ## Plan self-review
 
 **Spec coverage (phase 1 scope):** lead profiles with brief, hard filters, sources, cap (Tasks 1, 11); `LeadSource` interface, registry, Apollo connector incl. reveal (2, 4); encrypted keys and kill switch (3, 10); AI brief to reviewable query with hard filters winning (5, 11); two-stage design groundwork: search stores partial leads, `reveal` implemented and tested but not orchestrated, which is phase 2 (4, 7); de-duplication (6); caps, cursor, errors, kill switch (7); schedule (8); `leads.*` permissions (9); screens and sidebar (10 to 12); events table with `pulled` events (1, 6). Deferred by design and listed in the doc: qualification, promotion, outreach, reply detection and handling, autonomy levels, connectors 2 to 5.

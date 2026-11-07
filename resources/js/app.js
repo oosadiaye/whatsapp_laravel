@@ -57,6 +57,12 @@ if (window.userId && window.Echo) {
     pulse.listen('.call.terminated', () => {
         window.Livewire?.dispatch('realtime-pulse:refresh');
     });
+
+    // Lead CRM: a prospect replied, or an AI decision needs a person. The toast and the sidebar badge
+    // listen for this window event (resources/views/layouts/app.blade.php and navigation.blade.php).
+    pulse.listen('.lead.alert', (event) => {
+        window.dispatchEvent(new CustomEvent('lead-alert', { detail: event }));
+    });
 }
 
 // Live task board: subscribe to the board currently on screen so a teammate's

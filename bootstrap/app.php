@@ -62,8 +62,10 @@ return Application::configure(basePath: dirname(__DIR__))
             // signed-URL middleware instead of a CSRF token.
             'email/unsubscribe',
             'email/sequence-unsubscribe/*',
+            'email/lead-unsubscribe/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Never flash a typed API key back into the session on a validation failure.
+        $exceptions->dontFlash(['api_key']);
     })->create();

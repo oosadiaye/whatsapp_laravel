@@ -17,6 +17,9 @@ use App\Http\Controllers\EmailSuppressionController;
 use App\Http\Controllers\EmailTemplateController;
 use App\Http\Controllers\EmailTrackingController;
 use App\Http\Controllers\EmailWebhookController;
+use App\Http\Controllers\LeadController;
+use App\Http\Controllers\LeadProfileController;
+use App\Http\Controllers\LeadSourceSettingsController;
 use App\Http\Controllers\MailboxController;
 use App\Http\Controllers\MyTasksController;
 use App\Http\Controllers\MessageTemplateController;
@@ -88,6 +91,11 @@ Route::get('/email/sequence-click/{recipient}', [SequenceTrackingController::cla
 Route::match(['get', 'post'], '/email/sequence-unsubscribe/{recipient}', [SequenceTrackingController::class, 'unsubscribe'])
     ->middleware('signed')
     ->name('email.sequence-unsubscribe');
+
+// Lead outreach unsubscribe (signed per lead). Recipients are strangers, not app users.
+Route::match(['get', 'post'], '/email/lead-unsubscribe/{lead}', [\App\Http\Controllers\LeadUnsubscribeController::class, 'unsubscribe'])
+    ->middleware('signed')
+    ->name('email.lead-unsubscribe');
 
 // Authenticated routes — role/permission gates per resource group
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -439,6 +447,45 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/settings/test-voice', [SettingsController::class, 'testVoiceConnection'])->name('settings.test-voice');
         Route::post('/settings/test-ai', [SettingsController::class, 'testAiConnection'])->name('settings.test-ai');
         Route::get('/settings/ai/openrouter-models', [SettingsController::class, 'openRouterModels'])->name('settings.openrouter-models');
+    });
+
+    // ─── AI Lead CRM: platform keys, kill switch ────────────────────────────
+    // `kill-switch` is registered before the {source} wildcard (and the wildcard is
+    // constrained to [a-z0-9_]+, which excludes the hyphen) so it cannot be shadowed.
+    Route::middleware('permission:leads.manage')->group(function () {
+        Route::get('/lead-sources', [LeadSourceSettingsController::class, 'index'])->name('lead-sources.index');
+        Route::post('/lead-sources/kill-switch', [LeadSourceSettingsController::class, 'killSwitch'])->name('lead-sources.kill-switch');
+        Route::post('/lead-sources/autonomy', [LeadSourceSettingsController::class, 'autonomy'])->name('lead-sources.autonomy');
+        Route::put('/lead-sources/{source}', [LeadSourceSettingsController::class, 'update'])
+            ->where('source', '[a-z0-9_]+')->name('lead-sources.update');
+        Route::post('/lead-sources/{source}/test', [LeadSourceSettingsController::class, 'test'])
+            ->where('source', '[a-z0-9_]+')->middleware('throttle:6,1,lead-source-test:')->name('lead-sources.test');
+
+        // Static segments (/create) before the {leadProfile} wildcards.
+        Route::get('/lead-profiles', [LeadProfileController::class, 'index'])->name('lead-profiles.index');
+        Route::get('/lead-profiles/create', [LeadProfileController::class, 'create'])->name('lead-profiles.create');
+        Route::post('/lead-profiles', [LeadProfileController::class, 'store'])->middleware('throttle:6,1,lead-store:')->name('lead-profiles.store');
+        Route::get('/lead-profiles/{leadProfile}/edit', [LeadProfileController::class, 'edit'])->name('lead-profiles.edit');
+        Route::put('/lead-profiles/{leadProfile}', [LeadProfileController::class, 'update'])->middleware('throttle:12,1,lead-update:')->name('lead-profiles.update');
+        Route::post('/lead-profiles/{leadProfile}/rebuild-query', [LeadProfileController::class, 'rebuildQuery'])->middleware('throttle:6,1,lead-rebuild:')->name('lead-profiles.rebuild-query');
+        Route::post('/lead-profiles/{leadProfile}/pull', [LeadProfileController::class, 'pullNow'])->middleware('throttle:6,1,lead-pull:')->name('lead-profiles.pull');
+        Route::post('/lead-profiles/{leadProfile}/qualify', [LeadProfileController::class, 'qualifyNow'])
+            ->middleware('throttle:6,1,lead-qualify:')->name('lead-profiles.qualify');
+        Route::post('/lead-profiles/{leadProfile}/reset-pull', [LeadProfileController::class, 'resetPull'])->name('lead-profiles.reset-pull');
+        Route::delete('/lead-profiles/{leadProfile}', [LeadProfileController::class, 'destroy'])->name('lead-profiles.destroy');
+
+        // Drafts waiting for a person, replies that need one, and the sidebar badge counts.
+        Route::get('/lead-approvals', [\App\Http\Controllers\LeadApprovalController::class, 'index'])->name('lead-approvals.index');
+        Route::get('/lead-approvals/attention', [\App\Http\Controllers\LeadApprovalController::class, 'attention'])->name('lead-approvals.attention');
+        Route::post('/lead-approvals/messages/{message}/approve', [\App\Http\Controllers\LeadApprovalController::class, 'approve'])
+            ->middleware('throttle:30,1,lead-approve:')->name('lead-approvals.approve');
+        Route::post('/lead-approvals/messages/{message}/discard', [\App\Http\Controllers\LeadApprovalController::class, 'discard'])->name('lead-approvals.discard');
+        Route::post('/lead-approvals/replies/{reply}/resolve', [\App\Http\Controllers\LeadApprovalController::class, 'resolveReply'])->name('lead-approvals.resolve');
+    });
+
+    Route::middleware('permission:leads.view')->group(function () {
+        Route::get('/leads', [LeadController::class, 'index'])->name('leads.index');
+        Route::get('/leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
     });
 
     // ─── User Management ───────────────────────────────────────────────────

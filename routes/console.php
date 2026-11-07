@@ -58,6 +58,15 @@ Schedule::command('email:warmup')->everyFiveMinutes()->withoutOverlapping()->onO
 // Lead scoring: recalculate contact lead scores from email engagement.
 Schedule::command('email:score-leads')->hourly()->withoutOverlapping()->onOneServer();
 
+// AI lead CRM: pull a page of new leads for every due, active lead profile.
+Schedule::command('leads:pull')->hourly()->withoutOverlapping()->onOneServer();
+
+// AI lead CRM: judge new leads and reveal emails for the ones that pass.
+Schedule::command('leads:qualify')->everyTenMinutes()->withoutOverlapping()->onOneServer();
+
+// AI lead CRM: write first emails and follow-ups, and send what is approved (autonomy rules decide who approves).
+Schedule::command('leads:outreach')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
+
 // Auto-away: mark agents as away after 5 minutes of inactivity (RealtimePulse
 // touches last_seen_at every 30s). Keeps the RoundRobinAssigner from routing
 // new inbound calls to idle agents.

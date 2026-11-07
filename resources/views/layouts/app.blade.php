@@ -302,6 +302,27 @@
             }, true);
         </script>
 
+        @auth
+            @can('leads.manage')
+                {{-- Live alerts: a prospect replied, or an AI decision needs you. Fed by the lead.alert broadcast (resources/js/app.js). --}}
+                <div x-data="{ toasts: [], push(d) { const id = Date.now() + Math.random(); this.toasts.push({ id: id, headline: d.headline, company: d.company, url: d.url, kind: d.kind }); setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 15000); } }"
+                     @lead-alert.window="push($event.detail)"
+                     class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2"
+                     role="status" aria-live="polite" data-testid="lead-toasts">
+                    <template x-for="t in toasts" :key="t.id">
+                        <div class="pointer-events-auto rounded-xl border border-gray-200 bg-white p-4 shadow-lg" :class="t.kind === 'needs_attention' ? 'border-l-4 border-l-red-600' : 'border-l-4 border-l-emerald-600'">
+                            <p class="text-sm font-semibold text-gray-900" x-text="t.headline"></p>
+                            <p class="mt-0.5 text-xs text-gray-500" x-show="t.company" x-text="t.company"></p>
+                            <div class="mt-2 flex items-center gap-3">
+                                <a :href="t.url" class="text-sm font-medium text-brand-text hover:underline">Open lead</a>
+                                <button type="button" class="text-xs text-gray-500 hover:text-gray-800" @click="toasts = toasts.filter(x => x.id !== t.id)">Dismiss</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            @endcan
+        @endauth
+
         @livewireScripts
         @stack('scripts')
     </body>
