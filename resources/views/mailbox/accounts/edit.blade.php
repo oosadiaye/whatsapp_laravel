@@ -4,7 +4,35 @@
     </x-slot>
 
     <div class="py-8">
-        <div class="max-w-2xl mx-auto sm:px-6 lg:px-8">
+        <div class="max-w-2xl mx-auto sm:px-6 lg:px-8 space-y-6">
+            @if(session('success'))
+                <div class="rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-800">{{ session('success') }}</div>
+            @endif
+
+            <div class="bg-white shadow-sm rounded-lg p-6" id="signature">
+                <h3 class="text-base font-semibold text-gray-800">{{ __('Email signature') }}</h3>
+                <p class="mt-1 text-sm text-gray-500">{{ __('Yours alone: it is only used when you write from this mailbox.') }}</p>
+                <form method="POST" action="{{ route('mailbox.accounts.signature', $account) }}" class="mt-4 space-y-3">
+                    @csrf
+                    @method('PUT')
+                    <textarea name="signature" rows="6" maxlength="1000" spellcheck="true"
+                        placeholder="{{ __("Best regards,\nYour name\nYour role, Company\n+234 ...") }}"
+                        class="block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-brand focus:ring-brand">{{ old('signature', $account->signature) }}</textarea>
+                    <x-input-error :messages="$errors->get('signature')" />
+                    <label class="flex items-start gap-2 text-sm text-gray-700">
+                        <input type="hidden" name="signature_auto" value="0">
+                        <input type="checkbox" name="signature_auto" value="1" class="mt-0.5 rounded border-gray-300"
+                            @checked(old('signature_auto', $account->signature_auto ?? true))>
+                        <span>{{ __('Add it automatically to every new message, reply and forward') }}
+                            <span class="block text-xs text-gray-500">{{ __('It appears in the message so you can still edit or delete it before sending.') }}</span>
+                        </span>
+                    </label>
+                    <div class="flex justify-end">
+                        <button type="submit" class="px-5 py-2 bg-brand text-white text-sm font-semibold rounded-md hover:bg-brand-hover">{{ __('Save signature') }}</button>
+                    </div>
+                </form>
+            </div>
+
             <div class="bg-white shadow-sm rounded-lg p-6">
                 <form method="POST" action="{{ route('mailbox.accounts.update', $account) }}" class="space-y-5">
                     @csrf

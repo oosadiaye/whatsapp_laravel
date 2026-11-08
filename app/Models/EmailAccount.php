@@ -40,6 +40,8 @@ class EmailAccount extends Model
         'last_synced_at',
         'is_active',
         'needs_reauth',
+        'signature',
+        'signature_auto',
     ];
 
     /**
@@ -64,6 +66,7 @@ class EmailAccount extends Model
             'last_synced_at' => 'datetime',
             'is_active' => 'boolean',
             'needs_reauth' => 'boolean',
+            'signature_auto' => 'boolean',
         ];
     }
 

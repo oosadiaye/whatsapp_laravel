@@ -60,6 +60,9 @@ trait WithCompose
     /** @var array<int, TemporaryUploadedFile> */
     public array $composeFiles = [];
 
+    /** The signature block placed in the body when the composer opened (so a changed sender can swap it). */
+    public string $appliedSignature = '';
+
     /** The body as it was before the last AI edit, so one click puts it back. */
     public ?string $bodyBeforeAi = null;
 
@@ -182,6 +185,26 @@ trait WithCompose
         $this->composeReferences = $this->buildReferences($message);
     }
 
+    /** Sending from a different mailbox swaps in that mailbox's signature, if the old one is still there. */
+    public function updatedComposeAccountId(): void
+    {
+        if ($this->composeMode !== 'new') {
+            return;
+        }
+
+        $account = $this->ownActiveAccounts()->whereKey($this->composeAccountId)->first();
+        $new = $this->signatureBlock($account);
+        $old = $this->appliedSignature;
+
+        if ($old !== '' && str_contains($this->composeBody, $old)) {
+            $this->composeBody = str_replace($old, $new, $this->composeBody);
+        } elseif (trim($this->composeBody) === '') {
+            $this->composeBody = $new;
+        }
+
+        $this->appliedSignature = $new;
+    }
+
     public function startForward(int $messageId): void
     {
         $message = $this->sendableMessage($messageId);
@@ -189,7 +212,7 @@ trait WithCompose
         // A forward opens a NEW thread (no In-Reply-To/References to the original).
         $this->openComposer('forward', $message->account->id, null);
         $this->composeSubject = $this->prefixSubject('Fwd:', (string) $message->subject);
-        $this->composeBody = $this->quote($message);
+        $this->composeBody = $this->appliedSignature.$this->quote($message);
     }
 
     public function startCompose(): void
@@ -284,6 +307,18 @@ trait WithCompose
         $this->composeMode = $mode;
         $this->composeAccountId = $accountId;
         $this->composeThreadId = $threadId;
+
+        // Signature goes below the cursor, ahead of any quoted/forwarded text.
+        $this->appliedSignature = $this->signatureBlock($this->ownActiveAccounts()->whereKey($accountId)->first());
+        $this->composeBody = $this->appliedSignature;
+    }
+
+    /** "-- " is the conventional signature delimiter; mail clients and the AI editor both recognise it. */
+    private function signatureBlock(?EmailAccount $account): string
+    {
+        $signature = trim((string) $account?->signature);
+
+        return $account?->signature_auto && $signature !== '' ? "\n\n-- \n".$signature : '';
     }
 
     private function resetCompose(): void
@@ -291,7 +326,7 @@ trait WithCompose
         $this->reset([
             'composing', 'composeMode', 'composeAccountId', 'replyToMessageId',
             'composeThreadId', 'composeTo', 'composeCc', 'composeSubject',
-            'composeBody', 'composeInReplyTo', 'composeReferences', 'composeFiles', 'bodyBeforeAi',
+            'composeBody', 'composeInReplyTo', 'composeReferences', 'composeFiles', 'bodyBeforeAi', 'appliedSignature',
         ]);
     }
 

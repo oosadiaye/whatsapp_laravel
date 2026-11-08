@@ -187,6 +187,25 @@ class EmailAccountController extends Controller
             ->with('success', "Mailbox {$account->email} updated.");
     }
 
+    /** The owner's own signature for this mailbox. Plain text; added to new mail when `signature_auto` is on. */
+    public function updateSignature(Request $request, EmailAccount $account): RedirectResponse
+    {
+        abort_unless($account->user_id === auth()->id(), 403);
+
+        $data = $request->validate([
+            'signature' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $signature = trim(str_replace("\r\n", "\n", (string) ($data['signature'] ?? '')));
+
+        $account->update([
+            'signature' => $signature === '' ? null : $signature,
+            'signature_auto' => $request->boolean('signature_auto'),
+        ]);
+
+        return redirect()->route('mailbox.accounts.edit', $account)->with('success', 'Signature saved.');
+    }
+
     public function destroy(EmailAccount $account, AuditService $audit): RedirectResponse
     {
         abort_unless(

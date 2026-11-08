@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 /**
  * Improves an email the person has already written: fix spelling and grammar, rephrase, or polish.
  * Works only on what they typed. Quoted history in a forward or reply (everything from the
- * "Forwarded message" line or the first "> " line down) is carved off before the call and put back
+ * "Forwarded message" line, the first "> " line or the "-- " signature line down) is carved off before the call and put back
  * untouched, so the AI can never rewrite what someone else wrote.
  *
  * Returns null when the AI is unavailable, so the composer leaves the draft exactly as it was.
@@ -81,7 +81,7 @@ class AiEmailEditor
      */
     private function splitQuotedTail(string $text): array
     {
-        if (preg_match('/\n{0,2}-{5,} Forwarded message -{5,}|\n{1,2}On [^\n]{5,200} wrote:[ \t]*\n|\n> /', $text, $m, PREG_OFFSET_CAPTURE) !== 1) {
+        if (preg_match('/\n{0,2}-{5,} Forwarded message -{5,}|\n{1,2}On [^\n]{5,200} wrote:[ \t]*\n|\n{1,2}> |\n{1,2}-- ?\n/', $text, $m, PREG_OFFSET_CAPTURE) !== 1) {
             return [$text, ''];
         }
 

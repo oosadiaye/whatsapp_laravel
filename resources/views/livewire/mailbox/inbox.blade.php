@@ -1,13 +1,36 @@
-<div wire:key="mailbox-inbox">
+<div wire:key="mailbox-inbox" x-ref="shell"
+     x-data="{
+        w: 416, min: 256, max: 680, full: false,
+        init() {
+            try { const v = parseInt(localStorage.getItem('mailbox.listWidth'), 10); if (v >= this.min && v <= this.max) { this.w = v; } } catch (e) {}
+        },
+        clamp(v) { return Math.min(this.max, Math.max(this.min, v)); },
+        save() { try { localStorage.setItem('mailbox.listWidth', String(this.w)); } catch (e) {} },
+        startDrag(e) {
+            const x0 = e.clientX, w0 = this.w;
+            const move = (ev) => { this.w = this.clamp(w0 + ev.clientX - x0); };
+            const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); this.save(); };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+        },
+        nudge(d) { this.w = this.clamp(this.w + d); this.save(); },
+        reset() { this.w = 416; this.save(); },
+        toggleFull() {
+            try { if (document.fullscreenElement) { document.exitFullscreen(); } else { this.$refs.shell.requestFullscreen(); } } catch (e) {}
+        },
+     }"
+     @fullscreenchange.window="full = !! document.fullscreenElement"
+     :class="full ? 'bg-[rgb(var(--ground))] p-3 overflow-y-auto' : ''"
+     :style="'--list-w:' + w + 'px; --pane-h:' + (full ? 'calc(100vh - 1.5rem)' : 'calc(100vh - 5.75rem)')">
     @if(session('mailbox_status'))
         <div class="mb-3 rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-800">
             {{ session('mailbox_status') }}
         </div>
     @endif
 
-    <div class="grid grid-cols-1 lg:grid-cols-[minmax(20rem,26rem)_minmax(0,1fr)] gap-4">
+    <div class="grid grid-cols-1 gap-4 lg:gap-0 lg:grid-cols-[var(--list-w)_1rem_minmax(0,1fr)]">
         {{-- Left: thread list --}}
-        <div class="bg-white shadow-sm rounded-lg p-4 flex flex-col h-[calc(100vh-9rem)] min-h-[30rem]">
+        <div class="bg-white shadow-sm rounded-lg p-4 flex flex-col h-[var(--pane-h)] min-h-[30rem] min-w-0">
             <div class="flex items-center justify-between mb-3 shrink-0">
                 <div class="flex gap-1 text-xs">
                     @foreach(['inbox' => __('Inbox'), 'sent' => __('Sent'), 'archive' => __('Archive'), 'trash' => __('Trash')] as $key => $label)
@@ -15,10 +38,16 @@
                             class="px-2 py-1 rounded transition {{ $folder === $key ? 'bg-brand text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">{{ $label }}</button>
                     @endforeach
                 </div>
-                @if($myAccounts->isNotEmpty())
-                    <button type="button" wire:click="startCompose"
-                        class="text-xs font-medium px-2 py-1 rounded bg-gray-800 text-white hover:bg-gray-700 transition">{{ __('Compose') }}</button>
-                @endif
+                <div class="flex items-center gap-1">
+                    <button type="button" @click="toggleFull()" class="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                        :title="full ? '{{ __('Exit full screen') }}' : '{{ __('Full screen') }}'" :aria-label="full ? '{{ __('Exit full screen') }}' : '{{ __('Full screen') }}'">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"/></svg>
+                    </button>
+                    @if($myAccounts->isNotEmpty())
+                        <button type="button" wire:click="startCompose"
+                            class="text-xs font-medium px-2 py-1 rounded bg-gray-800 text-white hover:bg-gray-700 transition">{{ __('Compose') }}</button>
+                    @endif
+                </div>
             </div>
 
             <div class="relative mb-3 shrink-0">
@@ -102,8 +131,20 @@
             </div>
         </div>
 
+        {{-- Drag to resize the list; arrow keys nudge it, double-click resets. --}}
+        <div class="hidden lg:flex items-center justify-center cursor-col-resize group touch-none select-none"
+             role="separator" aria-orientation="vertical" tabindex="0"
+             aria-label="{{ __('Resize the mail list') }}"
+             :aria-valuenow="w" :aria-valuemin="min" :aria-valuemax="max"
+             @pointerdown.prevent="startDrag($event)"
+             @dblclick="reset()"
+             @keydown.left.prevent="nudge(-24)"
+             @keydown.right.prevent="nudge(24)">
+            <span class="h-16 w-1 rounded-full bg-gray-300 transition group-hover:bg-brand group-focus-visible:bg-brand"></span>
+        </div>
+
         {{-- Right: selected thread + composer --}}
-        <div class="bg-white shadow-sm rounded-lg p-5 overflow-y-auto h-[calc(100vh-9rem)] min-h-[30rem]">
+        <div class="bg-white shadow-sm rounded-lg p-5 overflow-y-auto h-[var(--pane-h)] min-h-[30rem] min-w-0">
             @if($selected)
                 <div class="flex items-start justify-between mb-4 gap-2">
                     <div class="min-w-0 flex-1">
@@ -311,6 +352,9 @@
                 </div>
                 <div class="flex items-center gap-3 text-xs text-gray-500">
                     <span x-data x-text="($wire.composeBody || '').trim() === '' ? '' : (($wire.composeBody || '').trim().split(/\s+/).length + ' {{ __('words') }}')"></span>
+                    @if($composeAccountId)
+                        <a href="{{ route('mailbox.accounts.edit', $composeAccountId) }}#signature" target="_blank" rel="noopener" class="hover:text-gray-800 hover:underline">{{ __('Signature') }}</a>
+                    @endif
                     <button type="button" wire:click="cancelCompose" class="rounded-full p-2 hover:bg-gray-100 hover:text-red-600" title="{{ __('Discard draft') }}" aria-label="{{ __('Discard draft') }}">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
                     </button>
