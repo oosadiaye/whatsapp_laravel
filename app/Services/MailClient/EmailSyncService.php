@@ -93,12 +93,17 @@ class EmailSyncService
             return false;
         }
 
-        $thread = $this->resolveThread($account, $fetched);
+        // Mail found in the server's Sent folder: sent by this mailbox from somewhere else (phone,
+        // webmail) or earlier than this app. Stored as outbound, already read, with no alert.
+        $outbound = $fetched->folder === EmailThread::FOLDER_SENT;
+
+        $thread = $this->resolveThread($account, $fetched, $outbound);
         $receivedAt = $fetched->date ?? now();
+        $isRead = $outbound || $fetched->isRead;
 
         $message = $thread->messages()->create([
             'email_account_id' => $account->id,
-            'direction' => EmailMessage::DIRECTION_INBOUND,
+            'direction' => $outbound ? EmailMessage::DIRECTION_OUTBOUND : EmailMessage::DIRECTION_INBOUND,
             'message_id' => $messageId,
             'in_reply_to' => $fetched->inReplyTo,
             'references_header' => $fetched->references,
@@ -108,9 +113,10 @@ class EmailSyncService
             'subject' => $fetched->subject,
             'body_html' => $fetched->bodyHtml,
             'body_text' => $fetched->bodyText,
-            'is_read' => $fetched->isRead,
+            'is_read' => $isRead,
             'has_attachments' => $fetched->attachments !== [],
-            'received_at' => $receivedAt,
+            'received_at' => $outbound ? null : $receivedAt,
+            'sent_at' => $outbound ? $receivedAt : null,
         ]);
 
         foreach ($fetched->attachments as $attachment) {
@@ -133,9 +139,16 @@ class EmailSyncService
         // same account can run concurrently; a read-then-write ($thread->unread_count
         // + 1) would let the second overwrite the first's increment and permanently
         // undercount the badge. Mirrors InboundMessageProcessor's fix.
-        $thread->increment('unread_count', $fetched->isRead ? 0 : 1, [
-            'last_message_at' => $receivedAt,
+        $thread->increment('unread_count', $isRead ? 0 : 1, [
+            // Never move a thread backwards: catching up on old mail can land inside a newer thread.
+            'last_message_at' => $thread->last_message_at !== null && $thread->last_message_at->gt($receivedAt)
+                ? $thread->last_message_at
+                : $receivedAt,
             'subject' => $thread->subject ?: $fetched->subject,
+            // An answer to something we sent (a thread that so far lives in Sent) belongs in the inbox.
+            'folder' => ! $outbound && $thread->folder === EmailThread::FOLDER_SENT
+                ? EmailThread::FOLDER_INBOX
+                : $thread->folder,
         ]);
 
         // Realtime push to the owner's inbox (plan B6). Only fires for genuinely
@@ -144,7 +157,7 @@ class EmailSyncService
         // Old mail pulled in while catching up is history, not news: no toast, and no lead-reply scan
         // (which could otherwise answer an email from months ago).
         $isHistory = $backfilling && $receivedAt->lt(now()->subDays(self::BACKFILL_QUIET_AFTER_DAYS));
-        if (! $isHistory) {
+        if (! $isHistory && ! $outbound) {
             MailReceived::dispatch($account, $message);
         }
 
@@ -169,7 +182,7 @@ class EmailSyncService
      * Thread by header references: any already-stored message this one replies to
      * puts it in that thread; otherwise start a new one.
      */
-    private function resolveThread(EmailAccount $account, FetchedMessage $fetched): EmailThread
+    private function resolveThread(EmailAccount $account, FetchedMessage $fetched, bool $outbound): EmailThread
     {
         $referencedIds = $this->referencedIds($fetched);
 
@@ -187,7 +200,7 @@ class EmailSyncService
         return EmailThread::create([
             'email_account_id' => $account->id,
             'subject' => $fetched->subject,
-            'folder' => EmailThread::FOLDER_INBOX,
+            'folder' => $outbound ? EmailThread::FOLDER_SENT : EmailThread::FOLDER_INBOX,
             'thread_ref' => $this->normalizeId($fetched->messageId),
             'last_message_at' => $fetched->date ?? now(),
             'unread_count' => 0,

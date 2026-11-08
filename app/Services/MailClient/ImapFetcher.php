@@ -11,7 +11,7 @@ use Webklex\PHPIMAP\ClientManager;
 use Webklex\PHPIMAP\Exceptions\AuthFailedException;
 
 /**
- * IMAP inbound fetcher (plan B3). Incremental by UID within INBOX; a UIDVALIDITY
+ * IMAP fetcher (plan B3): INBOX plus the Sent folder, each incremental by UID; a UIDVALIDITY
  * change invalidates the stored UID set and triggers a full re-sync (review M7).
  * `leaveUnread()` keeps the server's read state untouched during sync.
  *
@@ -33,9 +33,7 @@ class ImapFetcher implements MailFetcher
     public function fetch(EmailAccount $account): FetchResult
     {
         $creds = $account->credentials ?? [];
-        $state = $account->sync_state['inbox'] ?? [];
-        $storedUidValidity = (int) ($state['uidvalidity'] ?? 0);
-        $lastUid = (int) ($state['last_uid'] ?? 0);
+        $state = $account->sync_state ?? [];
 
         try {
             $client = $this->manager()->make([
@@ -49,56 +47,28 @@ class ImapFetcher implements MailFetcher
             ]);
             $client->connect();
 
-            $folder = $client->getFolderByPath('INBOX');
-            $currentUidValidity = (int) ($folder->examine()['uidvalidity'] ?? 0);
+            $inbox = $this->pull($client->getFolderByPath('INBOX'), (array) ($state['inbox'] ?? []), 'inbox', $account);
 
-            // Cursor invalid (first run, or the mailbox re-numbered its UIDs) →
-            // full re-sync from UID 0. Dedup downstream makes re-emitting safe.
-            $fullResync = $storedUidValidity === 0 || $storedUidValidity !== $currentUidValidity;
-            $fromUid = $fullResync ? 0 : $lastUid;
+            $messages = $inbox['messages'];
+            $cursor = ['inbox' => $inbox['cursor']];
+            $hasMore = $inbox['hasMore'];
 
-            $collection = $folder->query()
-                ->leaveUnread()
-                ->limit(self::PER_RUN_LIMIT)
-                ->getByUidGreater($fromUid);
-
-            $messages = [];
-            // Start from 0 on a full re-sync: a UIDVALIDITY change renumbers the
-            // mailbox, so the OLD last_uid is meaningless in the new UID space and
-            // seeding maxUid with it could pin the cursor above the new (smaller)
-            // UIDs, making the next incremental fetch skip everything below it.
-            $maxUid = $fullResync ? 0 : $lastUid;
-            foreach ($collection as $message) {
-                try {
-                    $uid = (int) $message->getUid();
-                    $maxUid = max($maxUid, $uid);
-
-                    // Skip oversized mail BEFORE materialising its bodies /
-                    // attachments — the memory + private-disk DoS guard. The
-                    // deterministic fixture-tested layer lives in
-                    // EmailSyncService::store; this short-circuit keeps a giant
-                    // message from ever being expanded into worker memory.
-                    $maxBytes = (int) config('mail_client.max_inbound_kb', 25600) * 1024;
-                    if ($maxBytes > 0) {
-                        try {
-                            if ((int) $message->getSize() > $maxBytes) {
-                                Log::warning('Skipping oversized inbound message', [
-                                    'account_id' => $account->id,
-                                    'uid' => $uid,
-                                    'cap_bytes' => $maxBytes,
-                                ]);
-
-                                continue;
-                            }
-                        } catch (\Throwable) {
-                            // size unreadable — don't skip on a missing header
-                        }
-                    }
-
-                    $messages[] = $this->toFetchedMessage($message);
-                } catch (\Throwable) {
-                    // Skip a single unparseable message rather than fail the run.
-                    continue;
+            // Mail sent from elsewhere (phone, webmail) and the Sent history. Best effort: an
+            // unusual or unreadable Sent folder must never stop the inbox from syncing, so on any
+            // failure keep the previous Sent cursor and try again next pass.
+            try {
+                $sent = $this->pullSent($client, (array) ($state['sent'] ?? []), $account);
+                if ($sent !== null) {
+                    $messages = array_merge($messages, $sent['messages']);
+                    $cursor['sent'] = $sent['cursor'];
+                    $hasMore = $hasMore || $sent['hasMore'];
+                }
+            } catch (AuthFailedException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                Log::warning('Sent folder sync failed; inbox unaffected', ['account_id' => $account->id, 'error' => $e->getMessage()]);
+                if (isset($state['sent'])) {
+                    $cursor['sent'] = $state['sent'];
                 }
             }
 
@@ -106,9 +76,9 @@ class ImapFetcher implements MailFetcher
 
             return new FetchResult(
                 messages: $messages,
-                newCursor: ['inbox' => ['uidvalidity' => $currentUidValidity, 'last_uid' => $maxUid]],
-                wasFullResync: $fullResync,
-                hasMore: count($collection) >= self::PER_RUN_LIMIT,
+                newCursor: $cursor,
+                wasFullResync: $inbox['fullResync'],
+                hasMore: $hasMore,
             );
         } catch (AuthFailedException $e) {
             // Terminal — bad credentials. The job flags needs_reauth and stops.
@@ -117,7 +87,89 @@ class ImapFetcher implements MailFetcher
         // Other exceptions (connection/network) propagate → the job retries.
     }
 
-    private function toFetchedMessage($message): FetchedMessage
+    /**
+     * @param  array<string, mixed>  $state
+     * @return array{messages: list<FetchedMessage>, cursor: array<string, int>, hasMore: bool}|null
+     */
+    private function pullSent(mixed $client, array $state, EmailAccount $account): ?array
+    {
+        $byPath = [];
+        foreach ($client->getFolders(false) as $folder) {
+            $byPath[(string) $folder->path] = $folder;
+        }
+
+        $path = SentFolderFinder::pick(array_keys($byPath));
+        if ($path === null) {
+            return null;
+        }
+
+        $pulled = $this->pull($byPath[$path], $state, 'sent', $account);
+
+        return ['messages' => $pulled['messages'], 'cursor' => $pulled['cursor'], 'hasMore' => $pulled['hasMore']];
+    }
+
+    /**
+     * One batch from one folder, incrementally by UID. A UIDVALIDITY change (or a first run)
+     * restarts from UID 0; dedup downstream makes re-emitting safe.
+     *
+     * @param  array<string, mixed>  $state  {uidvalidity, last_uid} from the previous pass
+     * @return array{messages: list<FetchedMessage>, cursor: array<string, int>, fullResync: bool, hasMore: bool}
+     */
+    private function pull(mixed $folder, array $state, string $label, EmailAccount $account): array
+    {
+        $storedUidValidity = (int) ($state['uidvalidity'] ?? 0);
+        $lastUid = (int) ($state['last_uid'] ?? 0);
+        $currentUidValidity = (int) ($folder->examine()['uidvalidity'] ?? 0);
+
+        $fullResync = $storedUidValidity === 0 || $storedUidValidity !== $currentUidValidity;
+        $fromUid = $fullResync ? 0 : $lastUid;
+
+        $collection = $folder->query()
+            ->leaveUnread()
+            ->limit(self::PER_RUN_LIMIT)
+            ->getByUidGreater($fromUid);
+
+        $messages = [];
+        // Start from 0 on a full re-sync: a UIDVALIDITY change renumbers the mailbox, so the OLD
+        // last_uid is meaningless in the new UID space and seeding with it could pin the cursor
+        // above the new (smaller) UIDs.
+        $maxUid = $fullResync ? 0 : $lastUid;
+        foreach ($collection as $message) {
+            try {
+                $uid = (int) $message->getUid();
+                $maxUid = max($maxUid, $uid);
+
+                // Skip oversized mail BEFORE materialising its bodies / attachments — the memory +
+                // private-disk DoS guard. The deterministic layer lives in EmailSyncService::store.
+                $maxBytes = (int) config('mail_client.max_inbound_kb', 25600) * 1024;
+                if ($maxBytes > 0) {
+                    try {
+                        if ((int) $message->getSize() > $maxBytes) {
+                            Log::warning('Skipping oversized message', ['account_id' => $account->id, 'uid' => $uid, 'folder' => $label, 'cap_bytes' => $maxBytes]);
+
+                            continue;
+                        }
+                    } catch (\Throwable) {
+                        // size unreadable — don't skip on a missing header
+                    }
+                }
+
+                $messages[] = $this->toFetchedMessage($message, $label);
+            } catch (\Throwable) {
+                // Skip a single unparseable message rather than fail the run.
+                continue;
+            }
+        }
+
+        return [
+            'messages' => $messages,
+            'cursor' => ['uidvalidity' => $currentUidValidity, 'last_uid' => $maxUid],
+            'fullResync' => $fullResync,
+            'hasMore' => count($collection) >= self::PER_RUN_LIMIT,
+        ];
+    }
+
+    private function toFetchedMessage($message, string $folder): FetchedMessage
     {
         return new FetchedMessage(
             messageId: (string) $message->getMessageId(),
@@ -131,7 +183,7 @@ class ImapFetcher implements MailFetcher
             bodyText: ($text = (string) $message->getTextBody()) !== '' ? $text : null,
             date: $this->date($message),
             attachments: $this->attachments($message),
-            folder: 'inbox',
+            folder: $folder,
             isRead: $this->isSeen($message),
         );
     }

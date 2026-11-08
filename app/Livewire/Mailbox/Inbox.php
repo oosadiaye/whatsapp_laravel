@@ -6,6 +6,7 @@ namespace App\Livewire\Mailbox;
 
 use App\Livewire\Mailbox\Concerns\WithCompose;
 use App\Models\EmailAccount;
+use App\Models\EmailMessage;
 use App\Models\EmailThread;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
@@ -84,7 +85,7 @@ class Inbox extends Component
     public function render()
     {
         $threads = $this->accessibleThreads()
-            ->where('folder', $this->folder)
+            ->tap(fn (Builder $q) => $this->inFolder($q))
             ->when($this->search !== '', function (Builder $q): void {
                 $term = '%'.$this->search.'%';
                 $q->where(function (Builder $sub) use ($term): void {
@@ -136,6 +137,28 @@ class Inbox extends Component
             'myAccounts' => $myAccounts,
             'canSendFromSelected' => $canSendFromSelected,
         ]);
+    }
+
+    /**
+     * Inbox/Archive/Trash are the thread's own folder. Sent is every conversation that holds a
+     * message we sent, so a reply sent from the app shows there even though its thread started in
+     * the inbox (archived or trashed threads stay in their own folder).
+     */
+    private function inFolder(Builder $query): void
+    {
+        if ($this->folder !== EmailThread::FOLDER_SENT) {
+            $query->where('folder', $this->folder);
+
+            return;
+        }
+
+        $query->where(function (Builder $q): void {
+            $q->where('folder', EmailThread::FOLDER_SENT)
+                ->orWhere(function (Builder $t): void {
+                    $t->whereNotIn('folder', [EmailThread::FOLDER_ARCHIVE, EmailThread::FOLDER_TRASH])
+                        ->whereHas('messages', fn (Builder $m) => $m->where('direction', EmailMessage::DIRECTION_OUTBOUND));
+                });
+        });
     }
 
     /**

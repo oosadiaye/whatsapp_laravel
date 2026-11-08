@@ -65,6 +65,15 @@ class EmailThread extends Model
         return $this->belongsTo(User::class, 'assigned_to_user_id');
     }
 
+    /** Who the latest message we sent went to, for the Sent list. */
+    public function getRecipientPreview(): ?string
+    {
+        $sent = $this->messages()->where('direction', EmailMessage::DIRECTION_OUTBOUND)->latest('id')->first();
+        $to = collect($sent?->to ?? [])->filter()->values();
+
+        return $to->isEmpty() ? null : $to->first().($to->count() > 1 ? ' +'.($to->count() - 1) : '');
+    }
+
     public function getSenderPreview(): ?string
     {
         $latest = $this->messages()->latest('id')->first();

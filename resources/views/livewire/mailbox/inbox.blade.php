@@ -37,7 +37,7 @@
                             class="w-full text-left py-3 px-2 rounded-lg transition hover:bg-gray-50 {{ $selectedThreadId === $thread->id ? 'bg-brand/5 ring-1 ring-brand/20' : '' }}">
                             <div class="flex items-center justify-between gap-2">
                                 <span class="text-sm truncate {{ $thread->unread_count > 0 ? 'font-semibold text-gray-900' : 'text-gray-700' }}">
-                                    {{ $thread->getSenderPreview() ?: ($thread->subject ?: __('(no subject)')) }}
+                                    {{ $folder === 'sent' ? ($thread->getRecipientPreview() ? __('To:').' '.$thread->getRecipientPreview() : ($thread->subject ?: __('(no subject)'))) : ($thread->getSenderPreview() ?: ($thread->subject ?: __('(no subject)'))) }}
                                 </span>
                                 @if($thread->unread_count > 0)
                                     <span class="shrink-0 inline-flex items-center justify-center rounded-full bg-brand text-white text-[10px] min-w-[1rem] h-4 px-1">{{ $thread->unread_count < 100 ? $thread->unread_count : '99+' }}</span>
