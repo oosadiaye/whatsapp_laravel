@@ -101,11 +101,15 @@ Plan: `docs/superpowers/plans/2026-11-07-ai-lead-crm-phase-3-4.md`.
   if the lead has not answered. Hot leads first, a few drafts per run, a stop after three AI failures in a row.
 - **Sending** has one path (`LeadMessageSender`): kill switch, suppression, "has the lead replied", the sender
   mailbox and the daily send cap are re-checked right before sending. A held message stays `approved` and goes
-  out on a later sweep. Every email carries a signed one-click unsubscribe link.
+  out on a later sweep. Every email carries a signed unsubscribe link. Opening it only shows a
+  confirm button (mail scanners open links, so a plain visit must not unsubscribe anyone); the button, or a mail
+  client's one-click POST, does the unsubscribe.
 - **Replies**: every inbound mail from a connected mailbox is matched to a lead by sender address. A match stops
   all outreach at once, alerts the owner and is classified by the AI (interested, question, not now, not
   interested, unsubscribe, out of office, other). Interested or a question gets an answer drafted from the
-  playbook; an answer the AI is not sure of becomes "needs you".
+  playbook; an answer the AI is not sure of becomes "needs you". A confident "interested" also files a high-priority
+  card, due in a day, on the owner's **Leads** board (made on first use; an archived one is left alone) assigned to
+  them, once per reply.
 - **Screens**: *Replies & approvals* (approve, edit then approve, discard, mark dealt with), a sidebar badge, the
   lead page (emails, replies, timeline), outreach settings on the profile, the default on Lead Sources.
 - **Alerts** (live): a prospect replying, a reply that needs a person, and drafts waiting for approval each push a
@@ -135,7 +139,9 @@ Add a platform under Lead Sources (key, "Test connection"), then tick it on a le
 
 Hunter notes: Discover is free but limited to 50 requests a minute, and paging past the first page needs a paid
 Hunter plan. Because the lead is a company until revealed, the AI judges the company against the brief (the prompt
-says so); the revealed person is not judged again. Titles, company size and exclusions cannot be sent to Hunter.
+says so). Once the person is revealed they are judged too, by the same rules (excluded titles, then the AI): a
+poor fit is rejected and not emailed, though the paid-for address stays on record, and if the AI cannot answer the
+lead stays qualified. Titles, company size and exclusions cannot be sent to Hunter.
 Lusha notes: seniority and industry are not sent (their values are account-specific); search may report
 `billing.creditsCharged` on your plan, so watch the first runs. The connectors follow the vendors' published
 docs and are tested against recorded-shape fakes, not live accounts.
@@ -146,6 +152,5 @@ output per actor, which need their own design). Adding a platform is one class p
 
 ## Not built yet
 
-- A board task for a person when a lead replies "interested" (alerts only for now).
 - Promoting by hand, a pipeline board view, open/click tracking on lead emails.
 - ZoomInfo and Apify / Outscraper connectors (see Lead platforms).

@@ -93,9 +93,11 @@ Route::match(['get', 'post'], '/email/sequence-unsubscribe/{recipient}', [Sequen
     ->name('email.sequence-unsubscribe');
 
 // Lead outreach unsubscribe (signed per lead). Recipients are strangers, not app users.
-Route::match(['get', 'post'], '/email/lead-unsubscribe/{lead}', [\App\Http\Controllers\LeadUnsubscribeController::class, 'unsubscribe'])
+Route::get('/email/lead-unsubscribe/{lead}', [\App\Http\Controllers\LeadUnsubscribeController::class, 'confirm'])
     ->middleware('signed')
     ->name('email.lead-unsubscribe');
+Route::post('/email/lead-unsubscribe/{lead}', [\App\Http\Controllers\LeadUnsubscribeController::class, 'unsubscribe'])
+    ->middleware('signed');
 
 // Authenticated routes — role/permission gates per resource group
 Route::middleware(['auth', 'verified'])->group(function () {

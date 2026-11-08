@@ -546,6 +546,80 @@ final class LeadQualificationRunnerTest extends TestCase
         $this->assertCount(0, $ai->calls);
     }
 
+    /** A company-first lead (Hunter): judged as a company, revealed, then the person who came back is judged too. */
+    private function hunterCompany(LeadProfile $profile, array $person): Lead
+    {
+        config(['services.hunter.key' => null]);
+        LeadConfig::setKey('hunter', 'hunter-test-key-123');
+        Http::fake(['api.hunter.io/v2/domain-search*' => Http::response(['data' => ['emails' => [array_merge([
+            'value' => 'who@paystackx.com', 'first_name' => 'Wil', 'last_name' => 'Hu', 'seniority' => 'senior',
+            'confidence' => 90, 'verification' => ['status' => 'valid'],
+        ], $person)]]])]);
+
+        return $this->newLead($profile, 'paystackx.com', [
+            'source' => 'hunter', 'title' => null, 'name' => 'PaystackX', 'company' => 'PaystackX', 'domain' => 'paystackx.com',
+        ]);
+    }
+
+    public function test_the_person_a_company_first_platform_reveals_is_judged_and_a_poor_fit_is_rejected(): void
+    {
+        $ai = $this->ai(['{"score": 80, "reason": "Right kind of company."}', '{"score": 10, "reason": "A support agent, not a decision maker."}']);
+        $profile = $this->profile();
+        $lead = $this->hunterCompany($profile, ['position' => 'Support Agent']);
+
+        $result = $this->runFor($profile);
+
+        $this->assertCount(2, $ai->calls, 'company judged, then the revealed person');
+        $this->assertStringContainsString('Support Agent', $ai->calls[1][0]['content']);
+        $lead->refresh();
+        $this->assertSame(Lead::STATUS_REJECTED, $lead->status);
+        $this->assertSame('A support agent, not a decision maker.', $lead->qualification_reason);
+        $this->assertSame('who@paystackx.com', $lead->email, 'the paid-for address is kept on record');
+        $this->assertSame(1, $result['revealed']);
+        $this->assertSame(1, $result['rejected']);
+        $this->assertSame(0, $result['qualified'], 'moved from qualified to rejected, not counted twice');
+    }
+
+    public function test_a_good_revealed_person_keeps_the_lead_qualified_with_the_persons_score(): void
+    {
+        $this->ai(['{"score": 80, "reason": "Right kind of company."}', '{"score": 95, "reason": "The CEO."}']);
+        $profile = $this->profile();
+        $lead = $this->hunterCompany($profile, ['position' => 'CEO']);
+
+        $this->runFor($profile);
+
+        $lead->refresh();
+        $this->assertSame(Lead::STATUS_QUALIFIED, $lead->status);
+        $this->assertSame(95, $lead->score);
+        $this->assertSame(Lead::TIER_HOT, $lead->tier);
+        $this->assertSame('The CEO.', $lead->qualification_reason);
+    }
+
+    public function test_a_revealed_person_with_an_excluded_title_is_rejected_without_asking_the_ai(): void
+    {
+        $ai = $this->ai(['{"score": 80, "reason": "Right kind of company."}']);
+        $profile = $this->profile();
+        $lead = $this->hunterCompany($profile, ['position' => 'Marketing Intern']);
+
+        $this->runFor($profile);
+
+        $this->assertCount(1, $ai->calls);
+        $this->assertSame(Lead::STATUS_REJECTED, $lead->fresh()->status);
+    }
+
+    public function test_an_unanswered_second_judgement_does_not_throw_away_a_paid_for_lead(): void
+    {
+        $this->ai(['{"score": 80, "reason": "Right kind of company."}', null]);
+        $profile = $this->profile();
+        $lead = $this->hunterCompany($profile, ['position' => 'Head of Growth']);
+
+        $this->runFor($profile);
+
+        $lead->refresh();
+        $this->assertSame(Lead::STATUS_QUALIFIED, $lead->status);
+        $this->assertSame('Head of Growth', $lead->title);
+    }
+
     public function test_a_clean_run_clears_the_previous_error_and_only_this_profiles_leads_are_touched(): void
     {
         $this->ai(['{"score": 90, "reason": "a"}']);

@@ -169,11 +169,24 @@ final class LeadMessageSenderTest extends TestCase
         $message = $this->message($profile, [], ['status' => 'pending_approval']);
         $url = \Illuminate\Support\Facades\URL::signedRoute('email.lead-unsubscribe', ['lead' => $message->lead_id]);
 
-        $this->get($url)->assertOk();
+        $this->post($url)->assertOk();
 
         $this->assertTrue(EmailSuppression::isSuppressed('ada@acme.test'));
         $this->assertSame(Lead::STATUS_UNSUBSCRIBED, $message->lead()->first()->status);
         $this->assertSame('discarded', $message->fresh()->status);
+    }
+
+    public function test_opening_the_unsubscribe_link_only_asks_for_confirmation(): void
+    {
+        // Mail scanners and link previewers open links with GET; that must never unsubscribe anyone.
+        $message = $this->message($this->profile(), [], ['status' => 'pending_approval']);
+        $url = \Illuminate\Support\Facades\URL::signedRoute('email.lead-unsubscribe', ['lead' => $message->lead_id]);
+
+        $this->get($url)->assertOk()->assertSee('Confirm unsubscribe')->assertSee('ada@acme.test');
+
+        $this->assertFalse(EmailSuppression::isSuppressed('ada@acme.test'));
+        $this->assertSame('pending_approval', $message->fresh()->status);
+        $this->assertNotSame(Lead::STATUS_UNSUBSCRIBED, $message->lead()->first()->status);
     }
 
     public function test_an_unsigned_unsubscribe_link_is_refused(): void
