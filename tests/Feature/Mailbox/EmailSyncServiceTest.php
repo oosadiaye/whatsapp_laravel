@@ -219,6 +219,51 @@ class EmailSyncServiceTest extends TestCase
         Event::assertDispatchedTimes(MailReceived::class, 1);
     }
 
+    public function test_old_mail_pulled_in_on_first_connect_is_stored_quietly_and_keeps_its_read_state(): void
+    {
+        Event::fake([MailReceived::class]);
+        $account = EmailAccount::factory()->create(['last_synced_at' => null]);
+        $old = new FetchedMessage(
+            messageId: '<old@example.com>', inReplyTo: null, references: null, from: 'ann@example.com',
+            to: ['me@work.test'], cc: [], subject: 'Years ago', bodyHtml: null, bodyText: 'Hi',
+            date: now()->subMonths(6), isRead: true,
+        );
+        $recent = $this->msg('<fresh@example.com>');
+
+        $this->service()->sync($account, $this->fetcherReturning($this->fetchResult([$old, $recent])));
+
+        $this->assertSame(2, EmailMessage::count());
+        $this->assertTrue(EmailMessage::where('message_id', 'old@example.com')->first()->is_read);
+        $this->assertSame(0, EmailMessage::where('message_id', 'old@example.com')->first()->thread->unread_count);
+        Event::assertDispatchedTimes(MailReceived::class, 1); // only the recent one
+    }
+
+    public function test_old_mail_still_alerts_when_the_account_is_not_catching_up(): void
+    {
+        Event::fake([MailReceived::class]);
+        $account = EmailAccount::factory()->create(['last_synced_at' => now()->subMinute()]);
+        $late = new FetchedMessage(
+            messageId: '<late@example.com>', inReplyTo: null, references: null, from: 'ann@example.com',
+            to: ['me@work.test'], cc: [], subject: 'Delayed', bodyHtml: null, bodyText: 'Hi', date: now()->subDays(10),
+        );
+
+        $this->service()->sync($account, $this->fetcherReturning($this->fetchResult([$late])));
+
+        Event::assertDispatchedTimes(MailReceived::class, 1);
+    }
+
+    public function test_a_full_batch_marks_the_account_as_still_catching_up(): void
+    {
+        $account = EmailAccount::factory()->create();
+        $result = new FetchResult([$this->msg('<a@example.com>')], ['inbox' => ['uidvalidity' => 1, 'last_uid' => 5]], hasMore: true);
+
+        $this->service()->sync($account, $this->fetcherReturning($result));
+        $this->assertTrue($account->fresh()->sync_state['backfilling']);
+
+        $this->service()->sync($account->fresh(), $this->fetcherReturning($this->fetchResult([], 5)));
+        $this->assertArrayNotHasKey('backfilling', $account->fresh()->sync_state);
+    }
+
     public function test_an_oversized_message_is_skipped(): void
     {
         // Tiny cap so the fixture body is unambiguously over the limit.

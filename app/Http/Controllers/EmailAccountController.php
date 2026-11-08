@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SyncEmailAccount;
 use App\Models\EmailAccount;
 use App\Rules\SafeMailHost;
 use App\Services\AuditService;
@@ -103,6 +104,9 @@ class EmailAccountController extends Controller
 
         $account->update(['is_active' => true, 'needs_reauth' => false]);
 
+        // Pull the mailbox's existing mail now, not at the next scheduler tick.
+        SyncEmailAccount::dispatch($account->id);
+
         $audit->log('mailbox.connected', 'email_account', $account->id, ['email' => $account->email]);
 
         return redirect()->route('mailbox.accounts.index')
@@ -174,6 +178,8 @@ class EmailAccountController extends Controller
 
         $account->is_active = true;
         $account->save();
+
+        SyncEmailAccount::dispatch($account->id);
 
         $audit->log('mailbox.updated', 'email_account', $account->id, ['email' => $account->email]);
 

@@ -24,6 +24,9 @@ use Illuminate\Support\Str;
  */
 class EmailSyncService
 {
+    /** While catching up on history, mail older than this is stored quietly (no live alert, no reply scan). */
+    private const BACKFILL_QUIET_AFTER_DAYS = 3;
+
     /**
      * @return int number of NEW messages stored this run
      */
@@ -31,15 +34,25 @@ class EmailSyncService
     {
         $result = $fetcher->fetch($account);
 
+        // First connect, a renumbered mailbox, or a previous pass that left mail behind.
+        $backfilling = $account->last_synced_at === null
+            || $result->wasFullResync
+            || ($account->sync_state['backfilling'] ?? false) === true;
+
         $new = 0;
         foreach ($result->messages as $message) {
-            if ($this->store($account, $message)) {
+            if ($this->store($account, $message, $backfilling)) {
                 $new++;
             }
         }
 
+        $cursor = $result->newCursor;
+        if ($result->hasMore) {
+            $cursor['backfilling'] = true; // SyncEmailAccount re-queues itself while this is set
+        }
+
         $account->update([
-            'sync_state' => $result->newCursor,
+            'sync_state' => $cursor,
             'last_synced_at' => now(),
             'needs_reauth' => false,
         ]);
@@ -47,7 +60,7 @@ class EmailSyncService
         return $new;
     }
 
-    private function store(EmailAccount $account, FetchedMessage $fetched): bool
+    private function store(EmailAccount $account, FetchedMessage $fetched, bool $backfilling): bool
     {
         $messageId = $this->normalizeId($fetched->messageId);
         if ($messageId === '') {
@@ -95,7 +108,7 @@ class EmailSyncService
             'subject' => $fetched->subject,
             'body_html' => $fetched->bodyHtml,
             'body_text' => $fetched->bodyText,
-            'is_read' => false,
+            'is_read' => $fetched->isRead,
             'has_attachments' => $fetched->attachments !== [],
             'received_at' => $receivedAt,
         ]);
@@ -120,7 +133,7 @@ class EmailSyncService
         // same account can run concurrently; a read-then-write ($thread->unread_count
         // + 1) would let the second overwrite the first's increment and permanently
         // undercount the badge. Mirrors InboundMessageProcessor's fix.
-        $thread->increment('unread_count', 1, [
+        $thread->increment('unread_count', $fetched->isRead ? 0 : 1, [
             'last_message_at' => $receivedAt,
             'subject' => $thread->subject ?: $fetched->subject,
         ]);
@@ -128,7 +141,12 @@ class EmailSyncService
         // Realtime push to the owner's inbox (plan B6). Only fires for genuinely
         // new mail — a re-fetch/full-resync dedupes above and never reaches here,
         // so the owner is never notified twice for one message.
-        MailReceived::dispatch($account, $message);
+        // Old mail pulled in while catching up is history, not news: no toast, and no lead-reply scan
+        // (which could otherwise answer an email from months ago).
+        $isHistory = $backfilling && $receivedAt->lt(now()->subDays(self::BACKFILL_QUIET_AFTER_DAYS));
+        if (! $isHistory) {
+            MailReceived::dispatch($account, $message);
+        }
 
         return true;
     }

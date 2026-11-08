@@ -12,6 +12,7 @@ use App\Services\MailClient\FetchResult;
 use App\Services\MailClient\MailAccountProviderFactory;
 use App\Services\MailClient\MailFetcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -82,5 +83,27 @@ class SyncEmailAccountJobTest extends TestCase
         (new SyncEmailAccount($account->id))->handle(new EmailSyncService, $factory);
 
         $this->assertFalse($account->fresh()->needs_reauth);
+    }
+
+    public function test_a_mailbox_with_more_mail_waiting_queues_its_next_batch(): void
+    {
+        Queue::fake();
+        $account = EmailAccount::factory()->create(['is_active' => true]);
+        $factory = $this->factoryFetching(fn () => new FetchResult([], ['inbox' => ['uidvalidity' => 1, 'last_uid' => 50]], hasMore: true));
+
+        (new SyncEmailAccount($account->id))->handle(new EmailSyncService, $factory);
+
+        Queue::assertPushed(SyncEmailAccount::class, fn (SyncEmailAccount $job): bool => $job->accountId === $account->id);
+    }
+
+    public function test_a_caught_up_mailbox_queues_nothing_more(): void
+    {
+        Queue::fake();
+        $account = EmailAccount::factory()->create(['is_active' => true]);
+        $factory = $this->factoryFetching(fn () => new FetchResult([], ['inbox' => ['uidvalidity' => 1, 'last_uid' => 3]]));
+
+        (new SyncEmailAccount($account->id))->handle(new EmailSyncService, $factory);
+
+        Queue::assertNothingPushed();
     }
 }

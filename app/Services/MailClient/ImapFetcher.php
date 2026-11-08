@@ -22,8 +22,11 @@ use Webklex\PHPIMAP\Exceptions\AuthFailedException;
  */
 class ImapFetcher implements MailFetcher
 {
-    /** Cap messages processed per run so a huge/first sync advances over several passes. */
-    private const PER_RUN_LIMIT = 200;
+    /**
+     * Cap messages per pass so a huge first sync advances in batches that fit the job timeout;
+     * SyncEmailAccount re-queues itself while {@see FetchResult::$hasMore} is true.
+     */
+    private const PER_RUN_LIMIT = 50;
 
     public function __construct(private readonly ?ClientManager $clientManager = null) {}
 
@@ -105,6 +108,7 @@ class ImapFetcher implements MailFetcher
                 messages: $messages,
                 newCursor: ['inbox' => ['uidvalidity' => $currentUidValidity, 'last_uid' => $maxUid]],
                 wasFullResync: $fullResync,
+                hasMore: count($collection) >= self::PER_RUN_LIMIT,
             );
         } catch (AuthFailedException $e) {
             // Terminal — bad credentials. The job flags needs_reauth and stops.
@@ -128,7 +132,18 @@ class ImapFetcher implements MailFetcher
             date: $this->date($message),
             attachments: $this->attachments($message),
             folder: 'inbox',
+            isRead: $this->isSeen($message),
         );
+    }
+
+    /** Mail already read elsewhere stays read here; an unreadable flag set means unread. */
+    private function isSeen(mixed $message): bool
+    {
+        try {
+            return (bool) $message->getFlags()->has('seen');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function header(mixed $attribute): ?string

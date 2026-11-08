@@ -55,9 +55,20 @@ fi
 # in shared-pool setups.
 RUN_AS_USER=$(stat -c '%U' "$PROJECT_PATH/storage" 2>/dev/null || stat -f '%Su' "$PROJECT_PATH/storage" 2>/dev/null || whoami)
 
+# The PHP the app requires (composer.json ^8.4). Supervisor's PATH usually resolves a plain
+# `php` to an older build, which dies on Composer's platform check and leaves the worker in
+# BACKOFF ("Exited too quickly"). Same lookup as deploy.sh; override with PHP_BIN=...
+PHP_BIN="${PHP_BIN:-}"
+if [ -z "$PHP_BIN" ]; then
+    for candidate in /usr/local/apps/php84/bin/php "$(command -v php || true)"; do
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then PHP_BIN="$candidate"; break; fi
+    done
+fi
+
 echo "=== BlastIQ Supervisor Worker Install ==="
 echo "  Project path:    $PROJECT_PATH"
 echo "  Run as user:     $RUN_AS_USER"
+echo "  PHP:             $PHP_BIN ($("$PHP_BIN" -r 'echo PHP_VERSION;'))"
 echo "  Source config:   $SOURCE_CONF"
 echo "  Target config:   $TARGET_CONF"
 echo ""
@@ -66,6 +77,7 @@ echo ""
 echo "[1/5] Rendering config to $TARGET_CONF..."
 sed -e "s|__PROJECT_PATH__|$PROJECT_PATH|g" \
     -e "s|__RUN_AS_USER__|$RUN_AS_USER|g" \
+    -e "s|__PHP_BIN__|$PHP_BIN|g" \
     "$SOURCE_CONF" > "$TARGET_CONF"
 
 # Step 2: ensure log directory exists and is writable by the run-as user

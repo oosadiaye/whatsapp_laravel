@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Mailbox;
 
+use App\Jobs\SyncEmailAccount;
 use App\Models\EmailAccount;
 use App\Models\User;
 use App\Services\MailClient\ConnectionResult;
@@ -11,6 +12,7 @@ use App\Services\MailClient\MailAccountProvider;
 use App\Services\MailClient\MailAccountProviderFactory;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -27,6 +29,7 @@ class MailboxAccountTest extends TestCase
         parent::setUp();
         $this->seed(RolesAndPermissionsSeeder::class);
         config(['mail_client.enabled' => true]);
+        Queue::fake(); // connecting queues a sync; never reach a real IMAP server from a test
     }
 
     private function user(string $role = 'agent'): User
@@ -177,6 +180,7 @@ class MailboxAccountTest extends TestCase
         $this->assertSame('me@work.test', $account->email);
         $this->assertTrue($account->is_active);
         $this->assertFalse($account->needs_reauth);
+        Queue::assertPushed(SyncEmailAccount::class, fn (SyncEmailAccount $job): bool => $job->accountId === $account->id);
     }
 
     public function test_a_failed_sign_in_saves_the_account_but_flags_reauth(): void
@@ -192,6 +196,7 @@ class MailboxAccountTest extends TestCase
         $this->assertNotNull($account);
         $this->assertFalse($account->is_active);
         $this->assertTrue($account->needs_reauth);
+        Queue::assertNothingPushed();
     }
 
     public function test_a_user_cannot_disconnect_another_users_mailbox(): void

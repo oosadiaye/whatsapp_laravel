@@ -52,6 +52,11 @@ class SyncEmailAccount implements ShouldQueue
 
         try {
             $service->sync($account, $fetcher);
+
+            // A big mailbox arrives in batches: queue the next one until the account is caught up.
+            if (($account->refresh()->sync_state['backfilling'] ?? false) === true) {
+                self::dispatch($account->id);
+            }
         } catch (MailAuthException $e) {
             // Terminal — stop syncing this account until the user reconnects.
             $account->update(['needs_reauth' => true]);
