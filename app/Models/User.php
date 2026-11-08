@@ -35,6 +35,9 @@ class User extends Authenticatable
 
     public const ROLE_AGENT = 'agent';
 
+    /** Everything operational, but only on records they created (unless a manager lifts the restriction). */
+    public const ROLE_USER = 'user';
+
     /**
      * Roles whose users handle inbound calls + conversations. Call routing
      * (RoundRobinAssigner) and every agent-roster/metric surface (Team Load,
@@ -99,6 +102,7 @@ class User extends Authenticatable
         'password',
         'role',
         'is_active',
+        'restrict_to_own',
         'task_notifications',
     ];
 
@@ -119,6 +123,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'restrict_to_own' => 'boolean',
             'last_seen_at' => 'datetime',
             'last_assigned_at' => 'datetime',
             'presence_status_set_at' => 'datetime',
@@ -158,6 +163,15 @@ class User extends Authenticatable
     public function messageTemplates(): HasMany
     {
         return $this->hasMany(MessageTemplate::class);
+    }
+
+    /**
+     * True while this person is confined to records they created. Set by a manager (see
+     * TeamAccessController); a super admin is never confined, so nobody can lock the owner out.
+     */
+    public function restrictsToOwnRecords(): bool
+    {
+        return $this->restrict_to_own === true && ! $this->hasRole(self::ROLE_SUPER_ADMIN);
     }
 
     public function isAgent(): bool

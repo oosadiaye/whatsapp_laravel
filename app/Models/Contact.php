@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\OwnedByUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Contact extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, OwnedByUser;
 
     /**
      * Engagement window for the Phase 13.1 opt-in proxy. A contact is

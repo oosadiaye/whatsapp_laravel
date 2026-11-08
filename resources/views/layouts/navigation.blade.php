@@ -327,7 +327,7 @@
                  The outer @canany shows the section if the user has EITHER permission;
                  the inner @can blocks gate each link individually so managers see
                  only Team while admins see both. --}}
-            @canany(['users.view', 'team.view'])
+            @canany(['users.view', 'team.view', 'users.scope'])
                 <div>
                     <h3 class="px-3 mb-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">{{ __('Administration') }}</h3>
                     <div class="space-y-1">
@@ -350,6 +350,14 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z"/>
                                 </svg>
                                 {{ __('User monitor') }}
+                            </x-sidebar-link>
+                        @endcan
+                        @can('users.scope')
+                            <x-sidebar-link :href="route('team-access.index')" :active="request()->routeIs('team-access.*')">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/>
+                                </svg>
+                                {{ __('Team access') }}
                             </x-sidebar-link>
                         @endcan
                         @can('users.view')

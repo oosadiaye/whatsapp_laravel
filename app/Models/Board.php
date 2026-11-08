@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\OwnedByUser;
 use Database\Factories\BoardFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Board extends Model
 {
     /** @use HasFactory<BoardFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, OwnedByUser;
 
     protected $fillable = ['user_id', 'name', 'slug', 'description', 'archived_at'];
 

@@ -499,6 +499,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
     });
 
+    // Managers decide which people only see records they created.
+    Route::middleware('permission:users.scope')->group(function () {
+        Route::get('/team-access', [\App\Http\Controllers\TeamAccessController::class, 'index'])->name('team-access.index');
+        Route::patch('/team-access/{user}', [\App\Http\Controllers\TeamAccessController::class, 'update'])->name('team-access.update');
+    });
+
     // Team-load dashboard (Phase 15) — separate permission from users.*
     // so managers get team visibility without user-CRUD rights.
     // See RolesAndPermissionsSeeder for the team.view → role grants.

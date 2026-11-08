@@ -75,6 +75,8 @@ class UserController extends Controller
             // no user was ever routable — every inbound call hit "agents busy".
             'role' => $validated['role'],
             'is_active' => true,
+            // The user role starts confined to its own records; a manager can lift that later.
+            'restrict_to_own' => $validated['role'] === User::ROLE_USER,
             'email_verified_at' => now(),
         ]);
 
@@ -127,12 +129,21 @@ class UserController extends Controller
                 ->with('error', 'You cannot change your own role. Ask another admin to do it.');
         }
 
+        $previousRole = $user->roles->first()?->name;
+
         $user->update([
             'name' => $validated['name'],
             'email' => $validated['email'],
             // Mirror the granular role into the denormalized column (see store()).
             'role' => $validated['role'],
         ]);
+
+        // A role change resets the restriction to that role's default; otherwise the form's choice stands.
+        if ($previousRole !== $validated['role']) {
+            $user->update(['restrict_to_own' => $validated['role'] === User::ROLE_USER]);
+        } elseif ($request->has('restrict_to_own')) {
+            $user->update(['restrict_to_own' => $request->boolean('restrict_to_own')]);
+        }
 
         if (! empty($validated['password'])) {
             $user->update(['password' => Hash::make($validated['password'])]);

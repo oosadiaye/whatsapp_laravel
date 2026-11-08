@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\OwnedByUser;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class EmailCampaign extends Model
 {
-    use HasFactory;
+    use HasFactory, OwnedByUser;
 
     public const STATUS_DRAFT = 'draft';
 

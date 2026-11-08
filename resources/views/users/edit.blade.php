@@ -60,6 +60,18 @@
                         <x-input-error :messages="$errors->get('role')" class="mt-2" />
                     </div>
 
+                    <div>
+                        <label class="inline-flex items-start gap-2">
+                            <input type="hidden" name="restrict_to_own" value="0">
+                            <input type="checkbox" name="restrict_to_own" value="1" class="mt-1 rounded border-gray-300"
+                                   {{ old('restrict_to_own', $user->restrict_to_own) ? 'checked' : '' }}>
+                            <span class="text-sm text-gray-700">
+                                {{ __('Only show this person records they created') }}
+                                <span class="block text-xs text-gray-500">{{ __('Contacts, campaigns, templates, email campaigns, sequences, boards and leads. Mailboxes are always private.') }}</span>
+                            </span>
+                        </label>
+                    </div>
+
                     <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
                         <a href="{{ route('users.index') }}" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">{{ __('Cancel') }}</a>
                         <button type="submit" class="px-5 py-2 bg-brand text-white text-sm font-semibold rounded-md hover:bg-brand-hover">{{ __('Save Changes') }}</button>

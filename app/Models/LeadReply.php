@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\OwnedThroughLead;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /** A message a lead sent back, with what the AI made of it. */
 class LeadReply extends Model
 {
+    use OwnedThroughLead;
+
     public const INTERESTED = 'interested';
 
     public const QUESTION = 'question';

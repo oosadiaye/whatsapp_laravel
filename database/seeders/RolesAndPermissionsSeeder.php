@@ -44,6 +44,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'users.create',
             'users.edit',
             'users.delete',
+            // Switch "only see their own records" on or off for the people below a manager. A
+            // manager gets this without any of the user-management permissions above.
+            'users.scope',
 
             // Note: the WhatsApp number is single-instance now and configured
             // on the Settings page — the old instances.* permissions were
@@ -196,6 +199,28 @@ class RolesAndPermissionsSeeder extends Seeder
             'users.delete',
             'mailbox.view_all',
             'mailbox.admin',
+        ]));
+
+        // User: every operational feature, but a workspace of their own. Their data is narrowed to
+        // records they created by User::restrict_to_own (on by default for this role, switchable by
+        // a manager). No people management, settings, team-wide reports, other people's inboxes or
+        // other people's chats.
+        $user = Role::firstOrCreate(['name' => User::ROLE_USER, 'guard_name' => 'web']);
+        $user->syncPermissions(array_diff($allPermissions, [
+            'users.view',
+            'users.create',
+            'users.edit',
+            'users.delete',
+            'users.scope',
+            'settings.view',
+            'settings.edit',
+            'team.view',
+            'reports.view',
+            'tasks.report',
+            'tasks.status.manage',
+            'mailbox.view_all',
+            'mailbox.admin',
+            'conversations.view_all',
         ]));
 
         // Agent (support staff): contacts + assigned conversations only.

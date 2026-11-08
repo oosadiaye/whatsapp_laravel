@@ -45,6 +45,7 @@
                                             'admin' => 'bg-blue-100 text-blue-800',
                                             'manager' => 'bg-emerald-100 text-emerald-800',
                                             'agent' => 'bg-amber-100 text-amber-800',
+                                            'user' => 'bg-sky-100 text-sky-800',
                                             default => 'bg-gray-100 text-gray-700',
                                         };
                                     @endphp

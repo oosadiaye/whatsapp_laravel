@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\OwnedThroughLead;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /** One entry in a lead's timeline: what happened, to whom, and who or what did it. */
 class LeadEvent extends Model
 {
+    use OwnedThroughLead;
+
     public const UPDATED_AT = null;
 
     protected $fillable = ['lead_id', 'type', 'payload', 'actor'];

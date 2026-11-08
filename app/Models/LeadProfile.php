@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\OwnedByUser;
 use Database\Factories\LeadProfileFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,7 +19,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class LeadProfile extends Model
 {
     /** @use HasFactory<LeadProfileFactory> */
-    use HasFactory;
+    use HasFactory, OwnedByUser;
+
+    public function ownerColumn(): string
+    {
+        return 'created_by';
+    }
 
     protected $fillable = [
         'name', 'is_active', 'brief', 'hard_filters', 'sources', 'lead_query',

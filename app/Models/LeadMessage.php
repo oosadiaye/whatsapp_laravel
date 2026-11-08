@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\OwnedThroughLead;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /** One email to a lead that the AI drafted: waiting for approval, sent, or discarded. */
 class LeadMessage extends Model
 {
+    use OwnedThroughLead;
+
     public const KIND_FIRST = 'first';
 
     public const KIND_FOLLOWUP = 'followup';
