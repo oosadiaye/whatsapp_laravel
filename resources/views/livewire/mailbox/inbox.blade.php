@@ -130,128 +130,134 @@
                         </div>
                     @endforeach
                 </div>
-            @elseif(! $composing)
+            @else
                 <div class="py-16 text-center text-sm text-gray-500">
                     <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 9v.906a2.25 2.25 0 01-1.183 1.981l-6.478 3.488M2.25 9v.906a2.25 2.25 0 001.183 1.981l6.478 3.488m8.839 2.51l-4.66-2.51m0 0l-1.023-.55a2.25 2.25 0 00-2.134 0l-1.022.55m0 0l-4.661 2.51m16.5 1.615a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V8.844a2.25 2.25 0 011.183-1.98l7.5-4.04a2.25 2.25 0 012.134 0l7.5 4.04a2.25 2.25 0 011.183 1.98V19.5z"/></svg>
                     {{ __('Select a conversation to read.') }}
                 </div>
             @endif
 
-            @if($composing)
-                <form wire:submit.prevent="send" class="mt-4 border-t border-gray-100 pt-4 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                            {{ ['reply' => __('Reply'), 'reply_all' => __('Reply all'), 'forward' => __('Forward'), 'new' => __('New message')][$composeMode] ?? __('Message') }}
-                        </span>
-                        <div class="flex items-center gap-2">
-                            <button type="button" wire:click="$set('showAiDraft', true)"
-                                    class="text-xs font-medium px-2 py-1 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 transition"
-                                    title="{{ __('Draft with AI') }}">
-                                <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/></svg>
-                                {{ __('AI') }}
-                            </button>
-                            <button type="button" wire:click="cancelCompose" class="text-xs text-gray-500 hover:text-gray-600">&times;</button>
-                        </div>
-                    </div>
-
-                    {{-- AI Draft Modal --}}
-                    @if($showAiDraft)
-                        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40" wire:click="$set('showAiDraft', false)">
-                            <div class="bg-white rounded-xl shadow-2xl p-5 max-w-lg w-full" wire:click.stop>
-                                <h4 class="text-sm font-bold text-gray-800 mb-3">{{ __('AI Email Draft') }}</h4>
-                                <div class="space-y-3">
-                                    <div>
-                                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ __('Goal') }}</label>
-                                        <textarea wire:model="aiDraftGoal" rows="2" class="mt-1 w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500" placeholder="{{ __('e.g. Introduce our product and schedule a demo') }}"></textarea>
-                                        @error('aiDraftGoal') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
-                                    </div>
-                                    <div>
-                                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ __('Tone') }}</label>
-                                        <select wire:model="aiDraftTone" class="mt-1 block w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500">
-                                            <option value="professional">{{ __('Professional') }}</option>
-                                            <option value="friendly">{{ __('Friendly') }}</option>
-                                            <option value="formal">{{ __('Formal') }}</option>
-                                            <option value="casual">{{ __('Casual') }}</option>
-                                            <option value="persuasive">{{ __('Persuasive') }}</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ __('Context (optional)') }}</label>
-                                        <textarea wire:model="aiDraftContext" rows="2" class="mt-1 w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500" placeholder="{{ __('Any background info the AI should know...') }}"></textarea>
-                                    </div>
-                                </div>
-                                <div class="flex justify-end gap-2 mt-4 pt-3 border-t border-gray-100">
-                                    <button type="button" wire:click="$set('showAiDraft', false)" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">{{ __('Cancel') }}</button>
-                                    <button type="button" wire:click="draftWithAi" wire:loading.attr="disabled"
-                                            class="px-4 py-1.5 text-sm font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition">
-                                        <span wire:loading.remove wire:target="draftWithAi">{{ __('Generate Draft') }}</span>
-                                        <span wire:loading wire:target="draftWithAi">{{ __('Generating...') }}</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    @endif
-
-                    @if($composeMode === 'new' && $myAccounts->count() > 1)
-                        <select wire:model="composeAccountId" aria-label="{{ __('Send from') }}" class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
-                            @foreach($myAccounts as $account)
-                                <option value="{{ $account->id }}">{{ $account->email }}</option>
-                            @endforeach
-                        </select>
-                    @endif
-
-                    <div>
-                        <input type="text" wire:model="composeTo" placeholder="{{ __('To') }}" aria-label="{{ __('To') }}"
-                            class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand" />
-                        @error('composeTo') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
-                    </div>
-
-                    <input type="text" wire:model="composeCc" placeholder="{{ __('Cc (optional)') }}" aria-label="{{ __('Cc') }}"
-                        class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand" />
-
-                    <div>
-                        <input type="text" wire:model="composeSubject" placeholder="{{ __('Subject') }}" aria-label="{{ __('Subject') }}"
-                            class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand" />
-                        @error('composeSubject') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
-                    </div>
-
-                    <div>
-                        <textarea wire:model="composeBody" rows="8" placeholder="{{ __('Write your message…') }}" aria-label="{{ __('Message body') }}"
-                            class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand"></textarea>
-                    </div>
-
-                    <div class="flex items-center gap-3">
-                        <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer hover:text-gray-700">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13"/></svg>
-                            <input type="file" wire:model="composeFiles" multiple class="hidden" />
-                            {{ __('Attach') }}
-                        </label>
-                        <span wire:loading wire:target="composeFiles" class="text-xs text-gray-500">{{ __('Uploading…') }}</span>
-                    </div>
-                    @error('composeFiles.*') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
-                    @if(! empty($composeFiles))
-                        <div class="flex flex-wrap gap-2">
-                            @foreach($composeFiles as $file)
-                                <span class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                                    {{ $file->getClientOriginalName() }}
-                                    <button type="button" wire:click="removeFile({{ $loop->index }})" class="text-gray-500 hover:text-red-500">&times;</button>
-                                </span>
-                            @endforeach
-                        </div>
-                    @endif
-
-                    <div class="flex items-center gap-2 pt-2">
-                        <button type="submit" wire:loading.attr="disabled" wire:target="send"
-                            class="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg bg-brand text-white hover:bg-brand-hover disabled:opacity-50 transition shadow-sm">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg>
-                            <span wire:loading.remove wire:target="send">{{ __('Send') }}</span>
-                            <span wire:loading wire:target="send">{{ __('Sending…') }}</span>
-                        </button>
-                        <button type="button" wire:click="cancelCompose"
-                            class="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition">{{ __('Cancel') }}</button>
-                    </div>
-                </form>
-            @endif
         </div>
     </div>
+    {{-- Floating composer, pinned bottom-right like Gmail. Minimise is client-side only so a
+         half-written message is never lost; the send logic is the same Livewire form as before. --}}
+    @if($composing)
+        <div x-data="{ minimised: false }"
+             class="fixed bottom-0 right-0 sm:right-6 z-40 w-full sm:w-[34rem] max-w-full flex flex-col bg-white rounded-t-lg shadow-2xl ring-1 ring-gray-300"
+             role="dialog" aria-label="{{ __('Compose message') }}">
+            <div class="flex items-center justify-between gap-2 rounded-t-lg bg-gray-800 px-3 py-2 text-white cursor-pointer select-none"
+                 @click="minimised = ! minimised">
+                <span class="truncate text-sm font-medium">
+                    {{ ['reply' => __('Reply'), 'reply_all' => __('Reply all'), 'forward' => __('Forward'), 'new' => __('New message')][$composeMode] ?? __('Message') }}@if($composeMode !== 'new' && $composeSubject !== ''): {{ $composeSubject }}@endif
+                </span>
+                <span class="flex items-center gap-1" @click.stop>
+                    <button type="button" wire:click="$set('showAiDraft', true)" title="{{ __('Draft with AI') }}"
+                            class="rounded px-2 py-0.5 text-xs font-medium bg-purple-500/30 hover:bg-purple-500/50 transition">{{ __('AI') }}</button>
+                    <button type="button" @click="minimised = ! minimised" class="rounded px-2 text-lg leading-none hover:bg-white/10" :aria-label="minimised ? '{{ __('Expand') }}' : '{{ __('Minimise') }}'">
+                        <span x-text="minimised ? '▢' : '–'"></span>
+                    </button>
+                    <button type="button" wire:click="cancelCompose" class="rounded px-2 text-lg leading-none hover:bg-white/10" aria-label="{{ __('Discard') }}">&times;</button>
+                </span>
+            </div>
+
+            <form wire:submit.prevent="send" x-show="! minimised" class="space-y-2 p-3 max-h-[70vh] overflow-y-auto">
+            {{-- AI Draft Modal --}}
+            @if($showAiDraft)
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40" wire:click="$set('showAiDraft', false)">
+                    <div class="bg-white rounded-xl shadow-2xl p-5 max-w-lg w-full" wire:click.stop>
+                        <h4 class="text-sm font-bold text-gray-800 mb-3">{{ __('AI Email Draft') }}</h4>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ __('Goal') }}</label>
+                                <textarea wire:model="aiDraftGoal" rows="2" class="mt-1 w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500" placeholder="{{ __('e.g. Introduce our product and schedule a demo') }}"></textarea>
+                                @error('aiDraftGoal') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ __('Tone') }}</label>
+                                <select wire:model="aiDraftTone" class="mt-1 block w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500">
+                                    <option value="professional">{{ __('Professional') }}</option>
+                                    <option value="friendly">{{ __('Friendly') }}</option>
+                                    <option value="formal">{{ __('Formal') }}</option>
+                                    <option value="casual">{{ __('Casual') }}</option>
+                                    <option value="persuasive">{{ __('Persuasive') }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ __('Context (optional)') }}</label>
+                                <textarea wire:model="aiDraftContext" rows="2" class="mt-1 w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500" placeholder="{{ __('Any background info the AI should know...') }}"></textarea>
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2 mt-4 pt-3 border-t border-gray-100">
+                            <button type="button" wire:click="$set('showAiDraft', false)" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">{{ __('Cancel') }}</button>
+                            <button type="button" wire:click="draftWithAi" wire:loading.attr="disabled"
+                                    class="px-4 py-1.5 text-sm font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition">
+                                <span wire:loading.remove wire:target="draftWithAi">{{ __('Generate Draft') }}</span>
+                                <span wire:loading wire:target="draftWithAi">{{ __('Generating...') }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            @if($composeMode === 'new' && $myAccounts->count() > 1)
+                <select wire:model="composeAccountId" aria-label="{{ __('Send from') }}" class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
+                    @foreach($myAccounts as $account)
+                        <option value="{{ $account->id }}">{{ $account->email }}</option>
+                    @endforeach
+                </select>
+            @endif
+
+            <div>
+                <input type="text" wire:model="composeTo" placeholder="{{ __('To') }}" aria-label="{{ __('To') }}"
+                    class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand" />
+                @error('composeTo') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+
+            <input type="text" wire:model="composeCc" placeholder="{{ __('Cc (optional)') }}" aria-label="{{ __('Cc') }}"
+                class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand" />
+
+            <div>
+                <input type="text" wire:model="composeSubject" placeholder="{{ __('Subject') }}" aria-label="{{ __('Subject') }}"
+                    class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand" />
+                @error('composeSubject') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+
+            <div>
+                <textarea wire:model="composeBody" rows="10" placeholder="{{ __('Write your message…') }}" aria-label="{{ __('Message body') }}"
+                    class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand"></textarea>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13"/></svg>
+                    <input type="file" wire:model="composeFiles" multiple class="hidden" />
+                    {{ __('Attach') }}
+                </label>
+                <span wire:loading wire:target="composeFiles" class="text-xs text-gray-500">{{ __('Uploading…') }}</span>
+            </div>
+            @error('composeFiles.*') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            @if(! empty($composeFiles))
+                <div class="flex flex-wrap gap-2">
+                    @foreach($composeFiles as $file)
+                        <span class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                            {{ $file->getClientOriginalName() }}
+                            <button type="button" wire:click="removeFile({{ $loop->index }})" class="text-gray-500 hover:text-red-500">&times;</button>
+                        </span>
+                    @endforeach
+                </div>
+            @endif
+
+            <div class="flex items-center gap-2 pt-2">
+                <button type="submit" wire:loading.attr="disabled" wire:target="send"
+                    class="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg bg-brand text-white hover:bg-brand-hover disabled:opacity-50 transition shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg>
+                    <span wire:loading.remove wire:target="send">{{ __('Send') }}</span>
+                    <span wire:loading wire:target="send">{{ __('Sending…') }}</span>
+                </button>
+                <button type="button" wire:click="cancelCompose"
+                    class="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition">{{ __('Cancel') }}</button>
+            </div>
+            </form>
+        </div>
+    @endif
 </div>
