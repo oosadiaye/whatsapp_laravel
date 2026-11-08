@@ -9,6 +9,7 @@ use App\Models\EmailAccount;
 use App\Models\EmailMessage;
 use App\Models\EmailThread;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -37,6 +38,16 @@ class Inbox extends Component
 
     public ?int $selectedThreadId = null;
 
+    public const SORT_FIELDS = ['date', 'sender', 'subject'];
+
+    /** date | sender | subject, kept in the address bar so a refresh keeps the order. */
+    #[Url(as: 'sort')]
+    public string $sortBy = 'date';
+
+    /** asc | desc */
+    #[Url(as: 'dir')]
+    public string $sortDir = 'desc';
+
     /**
      * Reverb push (plan B6): refresh the moment sync stores new mail on THIS
      * user's channel. `$refresh` re-queries the list + open thread and preserves
@@ -57,6 +68,22 @@ class Inbox extends Component
 
     public function updatingSearch(): void
     {
+        $this->resetPage();
+    }
+
+    public function updatingSortBy(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingSortDir(): void
+    {
+        $this->resetPage();
+    }
+
+    public function toggleSortDir(): void
+    {
+        $this->sortDir = $this->sortDir === 'asc' ? 'desc' : 'asc';
         $this->resetPage();
     }
 
@@ -97,8 +124,9 @@ class Inbox extends Component
                         });
                 });
             })
-            ->orderByDesc('last_message_at')
-            ->paginate(20);
+            ->tap(fn (Builder $q) => $this->applySort($q))
+            ->with('latestMessage')
+            ->paginate(25);
 
         $selected = null;
         if ($this->selectedThreadId !== null) {
@@ -137,6 +165,31 @@ class Inbox extends Component
             'myAccounts' => $myAccounts,
             'canSendFromSelected' => $canSendFromSelected,
         ]);
+    }
+
+    /**
+     * Order by date, sender (the person we wrote to, in Sent) or subject, either direction. The
+     * field and direction come from the client, so both are checked against fixed lists. Ties fall
+     * back to newest-first so paging never shuffles rows.
+     */
+    private function applySort(Builder $query): void
+    {
+        $dir = $this->sortDir === 'asc' ? 'asc' : 'desc';
+        $field = in_array($this->sortBy, self::SORT_FIELDS, true) ? $this->sortBy : 'date';
+
+        if ($field === 'sender') {
+            $column = $this->folder === EmailThread::FOLDER_SENT ? 'to' : 'from_email';
+            $query->orderBy(
+                EmailMessage::query()->select($column)->whereColumn('email_messages.email_thread_id', 'email_threads.id')->latest('id')->limit(1),
+                $dir,
+            );
+        } elseif ($field === 'subject') {
+            $query->orderBy('subject', $dir);
+        } else {
+            $query->orderBy('last_message_at', $dir);
+        }
+
+        $query->orderByDesc('id');
     }
 
     /**

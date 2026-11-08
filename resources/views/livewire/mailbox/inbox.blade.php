@@ -5,9 +5,9 @@
         </div>
     @endif
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 lg:grid-cols-[minmax(20rem,26rem)_minmax(0,1fr)] gap-4">
         {{-- Left: thread list --}}
-        <div class="lg:col-span-1 bg-white shadow-sm rounded-lg p-4 flex flex-col h-[75vh]">
+        <div class="bg-white shadow-sm rounded-lg p-4 flex flex-col h-[calc(100vh-9rem)] min-h-[30rem]">
             <div class="flex items-center justify-between mb-3 shrink-0">
                 <div class="flex gap-1 text-xs">
                     @foreach(['inbox' => __('Inbox'), 'sent' => __('Sent'), 'archive' => __('Archive'), 'trash' => __('Trash')] as $key => $label)
@@ -30,23 +30,45 @@
                     class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">{{ __('Loading…') }}</span>
             </div>
 
-            <ul class="divide-y divide-gray-100 overflow-y-auto flex-1 -mx-4 px-4">
+            <div class="mb-2 flex items-center gap-2 shrink-0 text-xs text-gray-500">
+                <label for="mailbox-sort" class="shrink-0">{{ __('Sort by') }}</label>
+                <select id="mailbox-sort" wire:model.live="sortBy"
+                    class="flex-1 min-w-0 text-xs rounded-md border-gray-300 py-1 shadow-sm focus:border-brand focus:ring-brand">
+                    <option value="date">{{ __('Date') }}</option>
+                    <option value="sender">{{ $folder === 'sent' ? __('Recipient (A–Z)') : __('Sender (A–Z)') }}</option>
+                    <option value="subject">{{ __('Subject (A–Z)') }}</option>
+                </select>
+                <button type="button" wire:click="toggleSortDir"
+                    class="shrink-0 inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                    title="{{ $sortDir === 'asc' ? __('Ascending') : __('Descending') }}"
+                    aria-label="{{ __('Reverse sort order') }}">
+                    @if($sortBy === 'date')
+                        {{ $sortDir === 'asc' ? __('Oldest first') : __('Newest first') }}
+                    @else
+                        {{ $sortDir === 'asc' ? __('A → Z') : __('Z → A') }}
+                    @endif
+                    <svg class="w-3 h-3 {{ $sortDir === 'asc' ? '' : 'rotate-180' }}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
+                </button>
+            </div>
+
+            <ul class="divide-y divide-gray-100 overflow-y-auto flex-1 -mx-4 px-2">
                 @forelse($threads as $thread)
                     <li>
                         <button type="button" wire:click="selectThread({{ $thread->id }})"
                             class="w-full text-left py-3 px-2 rounded-lg transition hover:bg-gray-50 {{ $selectedThreadId === $thread->id ? 'bg-brand/5 ring-1 ring-brand/20' : '' }}">
-                            <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-baseline justify-between gap-2">
                                 <span class="text-sm truncate {{ $thread->unread_count > 0 ? 'font-semibold text-gray-900' : 'text-gray-700' }}">
                                     {{ $folder === 'sent' ? ($thread->getRecipientPreview() ? __('To:').' '.$thread->getRecipientPreview() : ($thread->subject ?: __('(no subject)'))) : ($thread->getSenderPreview() ?: ($thread->subject ?: __('(no subject)'))) }}
                                 </span>
+                                <span class="shrink-0 text-[11px] {{ $thread->unread_count > 0 ? 'font-semibold text-brand-text' : 'text-gray-500' }}">{{ $thread->getListDateLabel() }}</span>
+                            </div>
+                            <div class="flex items-center justify-between gap-2 mt-0.5">
+                                <span class="text-xs truncate {{ $thread->unread_count > 0 ? 'font-semibold text-gray-800' : 'text-gray-600' }}">{{ $thread->subject ?: __('(no subject)') }}</span>
                                 @if($thread->unread_count > 0)
                                     <span class="shrink-0 inline-flex items-center justify-center rounded-full bg-brand text-white text-[10px] min-w-[1rem] h-4 px-1">{{ $thread->unread_count < 100 ? $thread->unread_count : '99+' }}</span>
                                 @endif
                             </div>
-                            @if($thread->subject)
-                                <div class="text-xs text-gray-500 mt-0.5 truncate">{{ $thread->subject }}</div>
-                            @endif
-                            <div class="text-[11px] text-gray-500 mt-1">{{ $thread->last_message_at?->diffForHumans() }}</div>
+                            <div class="text-xs text-gray-500 mt-0.5 truncate">{{ $thread->getSnippet() }}</div>
                         </button>
                     </li>
                 @empty
@@ -65,15 +87,27 @@
                 @endforelse
             </ul>
 
-            <div class="mt-3 shrink-0 border-t border-gray-100 pt-2">{{ $threads->links() }}</div>
+            <div class="mt-3 shrink-0 border-t border-gray-100 pt-2 flex items-center justify-between text-xs text-gray-500">
+                <span>
+                    @if($threads->total() > 0)
+                        {{ $threads->firstItem() }}–{{ $threads->lastItem() }} {{ __('of') }} {{ number_format($threads->total()) }}
+                    @endif
+                </span>
+                <span class="flex gap-1">
+                    <button type="button" wire:click="previousPage" @disabled($threads->onFirstPage())
+                        class="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">&lsaquo; {{ __('Prev') }}</button>
+                    <button type="button" wire:click="nextPage" @disabled(! $threads->hasMorePages())
+                        class="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">{{ __('Next') }} &rsaquo;</button>
+                </span>
+            </div>
         </div>
 
         {{-- Right: selected thread + composer --}}
-        <div class="lg:col-span-2 bg-white shadow-sm rounded-lg p-4 overflow-y-auto max-h-[75vh]">
+        <div class="bg-white shadow-sm rounded-lg p-5 overflow-y-auto h-[calc(100vh-9rem)] min-h-[30rem]">
             @if($selected)
                 <div class="flex items-start justify-between mb-4 gap-2">
                     <div class="min-w-0 flex-1">
-                        <h3 class="text-lg font-semibold text-gray-800 break-words">{{ $selected->subject ?: __('(no subject)') }}</h3>
+                        <h3 class="text-xl font-semibold text-gray-800 break-words">{{ $selected->subject ?: __('(no subject)') }}</h3>
                         <p class="text-xs text-gray-500 mt-1">
                             {{ $selected->messages->first()?->from_email ? __('From:').' '.$selected->messages->first()->from_email : '' }}
                             &middot; {{ $selected->messages->count() }} {{ __('message(s)') }}
@@ -102,7 +136,7 @@
                             </div>
 
                             @if($message->body_html)
-                                <iframe sandbox class="w-full min-h-[120px] border rounded-md" srcdoc="{{ $message->body_html }}" title="{{ __('Message body') }}"></iframe>
+                                <iframe sandbox class="w-full border rounded-md bg-white {{ $loop->last ? 'h-[60vh]' : 'h-[30vh]' }} min-h-[14rem]" srcdoc="{{ $message->body_html }}" title="{{ __('Message body') }}"></iframe>
                             @elseif($message->body_text)
                                 <div class="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap font-sans">{{ $message->body_text }}</div>
                             @endif
