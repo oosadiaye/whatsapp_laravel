@@ -45,6 +45,7 @@ final class ReplyHandler
         private readonly AutonomyPolicy $autonomy,
         private readonly LeadSuppressor $suppressor,
         private readonly LeadAlerts $alerts,
+        private readonly LeadFollowUpTask $followUp,
     ) {}
 
     /**
@@ -108,10 +109,27 @@ final class ReplyHandler
             LeadReply::OUT_OF_OFFICE => $this->pause($reply, $lead),
             LeadReply::NOT_NOW => $this->noteOnly($reply, $lead, 'asked to talk later'),
             LeadReply::INTERESTED, LeadReply::QUESTION => $verdict['confidence'] >= self::MIN_CONFIDENCE
-                ? $this->answer($reply, $lead, $class, $text)
+                ? $this->answerAndFollowUp($reply, $lead, $class, $text, $verdict['summary'])
                 : $this->escalate($reply, $lead, 'The AI is not sure what this reply means.', $text),
             default => $this->escalate($reply, $lead, 'This reply does not fit a known type.', $text),
         };
+    }
+
+    /** A confident "yes" also goes on the board; a question only gets its answer. */
+    private function answerAndFollowUp(LeadReply $reply, Lead $lead, string $class, string $text, string $summary): string
+    {
+        $result = $this->answer($reply, $lead, $class, $text);
+
+        if ($class === LeadReply::INTERESTED) {
+            try {
+                $this->followUp->createFor($lead, $reply, $summary);
+            } catch (\Throwable $e) {
+                // The reply is already handled; a board problem must not make the job run it again.
+                report($e);
+            }
+        }
+
+        return $result;
     }
 
     private function answer(LeadReply $reply, Lead $lead, string $class, string $text): string

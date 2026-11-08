@@ -285,6 +285,9 @@ final class LeadQualificationRunner
             return;
         }
 
+        // A company-first platform (Hunter) only finds the person at reveal time, so that person has not been judged yet.
+        $personWasKnown = trim((string) $lead->title) !== '';
+
         try {
             $outcome = $this->revealer->reveal($lead, $profile);
         } catch (LeadSourceException $e) {
@@ -305,12 +308,66 @@ final class LeadQualificationRunner
 
         if ($outcome === LeadRevealer::REVEALED) {
             $out['revealed']++;
+            if (! $personWasKnown) {
+                $this->judgeRevealedPerson($lead, $profile, $out);
+            }
         } elseif ($outcome === LeadRevealer::DUPLICATE || $outcome === LeadRevealer::NO_EMAIL) {
             $out['rejected']++;
         } elseif ($outcome === LeadRevealer::BUDGET) {
             $out['deferred']++;
             $out['errors'][] = 'Monthly reveal budget reached; qualified leads wait until next month or a larger budget.';
             $canReveal = false;
+        }
+    }
+
+    /**
+     * Judges the person a company-first platform revealed, using the same rules as any lead. The credit is
+     * already spent and the address stays on record either way; a poor fit is only kept from being emailed.
+     * No answer (AI down, daily cap reached) leaves the lead qualified: a paid-for lead is never thrown
+     * away for lack of a second opinion.
+     *
+     * @param  array<string, mixed>  $out
+     */
+    private function judgeRevealedPerson(Lead $lead, LeadProfile $profile, array &$out): void
+    {
+        $lead->refresh();
+        if (trim((string) $lead->title) === '') {
+            return;
+        }
+
+        try {
+            $result = $this->qualifier->freeRejection($lead, $profile)
+                ?? ($this->aiDecisionsToday($profile) < $profile->daily_qualify_cap ? $this->qualifier->qualify($lead, $profile) : null);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return;
+        }
+
+        if ($result === null) {
+            return;
+        }
+
+        $passed = $result->passed();
+        DB::transaction(function () use ($lead, $result, $passed): void {
+            $lead->update([
+                'score' => $result->score,
+                'tier' => $result->tier,
+                'qualification_reason' => $result->reason,
+                'status' => $passed ? Lead::STATUS_QUALIFIED : Lead::STATUS_REJECTED,
+            ]);
+            LeadEvent::record(
+                $lead,
+                $passed ? 'qualified' : 'rejected',
+                ['stage' => 'person', 'score' => $result->score, 'tier' => $result->tier, 'reason' => $result->reason],
+                $result->byAi ? 'ai' : 'system',
+            );
+        });
+
+        if (! $passed) {
+            // It was counted as qualified when the company passed; it now moves to rejected.
+            $out['qualified']--;
+            $out['rejected']++;
         }
     }
 
