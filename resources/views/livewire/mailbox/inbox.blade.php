@@ -233,63 +233,88 @@
                 </div>
             @endif
 
-            @if($composeMode === 'new' && $myAccounts->count() > 1)
-                <select wire:model="composeAccountId" aria-label="{{ __('Send from') }}" class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
-                    @foreach($myAccounts as $account)
-                        <option value="{{ $account->id }}">{{ $account->email }}</option>
-                    @endforeach
-                </select>
-            @endif
-
-            <div>
-                <input type="text" wire:model="composeTo" placeholder="{{ __('To') }}" aria-label="{{ __('To') }}"
-                    class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand" />
-                @error('composeTo') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            {{-- From (only when there is a choice) / To / Cc / Subject: borderless rows like Gmail --}}
+            <div class="-mx-3 divide-y divide-gray-100 border-y border-gray-100 text-sm">
+                @if($composeMode === 'new' && $myAccounts->count() > 1)
+                    <div class="flex items-center gap-2 px-3">
+                        <label for="compose-from" class="w-12 shrink-0 text-gray-500">{{ __('From') }}</label>
+                        <select id="compose-from" wire:model="composeAccountId" class="flex-1 border-0 bg-transparent py-2 text-sm focus:ring-0">
+                            @foreach($myAccounts as $account)
+                                <option value="{{ $account->id }}">{{ $account->email }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
+                <div class="flex items-center gap-2 px-3">
+                    <label for="compose-to" class="w-12 shrink-0 text-gray-500">{{ __('To') }}</label>
+                    <input id="compose-to" type="text" wire:model="composeTo" autocomplete="off" spellcheck="false"
+                        class="flex-1 border-0 bg-transparent py-2 text-sm placeholder-gray-400 focus:ring-0" placeholder="{{ __('name@example.com, another@example.com') }}" />
+                </div>
+                @error('composeTo') <p class="px-3 py-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                <div class="flex items-center gap-2 px-3">
+                    <label for="compose-cc" class="w-12 shrink-0 text-gray-500">{{ __('Cc') }}</label>
+                    <input id="compose-cc" type="text" wire:model="composeCc" autocomplete="off" spellcheck="false"
+                        class="flex-1 border-0 bg-transparent py-2 text-sm placeholder-gray-400 focus:ring-0" placeholder="{{ __('optional') }}" />
+                </div>
+                <div class="flex items-center gap-2 px-3">
+                    <label for="compose-subject" class="w-12 shrink-0 text-gray-500">{{ __('Subject') }}</label>
+                    <input id="compose-subject" type="text" wire:model="composeSubject"
+                        class="flex-1 border-0 bg-transparent py-2 text-sm font-medium placeholder-gray-400 focus:ring-0" />
+                </div>
+                @error('composeSubject') <p class="px-3 py-1 text-xs text-red-600">{{ $message }}</p> @enderror
             </div>
 
-            <input type="text" wire:model="composeCc" placeholder="{{ __('Cc (optional)') }}" aria-label="{{ __('Cc') }}"
-                class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand" />
-
-            <div>
-                <input type="text" wire:model="composeSubject" placeholder="{{ __('Subject') }}" aria-label="{{ __('Subject') }}"
-                    class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand" />
-                @error('composeSubject') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            {{-- AI writing tools: act on the body only, never on quoted history. --}}
+            <div class="flex flex-wrap items-center gap-1.5 pt-1" aria-label="{{ __('AI writing tools') }}">
+                @foreach(['fix' => __('Fix spelling & grammar'), 'rephrase' => __('Rephrase'), 'polish' => __('Polish')] as $mode => $label)
+                    <button type="button" wire:click="aiEdit('{{ $mode }}')" wire:loading.attr="disabled" wire:target="aiEdit"
+                        class="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50 transition">
+                        <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+                        {{ $label }}
+                    </button>
+                @endforeach
+                <span wire:loading wire:target="aiEdit" class="text-xs text-purple-700">{{ __('Working on it…') }}</span>
+                @if($bodyBeforeAi !== null)
+                    <button type="button" wire:click="undoAiEdit" class="ml-auto text-xs font-medium text-gray-600 underline hover:text-gray-900">{{ __('Undo AI change') }}</button>
+                @endif
             </div>
 
-            <div>
-                <textarea wire:model="composeBody" rows="10" placeholder="{{ __('Write your message…') }}" aria-label="{{ __('Message body') }}"
-                    class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand"></textarea>
+            <div wire:loading.class="opacity-60" wire:target="aiEdit">
+                <textarea wire:model="composeBody" rows="11" spellcheck="true" placeholder="{{ __('Write your message…') }}" aria-label="{{ __('Message body') }}"
+                    class="w-full resize-y rounded-md border-0 bg-transparent px-0 text-sm leading-relaxed placeholder-gray-400 focus:ring-0"></textarea>
             </div>
 
-            <div class="flex items-center gap-3">
-                <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer hover:text-gray-700">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13"/></svg>
-                    <input type="file" wire:model="composeFiles" multiple class="hidden" />
-                    {{ __('Attach') }}
-                </label>
-                <span wire:loading wire:target="composeFiles" class="text-xs text-gray-500">{{ __('Uploading…') }}</span>
-            </div>
             @error('composeFiles.*') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
             @if(! empty($composeFiles))
                 <div class="flex flex-wrap gap-2">
                     @foreach($composeFiles as $file)
-                        <span class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                        <span class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700">
                             {{ $file->getClientOriginalName() }}
-                            <button type="button" wire:click="removeFile({{ $loop->index }})" class="text-gray-500 hover:text-red-500">&times;</button>
+                            <button type="button" wire:click="removeFile({{ $loop->index }})" class="text-gray-500 hover:text-red-500" aria-label="{{ __('Remove attachment') }}">&times;</button>
                         </span>
                     @endforeach
                 </div>
             @endif
 
-            <div class="flex items-center gap-2 pt-2">
-                <button type="submit" wire:loading.attr="disabled" wire:target="send"
-                    class="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg bg-brand text-white hover:bg-brand-hover disabled:opacity-50 transition shadow-sm">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg>
-                    <span wire:loading.remove wire:target="send">{{ __('Send') }}</span>
-                    <span wire:loading wire:target="send">{{ __('Sending…') }}</span>
-                </button>
-                <button type="button" wire:click="cancelCompose"
-                    class="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition">{{ __('Cancel') }}</button>
+            <div class="flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                <div class="flex items-center gap-2">
+                    <button type="submit" wire:loading.attr="disabled" wire:target="send"
+                        class="inline-flex items-center gap-1.5 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-hover disabled:opacity-50">
+                        <span wire:loading.remove wire:target="send">{{ __('Send') }}</span>
+                        <span wire:loading wire:target="send">{{ __('Sending…') }}</span>
+                    </button>
+                    <label class="flex cursor-pointer items-center gap-1 rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800" title="{{ __('Attach files') }}">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13"/></svg>
+                        <input type="file" wire:model="composeFiles" multiple class="hidden" />
+                        <span wire:loading wire:target="composeFiles" class="text-xs">{{ __('Uploading…') }}</span>
+                    </label>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-gray-500">
+                    <span x-data x-text="($wire.composeBody || '').trim() === '' ? '' : (($wire.composeBody || '').trim().split(/\s+/).length + ' {{ __('words') }}')"></span>
+                    <button type="button" wire:click="cancelCompose" class="rounded-full p-2 hover:bg-gray-100 hover:text-red-600" title="{{ __('Discard draft') }}" aria-label="{{ __('Discard draft') }}">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+                    </button>
+                </div>
             </div>
             </form>
         </div>

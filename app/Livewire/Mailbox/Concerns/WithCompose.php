@@ -9,6 +9,7 @@ use App\Livewire\Mailbox\Inbox;
 use App\Models\EmailAccount;
 use App\Models\EmailMessage;
 use App\Services\AiEmailDraftService;
+use App\Services\AiEmailEditor;
 use App\Services\MailClient\AttachmentName;
 use App\Services\MailClient\OutboundAttachment;
 use App\Services\MailClient\OutboundEmail;
@@ -59,6 +60,9 @@ trait WithCompose
     /** @var array<int, TemporaryUploadedFile> */
     public array $composeFiles = [];
 
+    /** The body as it was before the last AI edit, so one click puts it back. */
+    public ?string $bodyBeforeAi = null;
+
     // AI drafting modal
     public bool $showAiDraft = false;
 
@@ -69,6 +73,57 @@ trait WithCompose
     public string $aiDraftTone = 'professional';
 
     public string $aiDraftContext = '';
+
+    /**
+     * Fix spelling and grammar, rephrase, or polish what has been written so far. The previous text
+     * is kept for {@see undoAiEdit()}; if the AI is unavailable the draft is left untouched.
+     */
+    public function aiEdit(string $mode, AiEmailEditor $editor): void
+    {
+        abort_unless(in_array($mode, AiEmailEditor::MODES, true), 422);
+
+        $body = $this->composeBody;
+        if (trim($body) === '') {
+            $this->dispatch('notify', 'Write something first, then the AI can improve it.', type: 'error');
+
+            return;
+        }
+        if (mb_strlen($body) > AiEmailEditor::MAX_CHARS) {
+            $this->dispatch('notify', 'That message is too long for the AI editor. Edit it in smaller parts.', type: 'error');
+
+            return;
+        }
+
+        // Same quota guard as drafting: a held-down button must not burn the API budget.
+        $rateKey = 'ai-edit:'.auth()->id();
+        if (RateLimiter::tooManyAttempts($rateKey, 20)) {
+            $this->dispatch('notify', 'Too many AI edits. Wait a moment and try again.', type: 'error');
+
+            return;
+        }
+        RateLimiter::hit($rateKey, 60);
+
+        $edited = $editor->edit($mode, $body);
+
+        if ($edited === null) {
+            $this->dispatch('notify', 'The AI editor is not available right now. Your text is unchanged.', type: 'error');
+
+            return;
+        }
+
+        $this->bodyBeforeAi = $body;
+        $this->composeBody = $edited;
+    }
+
+    public function undoAiEdit(): void
+    {
+        if ($this->bodyBeforeAi === null) {
+            return;
+        }
+
+        $this->composeBody = $this->bodyBeforeAi;
+        $this->bodyBeforeAi = null;
+    }
 
     public function draftWithAi(AiEmailDraftService $service): void
     {
@@ -236,7 +291,7 @@ trait WithCompose
         $this->reset([
             'composing', 'composeMode', 'composeAccountId', 'replyToMessageId',
             'composeThreadId', 'composeTo', 'composeCc', 'composeSubject',
-            'composeBody', 'composeInReplyTo', 'composeReferences', 'composeFiles',
+            'composeBody', 'composeInReplyTo', 'composeReferences', 'composeFiles', 'bodyBeforeAi',
         ]);
     }
 
