@@ -89,6 +89,7 @@
                 <script defer data-at-sdk src="{{ asset('vendor/africastalking-1.0.7.js') }}?v={{ @filemtime(public_path('vendor/africastalking-1.0.7.js')) ?: '1' }}"></script>
             @endif
         @endauth
+        @include('partials.pwa-head')
         @livewireStyles
     </head>
     <body class="font-sans antialiased">
@@ -189,6 +190,15 @@
                         :title="dark ? 'Switch to light mode' : 'Switch to dark mode'">
                     <svg x-show="!dark" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/></svg>
                     <svg x-show="dark" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16a4 4 0 100-8 4 4 0 000 8zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/></svg>
+                </button>
+
+                {{-- Install-app shortcut: only shows while the app can still be installed. --}}
+                <button type="button" x-data="bqInstallPrompt()" x-show="available" x-cloak
+                        @click="window.dispatchEvent(new CustomEvent('bq-install-open'))"
+                        class="hidden sm:inline-flex items-center gap-1.5 h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        title="{{ __('Install BlastIQ as an app') }}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+                    {{ __('Install app') }}
                 </button>
 
                 {{-- Sound-status pill. Visible only while the AudioContext is
@@ -325,5 +335,6 @@
 
         @livewireScripts
         @stack('scripts')
+        @include('partials.pwa-install-modal')
     </body>
 </html>

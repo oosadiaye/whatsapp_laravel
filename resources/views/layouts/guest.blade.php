@@ -24,6 +24,7 @@
     <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700|bricolage-grotesque:600,700,800|jetbrains-mono:400,500&display=swap" rel="stylesheet" />
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @include('partials.pwa-head')
 
     {{-- Page-local style for the brand panel. Always a deep, dark green field (in both
          themes) so the white headline keeps its contrast; the faint grid is pure CSS. --}}
@@ -133,5 +134,6 @@
             </div>
         </main>
     </div>
+@include('partials.pwa-install-modal')
 </body>
 </html>
