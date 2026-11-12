@@ -34,9 +34,9 @@
                              takeover from a borrowed session). Only required server-side
                              when the New password field above is filled in. --}}
                         <div>
-                            <x-input-label for="current_password" :value="__('Your current password')" />
-                            <x-text-input id="current_password" name="current_password" type="password" class="mt-1 block w-full" autocomplete="current-password" />
-                            <p class="mt-1 text-xs text-gray-500">{{ __('Required only to set a new password for this user.') }}</p>
+                            <x-input-label for="current_password" :value="__('Your own password (the one you sign in with)')" />
+                            <x-text-input id="current_password" name="current_password" type="password" class="mt-1 block w-full" autocomplete="off" />
+                            <p class="mt-1 text-xs text-gray-500">{{ __('Required only to set a new password for this user. Enter YOUR password for :email, not :name\'s.', ['email' => auth()->user()->email, 'name' => $user->name]) }}</p>
                             <x-input-error :messages="$errors->get('current_password')" class="mt-2" />
                         </div>
                     @endif
