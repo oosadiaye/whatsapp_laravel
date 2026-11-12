@@ -75,12 +75,11 @@ Schedule::command('agents:auto-away --threshold=5')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Inbound email-client sync (plan B3). Only runs while the feature is enabled;
-// interval from config (clamped to a valid */N cron). Each account syncs on the
-// mail-sync queue.
-$mailSyncEvery = min(59, max(1, (int) config('mail_client.sync_interval_minutes', 2)));
+// Inbound email-client sync (plan B3). Only runs while the feature is enabled. Ticks every minute;
+// the command queues just the mailboxes that are due, each on its owner's chosen interval
+// (default mail_client.sync_interval_minutes). Each account syncs on the mail-sync queue.
 Schedule::command('mailbox:sync')
-    ->cron("*/{$mailSyncEvery} * * * *")
+    ->everyMinute()
     ->withoutOverlapping()
     ->onOneServer()
     ->when(fn (): bool => (bool) config('mail_client.enabled'));

@@ -109,35 +109,80 @@ class ImapFetcher implements MailFetcher
     }
 
     /**
-     * One batch from one folder, incrementally by UID. A UIDVALIDITY change (or a first run)
-     * restarts from UID 0; dedup downstream makes re-emitting safe.
+     * One pass over one folder (see {@see UidCursor}). The first pass, or a renumbered folder
+     * (UIDVALIDITY change), takes the NEWEST batch so recent mail shows up at once; after that each
+     * pass takes mail newer than the last one, and then one batch of older history until the start
+     * of the folder is reached. Dedup downstream makes re-emitting safe.
      *
-     * @param  array<string, mixed>  $state  {uidvalidity, last_uid} from the previous pass
+     * @param  array<string, mixed>  $state  {uidvalidity, last_uid, backfill_below} from the previous pass
      * @return array{messages: list<FetchedMessage>, cursor: array<string, int>, fullResync: bool, hasMore: bool}
      */
     private function pull(mixed $folder, array $state, string $label, EmailAccount $account): array
     {
-        $storedUidValidity = (int) ($state['uidvalidity'] ?? 0);
-        $lastUid = (int) ($state['last_uid'] ?? 0);
         $currentUidValidity = (int) ($folder->examine()['uidvalidity'] ?? 0);
+        $fullResync = UidCursor::needsFullResync($state, $currentUidValidity);
 
-        $fullResync = $storedUidValidity === 0 || $storedUidValidity !== $currentUidValidity;
-        $fromUid = $fullResync ? 0 : $lastUid;
+        if ($fullResync) {
+            $newest = $this->readBatch(
+                $folder->query()->leaveUnread()->setFetchOrderDesc()->limit(self::PER_RUN_LIMIT)->getByUidGreater(0),
+                $label,
+                $account,
+            );
+            $cursor = UidCursor::afterNewest($currentUidValidity, $newest['uids'], self::PER_RUN_LIMIT);
 
-        $collection = $folder->query()
-            ->leaveUnread()
-            ->limit(self::PER_RUN_LIMIT)
-            ->getByUidGreater($fromUid);
+            return [
+                'messages' => $newest['messages'],
+                'cursor' => $cursor,
+                'fullResync' => true,
+                'hasMore' => UidCursor::hasMore($cursor, 0, self::PER_RUN_LIMIT),
+            ];
+        }
 
+        $lastUid = (int) ($state['last_uid'] ?? 0);
+        $below = (int) ($state['backfill_below'] ?? 0);
+
+        // Mail that arrived since last time, oldest first so a cut-off batch never skips any.
+        $new = $this->readBatch(
+            $folder->query()->leaveUnread()->setFetchOrderAsc()->limit(self::PER_RUN_LIMIT)->getByUidGreater($lastUid),
+            $label,
+            $account,
+        );
+
+        // History, newest of the unread part first, only once new mail is fully caught up.
+        $older = ['messages' => [], 'uids' => []];
+        if ($below > 1 && count($new['uids']) < self::PER_RUN_LIMIT) {
+            $older = $this->readBatch(
+                $folder->query()->leaveUnread()->setFetchOrderDesc()->limit(self::PER_RUN_LIMIT)->getByUidLower($below),
+                $label,
+                $account,
+            );
+        }
+
+        $cursor = UidCursor::afterIncremental($state, $currentUidValidity, $new['uids'], $older['uids'], self::PER_RUN_LIMIT);
+
+        return [
+            'messages' => array_merge($new['messages'], $older['messages']),
+            'cursor' => $cursor,
+            'fullResync' => false,
+            'hasMore' => UidCursor::hasMore($cursor, count($new['uids']), self::PER_RUN_LIMIT),
+        ];
+    }
+
+    /**
+     * Turn one fetched batch into messages. Every UID is reported, even for a message skipped as
+     * oversized or unreadable, so the cursor still moves past it.
+     *
+     * @return array{messages: list<FetchedMessage>, uids: list<int>}
+     */
+    private function readBatch(iterable $collection, string $label, EmailAccount $account): array
+    {
         $messages = [];
-        // Start from 0 on a full re-sync: a UIDVALIDITY change renumbers the mailbox, so the OLD
-        // last_uid is meaningless in the new UID space and seeding with it could pin the cursor
-        // above the new (smaller) UIDs.
-        $maxUid = $fullResync ? 0 : $lastUid;
+        $uids = [];
+
         foreach ($collection as $message) {
             try {
                 $uid = (int) $message->getUid();
-                $maxUid = max($maxUid, $uid);
+                $uids[] = $uid;
 
                 // Skip oversized mail BEFORE materialising its bodies / attachments — the memory +
                 // private-disk DoS guard. The deterministic layer lives in EmailSyncService::store.
@@ -161,12 +206,7 @@ class ImapFetcher implements MailFetcher
             }
         }
 
-        return [
-            'messages' => $messages,
-            'cursor' => ['uidvalidity' => $currentUidValidity, 'last_uid' => $maxUid],
-            'fullResync' => $fullResync,
-            'hasMore' => count($collection) >= self::PER_RUN_LIMIT,
-        ];
+        return ['messages' => $messages, 'uids' => $uids];
     }
 
     private function toFetchedMessage($message, string $folder): FetchedMessage

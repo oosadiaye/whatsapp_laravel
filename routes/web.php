@@ -120,6 +120,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/mailbox/accounts/{account}/edit', [EmailAccountController::class, 'edit'])->name('mailbox.accounts.edit');
         Route::put('/mailbox/accounts/{account}', [EmailAccountController::class, 'update'])->name('mailbox.accounts.update');
         Route::put('/mailbox/accounts/{account}/signature', [EmailAccountController::class, 'updateSignature'])->name('mailbox.accounts.signature');
+        Route::put('/mailbox/accounts/{account}/sync-interval', [EmailAccountController::class, 'updateSyncInterval'])->name('mailbox.accounts.sync-interval');
         Route::delete('/mailbox/accounts/{account}', [EmailAccountController::class, 'destroy'])->name('mailbox.accounts.destroy');
     });
 

@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Livewire\Mailbox;
 
+use App\Jobs\SyncEmailAccount;
 use App\Livewire\Mailbox\Concerns\WithCompose;
 use App\Models\EmailAccount;
 use App\Models\EmailMessage;
 use App\Models\EmailThread;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -47,6 +49,114 @@ class Inbox extends Component
     /** asc | desc */
     #[Url(as: 'dir')]
     public string $sortDir = 'desc';
+
+    /** Failed sends with an id above this have not been announced yet (a toast tells the person once). */
+    public int $lastFailureSeenId = 0;
+
+    public function mount(): void
+    {
+        $this->lastFailureSeenId = (int) $this->ownFailedSends()->max('email_messages.id');
+    }
+
+    /**
+     * Run on the page's poll: announce a message that has just failed to send, once. The list and
+     * banners refresh on the same round trip.
+     */
+    public function refreshMailbox(): void
+    {
+        $fresh = $this->ownFailedSends()
+            ->where('email_messages.id', '>', $this->lastFailureSeenId)
+            ->latest('id')
+            ->limit(3)
+            ->get();
+
+        foreach ($fresh as $failed) {
+            $this->dispatch('notify', message: __('Not sent: ":subject". :reason', [
+                'subject' => $failed->subject ?: __('(no subject)'),
+                'reason' => $failed->send_error,
+            ]), type: 'error');
+        }
+
+        $this->lastFailureSeenId = max($this->lastFailureSeenId, (int) $this->ownFailedSends()->max('email_messages.id'));
+    }
+
+    /**
+     * "Check now": look for new mail in the person's own mailboxes right away and say what happened.
+     * Runs in this request so the real reason shows if it fails.
+     */
+    public function syncNow(): void
+    {
+        abort_unless((bool) config('mail_client.enabled'), 404);
+        abort_unless(auth()->user()?->can('mailbox.view'), 403);
+
+        $rateKey = 'mail-sync-now:'.auth()->id();
+        if (RateLimiter::tooManyAttempts($rateKey, 6)) {
+            $this->dispatch('notify', message: __('You just checked. Wait a moment and try again.'), type: 'error');
+
+            return;
+        }
+        RateLimiter::hit($rateKey, 60);
+
+        $accounts = EmailAccount::query()->where('user_id', auth()->id())->where('is_active', true)->get();
+        if ($accounts->isEmpty()) {
+            $this->dispatch('notify', message: __('No mailbox is connected yet.'), type: 'error');
+
+            return;
+        }
+
+        // Give a web request room for a slow mail server. Only raises a limit that exists (it is 0, i.e.
+        // none, on the command line), so tests and workers are not suddenly put on a clock.
+        $limit = (int) ini_get('max_execution_time');
+        if ($limit > 0 && $limit < 120) {
+            @set_time_limit(120);
+        }
+        $ids = $accounts->pluck('id')->all();
+        $before = EmailMessage::query()->whereIn('email_account_id', $ids)->count();
+        $attemptedBefore = $accounts->mapWithKeys(fn (EmailAccount $a): array => [$a->id => $a->last_sync_attempt_at?->getTimestamp()])->all();
+
+        // At most three mailboxes per click, so one request cannot tie up a web worker for minutes.
+        foreach ($accounts->where('needs_reauth', false)->take(3) as $account) {
+            try {
+                SyncEmailAccount::dispatchSync($account->id);
+            } catch (\Throwable) {
+                // The job has already written the reason to the account; it is shown below.
+            }
+        }
+
+        $problem = EmailAccount::query()->whereIn('id', $ids)->where(fn ($q) => $q->where('needs_reauth', true)->orWhereNotNull('last_sync_error'))->first();
+        if ($problem !== null) {
+            $this->dispatch('notify', message: __('Could not check :email. :reason', [
+                'email' => $problem->email,
+                'reason' => $problem->last_sync_error ?: __('Reconnect the mailbox in its settings.'),
+            ]), type: 'error');
+
+            return;
+        }
+
+        // A run that found another run already in progress does nothing; do not call that "up to date".
+        $ran = EmailAccount::query()->whereIn('id', $ids)->get()
+            ->contains(fn (EmailAccount $a): bool => $a->last_sync_attempt_at?->getTimestamp() !== ($attemptedBefore[$a->id] ?? null));
+        if (! $ran) {
+            $this->dispatch('notify', message: __('A check is already running. Try again in a moment.'));
+
+            return;
+        }
+
+        $new = EmailMessage::query()->whereIn('email_account_id', $ids)->count() - $before;
+        $this->dispatch('notify', message: $new > 0
+            ? trans_choice(':count new message.|:count new messages.', $new, ['count' => $new])
+            : __('You are up to date.'));
+    }
+
+    /** Jump to the Sent folder at the newest message that failed to send. */
+    public function showFailedSends(): void
+    {
+        $failed = $this->ownFailedSends()->latest('id')->first();
+
+        $this->folder = EmailThread::FOLDER_SENT;
+        $this->resetPage();
+        $this->selectedThreadId = $failed?->email_thread_id;
+    }
 
     /**
      * Reverb push (plan B6): refresh the moment sync stores new mail on THIS
@@ -125,6 +235,7 @@ class Inbox extends Component
                 });
             })
             ->tap(fn (Builder $q) => $this->applySort($q))
+            ->withExists(['messages as has_failed_send' => fn (Builder $m) => $m->where('send_status', EmailMessage::SEND_FAILED)])
             ->with('latestMessage')
             ->paginate(25);
 
@@ -159,7 +270,12 @@ class Inbox extends Component
             && $selected->account !== null
             && $selected->account->user_id === auth()->id();
 
+        $syncProblemAccount = $myAccounts->first(fn (EmailAccount $a): bool => $a->needs_reauth || $a->last_sync_error !== null);
+
         return view('livewire.mailbox.inbox', [
+            'failedSendCount' => $this->ownFailedSends()->count(),
+            'lastChecked' => $myAccounts->max('last_synced_at'),
+            'syncProblemAccount' => $syncProblemAccount,
             'threads' => $threads,
             'selected' => $selected,
             'myAccounts' => $myAccounts,

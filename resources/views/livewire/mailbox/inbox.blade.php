@@ -1,4 +1,4 @@
-<div wire:key="mailbox-inbox" x-ref="shell"
+<div wire:key="mailbox-inbox" x-ref="shell" @if(! $composing) wire:poll.20s.visible="refreshMailbox" @endif
      x-data="{
         w: 416, min: 256, max: 680, full: false,
         init() {
@@ -25,6 +25,25 @@
     @if(session('mailbox_status'))
         <div class="mb-3 rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-800">
             {{ session('mailbox_status') }}
+        </div>
+    @endif
+
+    @if($failedSendCount > 0)
+        <div class="mb-3 flex items-start gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800" role="alert">
+            <span class="flex-1">
+                {{ trans_choice(':count message could not be sent.|:count messages could not be sent.', $failedSendCount, ['count' => $failedSendCount]) }}
+                <button type="button" wire:click="showFailedSends" class="font-medium underline hover:text-red-900">{{ __('See why') }}</button>
+            </span>
+        </div>
+    @endif
+
+    @if($syncProblemAccount)
+        <div class="mb-3 flex items-start gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800" role="alert">
+            <span class="flex-1">
+                {{ __('New mail from :email is not coming in.', ['email' => $syncProblemAccount->email]) }}
+                {{ $syncProblemAccount->last_sync_error ?: __('The mailbox needs to be reconnected.') }}
+                <a href="{{ route('mailbox.accounts.edit', $syncProblemAccount) }}" class="font-medium underline hover:text-red-900">{{ __('Open mailbox settings') }}</a>
+            </span>
         </div>
     @endif
 
@@ -80,6 +99,18 @@
                 </button>
             </div>
 
+            @if($myAccounts->isNotEmpty())
+                <div class="mb-2 flex items-center justify-between gap-2 shrink-0 text-xs text-gray-500">
+                    <span>{{ $lastChecked ? __('Checked :when', ['when' => $lastChecked->diffForHumans()]) : __('Not checked yet') }}</span>
+                    <button type="button" wire:click="syncNow" wire:loading.attr="disabled" wire:target="syncNow"
+                        class="shrink-0 inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                        <svg class="w-3 h-3" wire:loading.class="animate-spin" wire:target="syncNow" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992V4.356M2.985 19.644v-4.992h4.992m0 0A8.25 8.25 0 0120.25 12M7.977 14.652A8.25 8.25 0 013.75 12"/></svg>
+                        <span wire:loading.remove wire:target="syncNow">{{ __('Check now') }}</span>
+                        <span wire:loading wire:target="syncNow">{{ __('Checking…') }}</span>
+                    </button>
+                </div>
+            @endif
+
             <ul class="divide-y divide-gray-100 overflow-y-auto flex-1 -mx-4 px-2">
                 @forelse($threads as $thread)
                     <li>
@@ -93,7 +124,11 @@
                             </div>
                             <div class="flex items-center justify-between gap-2 mt-0.5">
                                 <span class="text-xs truncate {{ $thread->unread_count > 0 ? 'font-semibold text-gray-800' : 'text-gray-600' }}">{{ $thread->subject ?: __('(no subject)') }}</span>
-                                @if($thread->unread_count > 0)
+                                @if($thread->has_failed_send)
+                                    <span class="shrink-0 rounded bg-red-50 px-1.5 text-[10px] font-medium text-red-700">{{ __('Not sent') }}</span>
+                                @elseif($thread->latestMessage?->isBounce())
+                                    <span class="shrink-0 rounded bg-red-50 px-1.5 text-[10px] font-medium text-red-700">{{ __('Delivery failed') }}</span>
+                                @elseif($thread->unread_count > 0)
                                     <span class="shrink-0 inline-flex items-center justify-center rounded-full bg-brand text-white text-[10px] min-w-[1rem] h-4 px-1">{{ $thread->unread_count < 100 ? $thread->unread_count : '99+' }}</span>
                                 @endif
                             </div>
@@ -154,7 +189,7 @@
                             &middot; {{ $selected->messages->count() }} {{ __('message(s)') }}
                         </p>
                     </div>
-                    @if($canSendFromSelected && $selected->messages->isNotEmpty())
+                    @if($canSendFromSelected && $selected->messages->isNotEmpty() && ! $selected->messages->last()->isSendFailure())
                         <button type="button" wire:click="startReply({{ $selected->messages->last()->id }})"
                             class="shrink-0 text-xs font-medium px-3 py-1.5 rounded bg-brand text-white hover:bg-brand-hover transition">{{ __('Reply') }}</button>
                     @endif
@@ -169,12 +204,32 @@
                                         {{ strtoupper(substr($message->from_email ?? ($message->account->email ?? '?'), 0, 1)) }}
                                     </span>
                                     <span class="font-medium text-gray-700 truncate">{{ $message->from_email ?: ($message->account->email ?? '') }}</span>
-                                    @if($message->direction === 'outbound')
+                                    @if($message->isSendFailure())
+                                        <span class="text-[10px] font-medium text-red-700 bg-red-50 px-1.5 rounded">{{ __('Not sent') }}</span>
+                                    @elseif($message->direction === 'outbound')
                                         <span class="text-[10px] text-gray-500 bg-gray-200 px-1.5 rounded">{{ __('Sent') }}</span>
                                     @endif
                                 </div>
                                 <span class="shrink-0">{{ ($message->received_at ?? $message->sent_at)?->format('M j, Y g:i A') }}</span>
                             </div>
+
+                            @if($message->isSendFailure())
+                                <div class="mb-3 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800" role="alert">
+                                    <p class="font-medium">{{ __('This message was not sent.') }}</p>
+                                    <p class="mt-0.5">{{ $message->send_error }}</p>
+                                    @if($canSendFromSelected)
+                                        <div class="mt-2 flex gap-3">
+                                            <button type="button" wire:click="editFailed({{ $message->id }})" class="font-medium underline hover:text-red-900">{{ __('Edit and send again') }}</button>
+                                            <button type="button" wire:click="discardFailed({{ $message->id }})" wire:confirm="{{ __('Discard this message?') }}" class="hover:text-red-900 hover:underline">{{ __('Discard') }}</button>
+                                        </div>
+                                    @endif
+                                </div>
+                            @elseif($message->isBounce())
+                                <div class="mb-3 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800" role="alert">
+                                    <p class="font-medium">{{ __('A message you sent was not delivered.') }}</p>
+                                    <p class="mt-0.5">{{ __('The receiving mail server sent this notice back. The address may not exist or the mailbox may be full. Check the address below and send again.') }}</p>
+                                </div>
+                            @endif
 
                             @if($message->body_html)
                                 <iframe sandbox class="w-full border rounded-md bg-white {{ $loop->last ? 'h-[60vh]' : 'h-[30vh]' }} min-h-[14rem]" srcdoc="{{ $message->body_html }}" title="{{ __('Message body') }}"></iframe>
@@ -195,7 +250,7 @@
                                 </div>
                             @endif
 
-                            @if($canSendFromSelected)
+                            @if($canSendFromSelected && ! $message->isSendFailure())
                                 <div class="mt-3 flex gap-3 text-xs border-t border-gray-50 pt-3">
                                     <button type="button" wire:click="startReply({{ $message->id }})" class="text-gray-500 hover:text-gray-800 font-medium transition">{{ __('Reply') }}</button>
                                     <button type="button" wire:click="startReply({{ $message->id }}, true)" class="text-gray-500 hover:text-gray-800 font-medium transition">{{ __('Reply all') }}</button>
@@ -297,6 +352,7 @@
                     <input id="compose-cc" type="text" wire:model="composeCc" autocomplete="off" spellcheck="false"
                         class="flex-1 border-0 bg-transparent py-2 text-sm placeholder-gray-400 focus:ring-0" placeholder="{{ __('optional') }}" />
                 </div>
+                @error('composeCc') <p class="px-3 py-1 text-xs text-red-600">{{ $message }}</p> @enderror
                 <div class="flex items-center gap-2 px-3">
                     <label for="compose-subject" class="w-12 shrink-0 text-gray-500">{{ __('Subject') }}</label>
                     <input id="compose-subject" type="text" wire:model="composeSubject"

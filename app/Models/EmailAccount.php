@@ -38,6 +38,9 @@ class EmailAccount extends Model
         'credentials',
         'sync_state',
         'last_synced_at',
+        'sync_interval_minutes',
+        'last_sync_attempt_at',
+        'last_sync_error',
         'is_active',
         'needs_reauth',
         'signature',
@@ -64,11 +67,16 @@ class EmailAccount extends Model
             'credentials' => 'encrypted:array',
             'sync_state' => 'array',
             'last_synced_at' => 'datetime',
+            'last_sync_attempt_at' => 'datetime',
+            'sync_interval_minutes' => 'integer',
             'is_active' => 'boolean',
             'needs_reauth' => 'boolean',
             'signature_auto' => 'boolean',
         ];
     }
+
+    /** Minutes the person may choose between automatic checks for new mail. */
+    public const SYNC_INTERVALS = [1, 2, 5, 10, 15, 30];
 
     public function user(): BelongsTo
     {

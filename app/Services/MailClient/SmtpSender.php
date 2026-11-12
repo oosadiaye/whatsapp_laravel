@@ -6,6 +6,7 @@ namespace App\Services\MailClient;
 
 use App\Mail\UserMail;
 use App\Models\EmailAccount;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 /**
@@ -24,6 +25,35 @@ use Illuminate\Support\Facades\Mail;
 class SmtpSender implements MailSender
 {
     public function send(EmailAccount $account, OutboundEmail $email): void
+    {
+        $mailer = $this->registerMailer($account);
+
+        // The mailable carries its own recipients/from via envelope(), so send()
+        // needs no ->to(); a transport error bubbles up to the job.
+        Mail::mailer($mailer)->send(new UserMail($account, $email));
+    }
+
+    /**
+     * Open the outgoing connection and sign in, without sending anything, so a wrong host, port or
+     * password is found when the mailbox is connected rather than on the first real message.
+     */
+    public function check(EmailAccount $account): ConnectionResult
+    {
+        try {
+            $transport = Mail::mailer($this->registerMailer($account))->getSymfonyTransport();
+            $transport->start();
+            $transport->stop();
+
+            return ConnectionResult::ok();
+        } catch (\Throwable $e) {
+            Log::warning('Outgoing mail check failed', ['account_id' => $account->id, 'error' => $e->getMessage()]);
+
+            return ConnectionResult::fail(MailErrorExplainer::explain($e, (string) (($account->credentials ?? [])['smtp_host'] ?? '')));
+        }
+    }
+
+    /** Register this account's own SMTP settings as a named mailer and return its name. */
+    private function registerMailer(EmailAccount $account): string
     {
         $creds = $account->credentials ?? [];
         $mailer = 'mailbox_'.$account->id;
@@ -57,8 +87,6 @@ class SmtpSender implements MailSender
 
         config(["mail.mailers.{$mailer}" => $mailerConfig]);
 
-        // The mailable carries its own recipients/from via envelope(), so send()
-        // needs no ->to(); a transport error bubbles up to the job.
-        Mail::mailer($mailer)->send(new UserMail($account, $email));
+        return $mailer;
     }
 }

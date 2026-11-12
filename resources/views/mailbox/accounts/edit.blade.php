@@ -5,10 +5,6 @@
 
     <div class="py-8">
         <div class="max-w-2xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            @if(session('success'))
-                <div class="rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-800">{{ session('success') }}</div>
-            @endif
-
             <div class="bg-white shadow-sm rounded-lg p-6" id="signature">
                 <h3 class="text-base font-semibold text-gray-800">{{ __('Email signature') }}</h3>
                 <p class="mt-1 text-sm text-gray-500">{{ __('Yours alone: it is only used when you write from this mailbox.') }}</p>
@@ -30,6 +26,30 @@
                     <div class="flex justify-end">
                         <button type="submit" class="px-5 py-2 bg-brand text-white text-sm font-semibold rounded-md hover:bg-brand-hover">{{ __('Save signature') }}</button>
                     </div>
+                </form>
+            </div>
+
+            <div class="bg-white shadow-sm rounded-lg p-6" id="checking">
+                <h3 class="text-base font-semibold text-gray-800">{{ __('Checking for new mail') }}</h3>
+                <p class="mt-1 text-sm text-gray-500">
+                    {{ $account->last_synced_at ? __('Last checked :when.', ['when' => $account->last_synced_at->diffForHumans()]) : __('Not checked yet.') }}
+                </p>
+                @if($account->last_sync_error)
+                    <p class="mt-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800" role="alert">{{ $account->last_sync_error }}</p>
+                @endif
+                <form method="POST" action="{{ route('mailbox.accounts.sync-interval', $account) }}" class="mt-4 flex flex-wrap items-end gap-3">
+                    @csrf
+                    @method('PUT')
+                    <div>
+                        <x-input-label for="sync_interval_minutes" :value="__('Check for new mail every')" />
+                        <select id="sync_interval_minutes" name="sync_interval_minutes" class="mt-1 block rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand">
+                            @foreach(\App\Models\EmailAccount::SYNC_INTERVALS as $minutes)
+                                <option value="{{ $minutes }}" @selected((int) old('sync_interval_minutes', $account->sync_interval_minutes) === $minutes)>{{ trans_choice(':count minute|:count minutes', $minutes, ['count' => $minutes]) }}</option>
+                            @endforeach
+                        </select>
+                        <x-input-error :messages="$errors->get('sync_interval_minutes')" class="mt-2" />
+                    </div>
+                    <button type="submit" class="px-5 py-2 bg-brand text-white text-sm font-semibold rounded-md hover:bg-brand-hover">{{ __('Save') }}</button>
                 </form>
             </div>
 

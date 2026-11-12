@@ -313,6 +313,19 @@
         </script>
 
         @auth
+            {{-- Toasts for the `notify` event Livewire components dispatch (resources/js/notify.js). Top-right, under the bar, so they never cover the mail composer. --}}
+            <div x-data="bqNotify()" @notify.window="push($event.detail)"
+                 class="pointer-events-none fixed right-4 top-20 z-50 flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2"
+                 role="status" aria-live="polite" data-testid="notify-toasts">
+                <template x-for="t in toasts" :key="t.id">
+                    <div class="pointer-events-auto flex items-start gap-2 rounded-xl border border-gray-200 border-l-4 bg-white p-3 text-sm shadow-lg"
+                         :class="t.type === 'error' ? 'border-l-red-600 text-red-800' : 'border-l-emerald-600 text-gray-800'">
+                        <span class="flex-1" x-text="t.text"></span>
+                        <button type="button" class="text-gray-500 hover:text-gray-800" @click="dismiss(t.id)" aria-label="Dismiss">&times;</button>
+                    </div>
+                </template>
+            </div>
+
             @can('leads.manage')
                 {{-- Live alerts: a prospect replied, or an AI decision needs you. Fed by the lead.alert broadcast (resources/js/app.js). --}}
                 <div x-data="{ toasts: [], push(d) { const id = Date.now() + Math.random(); this.toasts.push({ id: id, headline: d.headline, company: d.company, url: d.url, kind: d.kind }); setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 15000); } }"

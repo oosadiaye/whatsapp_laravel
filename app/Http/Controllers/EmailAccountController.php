@@ -9,9 +9,11 @@ use App\Models\EmailAccount;
 use App\Rules\SafeMailHost;
 use App\Services\AuditService;
 use App\Services\MailClient\MailAccountProviderFactory;
+use App\Services\MailClient\SmtpSender;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -109,8 +111,10 @@ class EmailAccountController extends Controller
 
         $audit->log('mailbox.connected', 'email_account', $account->id, ['email' => $account->email]);
 
-        return redirect()->route('mailbox.accounts.index')
+        $redirect = redirect()->route('mailbox.accounts.index')
             ->with('success', "Mailbox {$account->email} connected.");
+
+        return $this->withSendWarning($redirect, $account);
     }
 
     public function edit(EmailAccount $account): View
@@ -183,8 +187,31 @@ class EmailAccountController extends Controller
 
         $audit->log('mailbox.updated', 'email_account', $account->id, ['email' => $account->email]);
 
-        return redirect()->route('mailbox.accounts.index')
+        $redirect = redirect()->route('mailbox.accounts.index')
             ->with('success', "Mailbox {$account->email} updated.");
+
+        return $this->withSendWarning($redirect, $account);
+    }
+
+    /**
+     * Receiving works if we got this far; also try the outgoing server. If that fails the mailbox
+     * stays connected, but the person is told right now that sending will not work yet.
+     */
+    private function withSendWarning(RedirectResponse $redirect, EmailAccount $account): RedirectResponse
+    {
+        if (! config('mail_client.verify_smtp_on_connect')) {
+            return $redirect;
+        }
+
+        $result = app(SmtpSender::class)->check($account);
+
+        if ($result->ok) {
+            return $redirect;
+        }
+
+        Log::warning('Mailbox outgoing check failed', ['account_id' => $account->id, 'reason' => $result->error]);
+
+        return $redirect->with('warning', 'Incoming mail works, but sending will fail until this is fixed. '.$result->error);
     }
 
     /** The owner's own signature for this mailbox. Plain text; added to new mail when `signature_auto` is on. */
@@ -204,6 +231,20 @@ class EmailAccountController extends Controller
         ]);
 
         return redirect()->route('mailbox.accounts.edit', $account)->with('success', 'Signature saved.');
+    }
+
+    /** How often this mailbox is checked for new mail. */
+    public function updateSyncInterval(Request $request, EmailAccount $account): RedirectResponse
+    {
+        abort_unless($account->user_id === auth()->id(), 403);
+
+        $data = $request->validate([
+            'sync_interval_minutes' => ['required', 'integer', Rule::in(EmailAccount::SYNC_INTERVALS)],
+        ]);
+
+        $account->update(['sync_interval_minutes' => $data['sync_interval_minutes']]);
+
+        return redirect()->route('mailbox.accounts.edit', $account)->with('success', 'Check interval saved.');
     }
 
     public function destroy(EmailAccount $account, AuditService $audit): RedirectResponse

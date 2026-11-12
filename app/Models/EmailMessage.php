@@ -22,6 +22,8 @@ class EmailMessage extends Model
 
     public const DIRECTION_OUTBOUND = 'outbound';
 
+    public const SEND_FAILED = 'failed';
+
     /**
      * @var list<string>
      */
@@ -41,6 +43,8 @@ class EmailMessage extends Model
         'body_text',
         'is_read',
         'has_attachments',
+        'send_status',
+        'send_error',
         'provider_ref',
         'sent_at',
         'received_at',
@@ -60,6 +64,29 @@ class EmailMessage extends Model
             'sent_at' => 'datetime',
             'received_at' => 'datetime',
         ];
+    }
+
+    public function isSendFailure(): bool
+    {
+        return $this->send_status === self::SEND_FAILED;
+    }
+
+    /**
+     * An automatic "your message could not be delivered" notice from a mail server: the recipient
+     * address does not exist, the inbox is full, or the message was refused. It arrives as ordinary
+     * inbound mail, so it is recognised by who sent it and what it says.
+     */
+    public function isBounce(): bool
+    {
+        if ($this->direction !== self::DIRECTION_INBOUND) {
+            return false;
+        }
+
+        $from = strtolower((string) $this->from_email);
+        $subject = strtolower((string) $this->subject);
+
+        return (bool) preg_match('/mailer-daemon|postmaster|mail delivery subsystem/', $from)
+            || (bool) preg_match('/undeliver|delivery status notification|delivery has failed|mail delivery failed|returned mail|failure notice|could ?n.?t be delivered|was ?n.?t delivered/', $subject);
     }
 
     public function thread(): BelongsTo

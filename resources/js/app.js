@@ -2,6 +2,7 @@ import './bootstrap';
 import './theme';
 import './model-picker';
 import './pwa-install';
+import './notify';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 

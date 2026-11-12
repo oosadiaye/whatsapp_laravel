@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Exceptions\MailSendException;
 use App\Models\EmailAccount;
 use App\Models\EmailMessage;
 use App\Models\EmailThread;
 use App\Services\MailClient\MailAccountProviderFactory;
+use App\Services\MailClient\MailErrorExplainer;
 use App\Services\MailClient\OutboundEmail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -62,7 +64,16 @@ class SendUserEmail implements ShouldQueue
     {
         $account = EmailAccount::find($this->accountId);
 
-        if ($account === null || ! $account->is_active) {
+        if ($account === null) {
+            Log::warning('SendUserEmail: the mailbox no longer exists', ['account_id' => $this->accountId]);
+
+            return;
+        }
+
+        if (! $account->is_active) {
+            // The person pressed Send, so tell them it did not go rather than dropping it silently.
+            $this->fail(new MailSendException('This mailbox is disconnected, so the message was not sent. Reconnect it in the mailbox settings and send again.'));
+
             return;
         }
 
@@ -80,6 +91,8 @@ class SendUserEmail implements ShouldQueue
 
         $sender = $factory->senderFor($account);
         if ($sender === null) {
+            $this->fail(new MailSendException('This mailbox type cannot send mail from here.'));
+
             return;
         }
 
@@ -123,6 +136,40 @@ class SendUserEmail implements ShouldQueue
             'account_id' => $this->accountId,
             'error' => $e->getMessage(),
         ]);
+
+        // The person must hear about it: keep the message in their Sent list, marked "not sent" with
+        // the reason, so they can fix the cause and send it again.
+        try {
+            $this->recordFailure($e);
+        } catch (\Throwable $recording) {
+            Log::error('SendUserEmail: could not record the failed send', ['error' => $recording->getMessage()]);
+        }
+    }
+
+    private function recordFailure(\Throwable $e): void
+    {
+        $account = EmailAccount::find($this->accountId);
+        if ($account === null) {
+            return;
+        }
+
+        $host = ($account->credentials ?? [])['smtp_host'] ?? null;
+        $reason = $e instanceof MailSendException
+            ? $e->getMessage()
+            : ($e instanceof \Illuminate\Queue\MaxAttemptsExceededException || $e instanceof \Illuminate\Queue\TimeoutExceededException
+                ? 'The mail server took too long, so we cannot tell whether this was delivered. Check the Sent folder at your email provider before sending it again.'
+                : MailErrorExplainer::explain($e, is_string($host) ? $host : null));
+
+        $message = $this->storeOutbound($account, $this->email, [
+            'send_status' => EmailMessage::SEND_FAILED,
+            'send_error' => mb_substr($reason, 0, 500),
+            'sent_at' => null,
+            'is_read' => false,
+        ]);
+
+        // Surface it in the thread list as unread, so it is not missed.
+        $message->thread->forceFill(['last_message_at' => now(), 'subject' => $message->thread->subject ?: $this->email->subject])->save();
+        $message->thread->increment('unread_count');
     }
 
     private function generateMessageId(EmailAccount $account): string
@@ -135,9 +182,21 @@ class SendUserEmail implements ShouldQueue
 
     private function storeSentCopy(EmailAccount $account, OutboundEmail $email): void
     {
+        $thread = $this->storeOutbound($account, $email, [])->thread;
+        $thread->forceFill([
+            'last_message_at' => now(),
+            'subject' => $thread->subject ?: $email->subject,
+        ])->save();
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides  columns that differ from a normally sent message
+     */
+    private function storeOutbound(EmailAccount $account, OutboundEmail $email, array $overrides): EmailMessage
+    {
         $thread = $this->resolveThread($account, $email);
 
-        $thread->messages()->create([
+        return $thread->messages()->create(array_merge([
             'email_account_id' => $account->id,
             'direction' => EmailMessage::DIRECTION_OUTBOUND,
             'message_id' => $email->messageId !== null ? trim($email->messageId, '<>') : null,
@@ -153,12 +212,7 @@ class SendUserEmail implements ShouldQueue
             'is_read' => true,
             'has_attachments' => $email->hasAttachments(),
             'sent_at' => now(),
-        ]);
-
-        $thread->forceFill([
-            'last_message_at' => now(),
-            'subject' => $thread->subject ?: $email->subject,
-        ])->save();
+        ], $overrides));
     }
 
     /**

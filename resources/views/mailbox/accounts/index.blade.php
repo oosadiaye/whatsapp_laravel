@@ -36,14 +36,24 @@
                                         <td class="py-2 pr-4">
                                             @if($account->needs_reauth)
                                                 <span class="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-700">{{ __('Needs reconnect') }}</span>
+                                            @elseif($account->is_active && $account->last_sync_error)
+                                                <span class="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-700">{{ __('Not updating') }}</span>
                                             @elseif($account->is_active)
                                                 <span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">{{ __('Connected') }}</span>
                                             @else
                                                 <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{{ __('Inactive') }}</span>
                                             @endif
                                         </td>
-                                        <td class="py-2 pr-4 text-gray-500">{{ $account->last_synced_at?->diffForHumans() ?? '—' }}</td>
+                                        <td class="py-2 pr-4 text-gray-500">
+                                            {{ $account->last_synced_at?->diffForHumans() ?? '—' }}
+                                            @if($account->last_sync_error)
+                                                <div class="mt-0.5 max-w-xs text-xs text-red-700">{{ $account->last_sync_error }}</div>
+                                            @endif
+                                        </td>
                                         <td class="py-2 text-right">
+                                            @if($account->user_id === auth()->id())
+                                                <a href="{{ route('mailbox.accounts.edit', $account) }}" class="mr-3 text-brand-text hover:text-brand-hover text-xs font-medium">{{ __('Settings') }}</a>
+                                            @endif
                                             <form method="POST" action="{{ route('mailbox.accounts.destroy', $account) }}" data-confirm="{{ __('Disconnect this mailbox?') }}" class="inline">
                                                 @csrf
                                                 @method('DELETE')

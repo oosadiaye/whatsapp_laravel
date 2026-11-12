@@ -54,6 +54,7 @@ class EmailSyncService
         $account->update([
             'sync_state' => $cursor,
             'last_synced_at' => now(),
+            'last_sync_error' => null,
             'needs_reauth' => false,
         ]);
 

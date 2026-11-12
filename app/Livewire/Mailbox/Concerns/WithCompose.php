@@ -34,6 +34,9 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
  */
 trait WithCompose
 {
+    /** Most people one message may go to (To and Cc together). */
+    public const MAX_RECIPIENTS = 50;
+
     public bool $composing = false;
 
     /** reply|reply_all|forward|new */
@@ -62,6 +65,9 @@ trait WithCompose
 
     /** The signature block placed in the body when the composer opened (so a changed sender can swap it). */
     public string $appliedSignature = '';
+
+    /** A message that failed to send and is being edited to send again; removed once the new send is queued. */
+    public ?int $retryingMessageId = null;
 
     /** The body as it was before the last AI edit, so one click puts it back. */
     public ?string $bodyBeforeAi = null;
@@ -205,6 +211,43 @@ trait WithCompose
         $this->appliedSignature = $new;
     }
 
+    /**
+     * Reopen a message that failed to send, filled in as it was, so the person can fix the cause
+     * (usually the address) and send it again. Attachments are not kept, so they must be added again.
+     */
+    public function editFailed(int $messageId): void
+    {
+        $failed = $this->ownFailedSends()->with('thread')->whereKey($messageId)->first();
+        abort_if($failed === null, 404);
+
+        $account = $this->ownActiveAccounts()->whereKey($failed->email_account_id)->first();
+        if ($account === null) {
+            $this->dispatch('notify', message: __('That mailbox is disconnected. Reconnect it first, then send again.'), type: 'error');
+
+            return;
+        }
+
+        $isReply = $failed->in_reply_to !== null;
+        $this->openComposer($isReply ? 'reply' : 'new', $account->id, $isReply ? $failed->email_thread_id : null);
+        $this->retryingMessageId = $failed->id;
+        $this->composeTo = implode(', ', (array) $failed->to);
+        $this->composeCc = implode(', ', (array) $failed->cc);
+        $this->composeSubject = (string) $failed->subject;
+        $this->composeBody = (string) $failed->body_text;
+        $this->composeInReplyTo = $failed->in_reply_to;
+        $this->composeReferences = $failed->references_header;
+        $this->appliedSignature = '';
+    }
+
+    /** Remove a message that failed to send, and its conversation if it held nothing else. */
+    public function discardFailed(int $messageId): void
+    {
+        $failed = $this->ownFailedSends()->whereKey($messageId)->first();
+        abort_if($failed === null, 404);
+
+        $this->removeFailedSend($failed);
+    }
+
     public function startForward(int $messageId): void
     {
         $message = $this->sendableMessage($messageId);
@@ -253,10 +296,20 @@ trait WithCompose
         $account = $this->ownActiveAccounts()->whereKey($this->composeAccountId)->first();
         abort_if($account === null, 403);
 
-        $to = $this->parseAddresses($this->composeTo);
-        if ($to === []) {
-            $this->addError('composeTo', __('Enter at least one valid recipient email.'));
+        [$to, $badTo] = $this->splitAddresses($this->composeTo);
+        [$cc, $badCc] = $this->splitAddresses($this->composeCc);
 
+        if ($badTo !== []) {
+            $this->addError('composeTo', __("These don't look like email addresses: :list", ['list' => implode(', ', $badTo)]));
+        } elseif ($to === []) {
+            $this->addError('composeTo', __('Enter at least one valid recipient email.'));
+        } elseif (count($to) + count($cc) > self::MAX_RECIPIENTS) {
+            $this->addError('composeTo', __('Too many recipients. Send to at most :max people at once.', ['max' => self::MAX_RECIPIENTS]));
+        }
+        if ($badCc !== []) {
+            $this->addError('composeCc', __("These don't look like email addresses: :list", ['list' => implode(', ', $badCc)]));
+        }
+        if ($this->getErrorBag()->isNotEmpty()) {
             return;
         }
 
@@ -265,7 +318,7 @@ trait WithCompose
             subject: $this->composeSubject,
             bodyHtml: null,
             bodyText: $this->composeBody,
-            cc: $this->parseAddresses($this->composeCc),
+            cc: $cc,
             inReplyTo: $this->composeInReplyTo,
             references: $this->composeReferences,
             threadId: $this->composeThreadId,
@@ -274,8 +327,14 @@ trait WithCompose
 
         SendUserEmail::dispatch($account->id, $outbound);
 
+        // The earlier failed copy is replaced by this attempt (which is itself marked if it fails too).
+        $failed = $this->retryingMessageId !== null ? $this->ownFailedSends()->whereKey($this->retryingMessageId)->first() : null;
+        if ($failed !== null) {
+            $this->removeFailedSend($failed);
+        }
+
         $this->resetCompose();
-        session()->flash('mailbox_status', __('Message queued for delivery.'));
+        session()->flash('mailbox_status', __('Sending your message. If it cannot be delivered you will be told here.'));
         $this->dispatch('mailbox-sent');
     }
 
@@ -326,7 +385,7 @@ trait WithCompose
         $this->reset([
             'composing', 'composeMode', 'composeAccountId', 'replyToMessageId',
             'composeThreadId', 'composeTo', 'composeCc', 'composeSubject',
-            'composeBody', 'composeInReplyTo', 'composeReferences', 'composeFiles', 'bodyBeforeAi', 'appliedSignature',
+            'composeBody', 'composeInReplyTo', 'composeReferences', 'composeFiles', 'bodyBeforeAi', 'appliedSignature', 'retryingMessageId',
         ]);
     }
 
@@ -388,21 +447,68 @@ trait WithCompose
     }
 
     /**
-     * @return list<string>
+     * Split what was typed into addresses. Accepts "a@x.com, b@y.com", one per line, and the
+     * "Ada Obi <ada@x.com>" form. Anything that is not an address is returned so it can be shown,
+     * never silently dropped.
+     *
+     * @return array{0: list<string>, 1: list<string>} [valid, invalid]
      */
-    private function parseAddresses(string $raw): array
+    private function splitAddresses(string $raw): array
     {
+        $raw = (string) preg_replace('/"?[^<>,;"]*"?\s*<([^<>\s]+)>/', '$1', $raw);
         $parts = preg_split('/[,;\s]+/', trim($raw)) ?: [];
 
         $valid = [];
+        $invalid = [];
         foreach ($parts as $part) {
             $part = trim($part);
-            if ($part !== '' && filter_var($part, FILTER_VALIDATE_EMAIL)) {
+            if ($part === '') {
+                continue;
+            }
+            if (filter_var($part, FILTER_VALIDATE_EMAIL)) {
                 $valid[strtolower($part)] = $part;
+            } else {
+                $invalid[$part] = $part;
             }
         }
 
-        return array_values($valid);
+        return [array_values($valid), array_values($invalid)];
+    }
+
+    /**
+     * Messages from the current user's own mailboxes that could not be sent.
+     *
+     * @return Builder<EmailMessage>
+     */
+    private function ownFailedSends()
+    {
+        // Livewire actions do not re-run the route middleware, so check here as the reader does.
+        abort_unless((bool) config('mail_client.enabled'), 404);
+        abort_unless(auth()->user()?->can('mailbox.view'), 403);
+
+        return EmailMessage::query()
+            ->where('direction', EmailMessage::DIRECTION_OUTBOUND)
+            ->where('send_status', EmailMessage::SEND_FAILED)
+            ->whereHas('account', fn ($q) => $q->where('user_id', auth()->id()));
+    }
+
+    private function removeFailedSend(EmailMessage $failed): void
+    {
+        $thread = $failed->thread;
+        $wasUnread = ! $failed->is_read;
+        $failed->delete();
+
+        // A failed send was counted as unread when it was recorded; take that back.
+        if ($wasUnread && $thread !== null && $thread->unread_count > 0) {
+            $thread->decrement('unread_count');
+        }
+
+        if ($thread !== null && $thread->messages()->doesntExist()) {
+            if ($this->selectedThreadId === $thread->id) {
+                $this->selectedThreadId = null;
+            }
+            $thread->delete();
+        }
     }
 
     private function prefixSubject(string $prefix, string $subject): string

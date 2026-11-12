@@ -26,6 +26,10 @@ return [
     // How often the scheduler fans out per-account inbound sync (B3).
     'sync_interval_minutes' => (int) env('MAIL_CLIENT_SYNC_INTERVAL', 2),
 
+    // When a mailbox is connected, also sign in to its outgoing (SMTP) server so a wrong setting is
+    // reported straight away instead of on the first message. Off in tests (no network).
+    'verify_smtp_on_connect' => (bool) env('MAIL_CLIENT_VERIFY_SMTP', true),
+
     // Per-account outbound send rate (B5).
     'send_rate_per_minute' => (int) env('MAIL_CLIENT_SEND_RATE', 30),
 
