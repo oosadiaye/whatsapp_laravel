@@ -29,6 +29,15 @@ return [
     ],
 
     /*
+    | Google Calendar / Meet (Meetings). Create an OAuth client in Google Cloud Console (type "Web application") and
+    | paste the values in Settings -> Google Calendar, or set these env vars (Settings wins when both exist).
+    */
+    'google_calendar' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+    ],
+
+    /*
     | Inbound provider bounce/complaint webhooks. The secret is an unguessable
     | token embedded in the callback URL path
     | (/webhooks/email/{provider}/{secret}); the endpoint fails closed (404)

@@ -47,6 +47,7 @@ class SettingsController extends Controller
         'gemini_api_key',
         'openrouter_api_key',
         'mail_password',
+        'google_client_secret',
     ];
 
     public function index(): View
@@ -108,6 +109,10 @@ class SettingsController extends Controller
             'africastalking_rate_per_minute_kobo' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'gemini_api_key' => ['nullable', 'string', 'min:10', 'max:512'],
             'openrouter_api_key' => ['nullable', 'string', 'min:10', 'max:512'],
+            // Google Calendar / Meet OAuth client (Meetings). The secret is encrypted at rest and, like the other
+            // secrets, left blank to keep the saved one.
+            'google_client_id' => ['nullable', 'string', 'max:255', 'regex:/^[\w\-\.]+$/'],
+            'google_client_secret' => ['nullable', 'string', 'min:10', 'max:512'],
             'ai_provider' => ['nullable', 'in:gemini,openrouter'],
             'ai_model_draft' => ['nullable', 'string', 'max:128'],
             'ai_model_classify' => ['nullable', 'string', 'max:128'],

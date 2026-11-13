@@ -22,6 +22,9 @@ use App\Http\Controllers\LeadProfileController;
 use App\Http\Controllers\LeadSourceSettingsController;
 use App\Http\Controllers\MailboxController;
 use App\Http\Controllers\MyTasksController;
+use App\Http\Controllers\GoogleCalendarController;
+use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\MeetingResponseController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
@@ -71,6 +74,13 @@ Route::middleware([
 Route::match(['get', 'post'], '/email/unsubscribe', [UnsubscribeController::class, 'show'])
     ->middleware('signed')
     ->name('email.unsubscribe');
+
+// Public accept / decline for a meeting invitation. The per-person 40-char token is the credential (no login:
+// invitees can be clients). GET only shows; POST records, so mail-scanner link prefetch cannot answer for anyone.
+Route::get('/meetings/respond/{token}', [MeetingResponseController::class, 'show'])
+    ->middleware('throttle:30,1')->name('meetings.respond.show');
+Route::post('/meetings/respond/{token}', [MeetingResponseController::class, 'store'])
+    ->middleware('throttle:30,1')->name('meetings.respond.store');
 
 // Open-tracking pixel (signed per-recipient). Returns a 1x1 GIF and records the
 // open. No auth — recipients aren't users.
@@ -379,6 +389,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:conversations.call')->group(function () {
         Route::post('/contacts/{contact}/call', [ContactController::class, 'startCall'])
             ->name('contacts.startCall');
+    });
+
+    // ─── Meetings & calendar ────────────────────────────────────────────────
+    // The page is a Livewire component that re-checks permissions on every action.
+    Route::middleware('permission:meetings.view')->group(function () {
+        Route::get('/meetings', [MeetingController::class, 'index'])->name('meetings.index');
+        Route::get('/meetings/{meeting}/ics', [MeetingController::class, 'ics'])->whereNumber('meeting')->name('meetings.ics');
+
+        // Google Calendar: each person connects their own account (the OAuth client is set in Settings).
+        Route::get('/integrations/google/connect', [GoogleCalendarController::class, 'connect'])->name('google.connect');
+        Route::get('/integrations/google/callback', [GoogleCalendarController::class, 'callback'])->name('google.callback');
+        Route::post('/integrations/google/test', [GoogleCalendarController::class, 'test'])->middleware('throttle:10,1')->name('google.test');
+        Route::post('/integrations/google/sync', [GoogleCalendarController::class, 'sync'])->middleware('throttle:6,1')->name('google.sync');
+        Route::post('/integrations/google/disconnect', [GoogleCalendarController::class, 'disconnect'])->name('google.disconnect');
     });
 
     // ─── Task Management (Trello-style board) ──────────────────────────────

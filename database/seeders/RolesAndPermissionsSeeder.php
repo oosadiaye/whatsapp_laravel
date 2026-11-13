@@ -160,6 +160,14 @@ class RolesAndPermissionsSeeder extends Seeder
             // Both are in $allPermissions (admin + manager); the agent allowlist omits them.
             'leads.view',
             'leads.manage',
+
+            // Meetings & calendar. view = see the calendar (your own meetings and tasks);
+            // create = schedule and edit your own meetings; manage_all = see everyone's meetings
+            // and edit/cancel/schedule on behalf of others. In $allPermissions (admin, manager);
+            // the user role and the agent allowlist below omit manage_all.
+            'meetings.view',
+            'meetings.create',
+            'meetings.manage_all',
         ];
 
         foreach ($perms as $perm) {
@@ -221,6 +229,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'mailbox.view_all',
             'mailbox.admin',
             'conversations.view_all',
+            // A workspace of their own: no seeing or editing other people's meetings.
+            'meetings.manage_all',
         ]));
 
         // Agent (support staff): contacts + assigned conversations only.
@@ -250,6 +260,9 @@ class RolesAndPermissionsSeeder extends Seeder
             // stages exist is an admin action).
             'tasks.view',
             'tasks.create',
+            // Own calendar: see it and schedule their own meetings, never other people's.
+            'meetings.view',
+            'meetings.create',
         ]);
     }
 

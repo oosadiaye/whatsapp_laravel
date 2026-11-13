@@ -3,6 +3,7 @@ import './theme';
 import './model-picker';
 import './pwa-install';
 import './notify';
+import './email-chips';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 

@@ -483,6 +483,9 @@
                         </div>
                     </div>
 
+                    {{-- Google Calendar & Meet (Meetings) --}}
+                    @include('settings._google-calendar')
+
                     {{-- Sending defaults --}}
                     <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                         <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
@@ -652,6 +655,8 @@
 
         {{-- Standalone form for the "Test AI connection" button (AI card). The provider and key are
              read server-side from saved settings, so this form carries nothing but the CSRF token. --}}
+        @include('meetings._google-forms', ['return' => 'settings'])
+
         <form id="settings-test-ai" action="{{ route('settings.test-ai') }}" method="POST" class="hidden">
             @csrf
         </form>

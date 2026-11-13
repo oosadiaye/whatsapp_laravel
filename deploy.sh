@@ -232,7 +232,7 @@ echo "[11/11] Final verification..."
 echo "  - Manifest exists?           $([ -f public/build/manifest.json ] && echo YES || echo NO)"
 echo "  - public/hot gone?           $([ ! -f public/hot ] && echo YES || echo NO)"
 ROLES=$(php artisan tinker --execute="echo Spatie\\Permission\\Models\\Role::count();" 2>/dev/null | tail -1)
-echo "  - Roles seeded?              ${ROLES:-0} roles in DB (expect 4)"
+echo "  - Roles seeded?              ${ROLES:-0} roles in DB (expect 5)"
 ADMIN_ROLE=$(php artisan tinker --execute="echo App\\Models\\User::where('email','admin@blastiq.com')->first()?->roles->pluck('name')->implode(',');" 2>/dev/null | tail -1)
 echo "  - admin@blastiq.com role:    ${ADMIN_ROLE:-MISSING}"
 

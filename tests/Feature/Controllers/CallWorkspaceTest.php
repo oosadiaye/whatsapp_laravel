@@ -108,7 +108,8 @@ class CallWorkspaceTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $marker = strpos($html, 'open: false');
+        // 'open: false,' (trailing comma) is the Quick Dial object; the sidebar status selector's `{ open: false }` has none.
+        $marker = strpos($html, 'open: false,');
         $this->assertNotFalse($marker, 'Quick Dial component (canDial) did not render on the workspace.');
 
         $attrStart = strrpos(substr($html, 0, $marker), 'x-data="');

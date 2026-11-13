@@ -247,6 +247,31 @@
                 </div>
             @endcanany
 
+            {{-- Section: Meetings & calendar --}}
+            @can('meetings.view')
+                <div>
+                    <h3 class="px-3 mb-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">{{ __('Calendar') }}</h3>
+                    <div class="space-y-1">
+                        @php
+                            $meetingsToday = \App\Models\Meeting::query()->scheduled()->involving((int) auth()->id())
+                                ->whereBetween('starts_at', [
+                                    now(config('app.business_timezone'))->startOfDay()->utc(),
+                                    now(config('app.business_timezone'))->endOfDay()->utc(),
+                                ])->where('ends_at', '>', now())->count();
+                        @endphp
+                        <x-sidebar-link :href="route('meetings.index')" :active="request()->routeIs('meetings.*')">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            {{ __('Meetings') }}
+                            @if($meetingsToday > 0)
+                                <span class="ml-auto rounded-full bg-brand px-2 py-0.5 text-[11px] font-bold text-white" aria-label="{{ $meetingsToday }} today">{{ $meetingsToday }}</span>
+                            @endif
+                        </x-sidebar-link>
+                    </div>
+                </div>
+            @endcan
+
             {{-- Section: Tasks (Trello-style board) --}}
             @can('tasks.view')
                 <div>
@@ -374,13 +399,13 @@
 
         </nav>
 
-        {{-- Presence toggle: agent-only --}}
+        {{-- Status (Available / Busy / Away): every signed-in person sets their own; it shows on the Meetings
+             page. Only role=agent accounts are ever picked for incoming calls (RoundRobinAssigner), so showing
+             it to other roles changes nothing about call routing. --}}
         @auth
-            @if(auth()->user()->role === \App\Models\User::ROLE_AGENT)
-                <div class="border-t border-gray-200 px-3 pt-3 flex-shrink-0">
-                    <livewire:presence-toggle />
-                </div>
-            @endif
+            <div class="border-t border-gray-200 px-3 pt-3 flex-shrink-0">
+                <livewire:presence-toggle />
+            </div>
         @endauth
 
         {{-- User block at bottom --}}

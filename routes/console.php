@@ -83,3 +83,17 @@ Schedule::command('mailbox:sync')
     ->withoutOverlapping()
     ->onOneServer()
     ->when(fn (): bool => (bool) config('mail_client.enabled'));
+
+// Meetings: 24-hour and 10-minute reminder emails. The command itself is a no-op until
+// meetings.reminders_enabled (MEETINGS_REMINDERS) is on, so it is safe to schedule unconditionally.
+Schedule::command('meetings:remind')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Google Calendar: mirror each connected person's calendar onto the Meetings calendar. A no-op until the Google
+// OAuth client is configured and someone has connected.
+Schedule::command('google:sync')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
